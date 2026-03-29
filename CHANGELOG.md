@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2026-03-29
+
+### Changed
+- **Repository renamed to `bear-notes-mcp`** ([#75](https://github.com/vasylenko/bear-notes-mcp/issues/75)): The project identity is now client-neutral — "Bear Notes MCP Server" instead of "Claude Desktop Extension". README, package metadata, and all repository URLs have been updated. GitHub redirects the old URL automatically, but update your bookmarks and clones when convenient.
+
+**No feature- or client-facing changes in this release**
+
 ## [2.8.1] - 2026-03-14
 
 ### Fixed
