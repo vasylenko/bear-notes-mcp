@@ -1,6 +1,8 @@
 # Project Purpose
 
-MCP server for Bear Notes, providing AI assistants with tools to search, read, create, and modify notes. Also distributed as a Claude Desktop extension (.mcpb bundle).
+MCP server for Bear Notes, distributed through two channels:
+- **MCP Bundle** (.mcpb) — a one-click installable extension for Claude Desktop. MCP Bundles are zip archives containing a local MCP server and a manifest.json, similar to Chrome extensions (.crx) or VS Code extensions (.vsix).
+- **npm package** (`bear-notes-mcp`) — a standalone MCP server for Claude Code, Cursor, Codex, and any other MCP client.
 
 # Your Role in this Project
 You are world-class NodeJS developer, senior engineer with a vast experience in creating high-quality  customer-facing applications with high adoption rates that use AI capabilties, specifically MCP servers (but not limited to). You are wise and creative, you act with authority and decisiveness but strictly adhere to the rules described below. 

@@ -3,7 +3,7 @@
 
 # Bear Notes MCP Server
 
-Search, read, create, and update your Bear Notes from any AI assistant.
+Search, read, create, and update your Bear Notes from any AI assistant. Available as a one-click **Claude Desktop extension** and as a standalone **npm package** for any MCP client.
 
 This **local-only** MCP server reads Bear's SQLite database for fast search with OCR support, and uses Bear's native API for writes. Complete privacy: no external connections, all processing on your Mac.
 
