@@ -30,14 +30,14 @@ describe('bear-open-note by title', () => {
       const createResult = callTool({
         toolName: 'bear-create-note',
         args: { title: noteTitle, text: noteText },
-      });
+      }).content[0].text;
       noteId = tryExtractNoteId(createResult) ?? undefined;
       expect(noteId).toBeDefined();
 
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { title: noteTitle },
-      });
+      }).content[0].text;
 
       expect(openResult).toContain(noteTitle);
       expect(extractNoteBody(openResult)).toContain(noteText);
@@ -56,14 +56,14 @@ describe('bear-open-note by title', () => {
       const createResult = callTool({
         toolName: 'bear-create-note',
         args: { title: noteTitle, text: 'Case sensitivity test' },
-      });
+      }).content[0].text;
       noteId = tryExtractNoteId(createResult) ?? undefined;
       expect(noteId).toBeDefined();
 
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { title: noteTitle.toLowerCase() },
-      });
+      }).content[0].text;
 
       expect(openResult).toContain(noteTitle);
     } finally {
@@ -75,7 +75,7 @@ describe('bear-open-note by title', () => {
     const openResult = callTool({
       toolName: 'bear-open-note',
       args: { title: `Non-existent note ${RUN_ID}` },
-    });
+    }).content[0].text;
 
     expect(openResult).toContain('No note found with title');
   });
@@ -90,7 +90,7 @@ describe('bear-open-note by title', () => {
         const createResult = callTool({
           toolName: 'bear-create-note',
           args: { title: sharedTitle, text },
-        });
+        }).content[0].text;
         const id = tryExtractNoteId(createResult);
         expect(id).toBeTruthy();
         if (id) noteIds.push(id);
@@ -101,7 +101,7 @@ describe('bear-open-note by title', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { title: sharedTitle },
-      });
+      }).content[0].text;
 
       expect(openResult).toContain('Multiple notes found');
       // Both IDs and modification dates should appear in the disambiguation list
@@ -120,7 +120,7 @@ describe('bear-open-note by title', () => {
     const openResult = callTool({
       toolName: 'bear-open-note',
       args: {},
-    });
+    }).content[0].text;
 
     expect(openResult).toContain('Either note ID or title is required');
   });
@@ -133,7 +133,7 @@ describe('bear-open-note by title', () => {
       const createResult = callTool({
         toolName: 'bear-create-note',
         args: { title: noteTitle, text: 'Will be trashed' },
-      });
+      }).content[0].text;
       noteId = tryExtractNoteId(createResult) ?? undefined;
       expect(noteId).toBeDefined();
 
@@ -142,7 +142,7 @@ describe('bear-open-note by title', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { title: noteTitle },
-      });
+      }).content[0].text;
 
       expect(openResult).toContain('No note found with title');
     } finally {
@@ -159,14 +159,14 @@ describe('bear-open-note by title', () => {
       const createResult = callTool({
         toolName: 'bear-create-note',
         args: { title: noteTitle, text: noteText },
-      });
+      }).content[0].text;
       noteId = tryExtractNoteId(createResult) ?? undefined;
       expect(noteId).toBeDefined();
 
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId! },
-      });
+      }).content[0].text;
 
       expect(openResult).toContain(noteTitle);
       expect(extractNoteBody(openResult)).toContain(noteText);
