@@ -33,6 +33,9 @@ const HTML_BASE64 = 'PGh0bWw+PGJvZHk+PHA+QmVhciBjYW5ub3QgT0NSIHRoaXM8L3A+PC9ib2R
 const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
+// Absolute path to fixture — used for file_path tests
+const OCR_JPG_PATH = resolve(import.meta.dirname, '../fixtures/ocr-text.jpg');
+
 afterAll(() => {
   cleanupTestNotes(TEST_PREFIX);
 });
@@ -252,6 +255,87 @@ describe('attached files content separation', () => {
       // reference is removed from the note body — the attachment is not orphaned
       expect(afterResponse.content).toHaveLength(2);
       expect(afterResponse.content[1].text).toContain('architecture.png');
+    } finally {
+      if (noteId) trashNote(noteId);
+    }
+  });
+
+  it('attaches file via file_path', async () => {
+    const title = uniqueTitle(TEST_PREFIX, 'FilePath', RUN_ID);
+    let noteId: string | undefined;
+
+    try {
+      callTool({
+        toolName: 'bear-create-note',
+        args: { title, text: 'File path attachment test', tags: 'system-test' },
+      });
+
+      noteId = findNoteId(title);
+
+      const addResult = callTool({
+        toolName: 'bear-add-file',
+        args: { id: noteId, file_path: OCR_JPG_PATH },
+      }).content[0].text;
+
+      // Server should infer filename from path
+      expect(addResult).toContain('ocr-text.jpg');
+      expect(addResult).toContain('added successfully');
+
+      // Poll until Bear finishes OCR — proves the file was actually attached
+      const response = await waitForFileContent(noteId, 'simple');
+      expect(response.content).toHaveLength(2);
+      expect(response.content[1].text).toContain('ocr-text.jpg');
+    } finally {
+      if (noteId) trashNote(noteId);
+    }
+  });
+
+  it('file_path uses explicit filename when provided', async () => {
+    const title = uniqueTitle(TEST_PREFIX, 'FilePathCustomName', RUN_ID);
+    let noteId: string | undefined;
+
+    try {
+      callTool({
+        toolName: 'bear-create-note',
+        args: { title, text: 'Custom filename test', tags: 'system-test' },
+      });
+
+      noteId = findNoteId(title);
+
+      const addResult = callTool({
+        toolName: 'bear-add-file',
+        args: { id: noteId, file_path: OCR_JPG_PATH, filename: 'custom-name.jpg' },
+      }).content[0].text;
+
+      expect(addResult).toContain('custom-name.jpg');
+      expect(addResult).toContain('added successfully');
+
+      const response = await waitForFileContent(noteId, 'custom-name.jpg');
+      expect(response.content).toHaveLength(2);
+      expect(response.content[1].text).toContain('custom-name.jpg');
+    } finally {
+      if (noteId) trashNote(noteId);
+    }
+  });
+
+  it('returns error for non-existent file_path', () => {
+    const title = uniqueTitle(TEST_PREFIX, 'BadPath', RUN_ID);
+    let noteId: string | undefined;
+
+    try {
+      callTool({
+        toolName: 'bear-create-note',
+        args: { title, text: 'Bad path test', tags: 'system-test' },
+      });
+
+      noteId = findNoteId(title);
+
+      const result = callTool({
+        toolName: 'bear-add-file',
+        args: { id: noteId, file_path: '/tmp/does-not-exist-12345.pdf' },
+      }).content[0].text;
+
+      expect(result).toContain('File not found');
     } finally {
       if (noteId) trashNote(noteId);
     }

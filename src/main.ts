@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -455,18 +458,32 @@ server.registerTool(
   {
     title: 'Add File to Note',
     description:
-      'Attach a file to an existing Bear note. Encode the file to base64 using shell commands (e.g., base64 /path/to/file.xlsx) and provide the encoded content. Use bear-search-notes first to get the note ID.',
+      'Attach a file to an existing Bear note. Preferred: provide file_path for files on disk — the server reads and encodes them automatically. Alternative: provide base64_content with pre-encoded data. Use bear-search-notes first to get the note ID.',
     inputSchema: {
+      file_path: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe(
+          'Absolute path to a file on disk. Preferred over base64_content when the file already exists locally.'
+        ),
       base64_content: z
         .string()
         .trim()
-        .min(1, 'Base64 file content is required')
-        .describe('Base64-encoded file content'),
+        .min(1)
+        .optional()
+        .describe(
+          'Base64-encoded file content. Use file_path instead when the file exists on disk.'
+        ),
       filename: z
         .string()
         .trim()
-        .min(1, 'Filename is required')
-        .describe('Filename with extension (e.g., budget.xlsx, report.pdf)'),
+        .min(1)
+        .optional()
+        .describe(
+          'Filename with extension (e.g., budget.xlsx, report.pdf). Required when using base64_content. Auto-inferred from file_path when omitted.'
+        ),
       id: z
         .string()
         .trim()
@@ -481,9 +498,9 @@ server.registerTool(
       openWorldHint: true,
     },
   },
-  async ({ base64_content, filename, id, title }): Promise<CallToolResult> => {
+  async ({ file_path, base64_content, filename, id, title }): Promise<CallToolResult> => {
     logger.info(
-      `bear-add-file called with base64_content: ${base64_content ? 'provided' : 'none'}, filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
+      `bear-add-file called with file_path: ${file_path || 'none'}, base64_content: ${base64_content ? 'provided' : 'none'}, filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
     );
 
     if (!id && !title) {
@@ -492,9 +509,43 @@ server.registerTool(
       );
     }
 
+    if (file_path && base64_content) {
+      return createToolResponse('Provide either file_path or base64_content, not both.');
+    }
+    if (!file_path && !base64_content) {
+      return createToolResponse('Either file_path or base64_content is required.');
+    }
+    if (base64_content && !filename) {
+      return createToolResponse('filename is required when using base64_content.');
+    }
+
     try {
-      // base64 CLI adds line breaks that break URL encoding
-      const cleanedBase64 = cleanBase64(base64_content);
+      let fileData: string;
+      let resolvedFilename: string;
+
+      if (file_path) {
+        // Read file from disk and encode — avoids the LLM producing thousands of base64 tokens
+        try {
+          const buffer = readFileSync(file_path);
+          fileData = buffer.toString('base64');
+        } catch (err) {
+          const code = (err as { code?: string }).code;
+          if (code === 'ENOENT') {
+            return createToolResponse(`File not found: ${file_path}`);
+          }
+          if (code === 'EACCES') {
+            return createToolResponse(`Permission denied: ${file_path}`);
+          }
+          return createToolResponse(
+            `Cannot read file: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+        resolvedFilename = filename || basename(file_path);
+      } else {
+        // base64_content path — strip whitespace that base64 CLI adds
+        fileData = cleanBase64(base64_content!);
+        resolvedFilename = filename!;
+      }
 
       // Fail fast with helpful message rather than cryptic Bear error
       if (id) {
@@ -509,17 +560,17 @@ Use bear-search-notes to find the correct note identifier.`);
       const url = buildBearUrl('add-file', {
         id,
         title,
-        file: cleanedBase64,
-        filename,
+        file: fileData,
+        filename: resolvedFilename,
         mode: 'append',
       });
 
-      logger.debug(`Executing Bear add-file URL for: ${filename}`);
+      logger.debug(`Executing Bear add-file URL for: ${resolvedFilename}`);
       await executeBearXCallbackApi(url);
 
       const noteIdentifier = id ? `Note ID: ${id}` : `Note title: "${title!}"`;
 
-      return createToolResponse(`File "${filename}" added successfully!
+      return createToolResponse(`File "${resolvedFilename}" added successfully!
 
 ${noteIdentifier}
 
