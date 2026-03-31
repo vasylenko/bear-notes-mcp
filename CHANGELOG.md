@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`bear-add-file` accepts `file_path` as alternative to `base64_content`** ([#88](https://github.com/vasylenko/bear-notes-mcp/issues/88)): When the file exists on disk, provide its path instead of base64-encoded content. The server reads and encodes the file internally, avoiding the cost of the LLM producing thousands of base64 output tokens. The `filename` parameter is auto-inferred from the path when omitted. The two input modes (`file_path` and `base64_content`) are mutually exclusive.
+
 ### Changed
 - **`bear-open-note` accepts title as an alternative to ID** ([#60](https://github.com/vasylenko/bear-notes-mcp/issues/60)): The tool now takes an optional `title` parameter, so AI agents can open a note by its exact title without needing to know the ID upfront. Title matching is case-insensitive. When multiple notes share the same title, the tool returns a disambiguation list with each note's ID and last modification date instead of picking one arbitrarily. When no match is found, the response suggests using `bear-search-notes` for partial text search.
 
