@@ -504,7 +504,7 @@ server.registerTool(
     );
 
     if (!id && !title) {
-      throw new Error(
+      return createToolResponse(
         'Either note ID or title is required. Use bear-search-notes to find the note ID.'
       );
     }
@@ -527,6 +527,9 @@ server.registerTool(
         // Read file from disk and encode — avoids the LLM producing thousands of base64 tokens
         try {
           const buffer = readFileSync(file_path);
+          if (buffer.length === 0) {
+            return createToolResponse(`File is empty: ${file_path}`);
+          }
           fileData = buffer.toString('base64');
         } catch (err) {
           const code = (err as { code?: string }).code;
