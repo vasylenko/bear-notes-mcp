@@ -164,7 +164,7 @@ export function findNotesByTitle(title: string): NoteTitleMatch[] {
   logger.info(`findNotesByTitle called with title: "${title}"`);
 
   if (!title || typeof title !== 'string' || !title.trim()) {
-    logAndThrow('Search error: Invalid note title provided');
+    logAndThrow('Database error: Invalid note title provided');
   }
 
   const db = openBearDatabase();
