@@ -80,7 +80,7 @@
     },
     {
       "name": "bear-add-file",
-      "description": "Attach a file (image, PDF, Excel, etc.) to an existing Bear note using base64-encoded content"
+      "description": "Attach a file to an existing Bear note. Provide a local file path (preferred) or base64-encoded content."
     },
     {
       "name": "bear-list-tags",
