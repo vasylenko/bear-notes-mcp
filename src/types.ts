@@ -18,6 +18,16 @@ export interface BearNote {
 }
 
 /**
+ * Lightweight note match for title-based lookups where full content is not needed.
+ * Used for disambiguation when multiple notes share the same title.
+ */
+export interface NoteTitleMatch {
+  identifier: string;
+  title: string;
+  modification_date: string;
+}
+
+/**
  * Date filter parameters for searching notes by creation or modification date.
  */
 export interface DateFilter {

@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **`bear-open-note` accepts title as an alternative to ID** ([#60](https://github.com/vasylenko/bear-notes-mcp/issues/60)): The tool now takes an optional `title` parameter, so AI agents can open a note by its exact title without needing to know the ID upfront. Title matching is case-insensitive. When multiple notes share the same title, the tool returns a disambiguation list with each note's ID and last modification date instead of picking one arbitrarily. When no match is found, the response suggests using `bear-search-notes` for partial text search.
+
 ## [2.8.2] - 2026-03-29
 
 ### Changed

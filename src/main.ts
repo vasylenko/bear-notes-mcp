@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { APP_VERSION, ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from './config.js';
 import { applyNoteConventions } from './note-conventions.js';
 import { cleanBase64, createToolResponse, handleNoteTextUpdate, logger } from './utils.js';
-import { awaitNoteCreation, getNoteContent, searchNotes } from './notes.js';
+import { awaitNoteCreation, findNotesByTitle, getNoteContent, searchNotes } from './notes.js';
 import { findUntaggedNotes, listTags } from './tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from './bear-urls.js';
 import type { BearTag } from './types.js';
@@ -22,7 +22,7 @@ const server = new McpServer(
       'This server integrates with Bear, a markdown note-taking app.',
       'Each note has a unique ID, a title, a body, and optional tags.',
       'Notes use markdown headings (##, ###, etc.) to define sections.',
-      'Use bear-search-notes to find note IDs before reading or modifying notes.',
+      'Use bear-search-notes to find note IDs before reading or modifying notes, or provide an exact title to bear-open-note for direct lookup.',
       'To modify note content: bear-add-text inserts text without touching existing content; bear-replace-text overwrites content.',
       'When targeting a section by header, operations apply only to the direct content under that header — not nested sub-sections.',
       'To modify sub-sections, make separate calls targeting each sub-header.',
@@ -35,13 +35,22 @@ server.registerTool(
   {
     title: 'Open Bear Note',
     description:
-      'Read the full text content of a Bear note from your library. Always includes text extracted from attached images and PDFs (aka OCR search) with clear labeling.',
+      'Read the full text content of a Bear note by its ID or title. Supports direct title lookup as an alternative to searching first. Always includes text extracted from attached images and PDFs (aka OCR search) with clear labeling.',
     inputSchema: {
       id: z
         .string()
         .trim()
-        .min(1, 'Note ID is required')
-        .describe('Exact note identifier (ID) obtained from bear-search-notes'),
+        .optional()
+        .describe(
+          'Note identifier (ID) from bear-search-notes. Either id or title must be provided.'
+        ),
+      title: z
+        .string()
+        .trim()
+        .optional()
+        .describe(
+          'Exact note title for direct lookup (case-insensitive). Either id or title must be provided. If multiple notes share the same title, returns a list for disambiguation.'
+        ),
     },
     annotations: {
       readOnlyHint: true,
@@ -49,11 +58,45 @@ server.registerTool(
       openWorldHint: false,
     },
   },
-  async ({ id }): Promise<CallToolResult> => {
-    logger.info(`bear-open-note called with id: ${id}, includeFiles: always`);
+  async ({ id, title }): Promise<CallToolResult> => {
+    logger.info(
+      `bear-open-note called with id: ${id || 'none'}, title: ${title ? '"' + title + '"' : 'none'}`
+    );
+
+    if (!id && !title) {
+      return createToolResponse(
+        'Either note ID or title is required. Use bear-search-notes to find the note ID, or provide the exact title.'
+      );
+    }
 
     try {
-      const noteWithContent = getNoteContent(id);
+      // Title lookup path: find by title, then fetch full content
+      if (!id && title) {
+        const matches = findNotesByTitle(title);
+
+        if (matches.length === 0) {
+          return createToolResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
+
+Use bear-search-notes to find notes by partial text match.`);
+        }
+
+        if (matches.length > 1) {
+          const matchList = matches
+            .map((m, i) => `${i + 1}. ID: ${m.identifier} (modified: ${m.modification_date})`)
+            .join('\n');
+
+          return createToolResponse(`Multiple notes found with title "${title}":
+
+${matchList}
+
+Use bear-open-note with a specific ID to open the desired note.`);
+        }
+
+        // Exactly one match — fetch full content by ID
+        id = matches[0].identifier;
+      }
+
+      const noteWithContent = getNoteContent(id!);
 
       if (!noteWithContent) {
         return createToolResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
