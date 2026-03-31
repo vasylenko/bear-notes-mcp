@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **`bear-open-note` accepts title as an alternative to ID** ([#60](https://github.com/vasylenko/bear-notes-mcp/issues/60)): The tool now takes an optional `title` parameter, so AI agents can open a note by its exact title without needing to know the ID upfront. Title matching is case-insensitive. When multiple notes share the same title, the tool returns a disambiguation list with each note's ID and last modification date instead of picking one arbitrarily. When no match is found, the response suggests using `bear-search-notes` for partial text search.
+
 ## [2.8.2] - 2026-03-29
 
 ### Changed
@@ -26,9 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`bear-list-tags` no longer shows ghost tags from excluded notes** ([#77](https://github.com/vasylenko/claude-desktop-extension-bear-notes/issues/77)): Tag counts previously included trashed, archived, and encrypted notes, causing tags that existed only on those notes to appear in the list with inflated counts. Tag results now match what Bear's UI shows.
 - **Attachments without OCR text no longer silently disappear** ([#79](https://github.com/vasylenko/claude-desktop-extension-bear-notes/issues/79)): When a note had attachments that Bear could not extract text from (e.g., MHTML files), those attachments were omitted entirely — making it look like the note had no files. Attachment filenames now always appear, with a note indicating when file content is not available.
-
-### Changed
-- **`bear-open-note` accepts title as an alternative to ID** ([#60](https://github.com/vasylenko/claude-desktop-extension-bear-notes/issues/60)): The tool now takes an optional `title` parameter, so AI agents can open a note by its exact title without needing to know the ID upfront. Title matching is case-insensitive. When multiple notes share the same title, the tool returns a disambiguation list with each note's ID and last modification date instead of picking one arbitrarily. When no match is found, the response suggests using `bear-search-notes` for partial text search.
 
 ## [2.7.0] - 2026-03-06
 
