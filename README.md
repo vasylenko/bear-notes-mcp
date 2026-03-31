@@ -1,13 +1,11 @@
-[![Supply Chain](https://github.com/vasylenko/claude-desktop-extension-bear-notes/actions/workflows/ci.yml/badge.svg)](https://github.com/vasylenko/claude-desktop-extension-bear-notes/actions/workflows/ci.yml)
-[![Snyk](https://snyk.io/test/github/vasylenko/claude-desktop-extension-bear-notes/badge.svg)](https://snyk.io/test/github/vasylenko/claude-desktop-extension-bear-notes)
-[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/34d7b12a-3983-40a3-876f-3cdd2ccfe3f2)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vasylenko/claude-desktop-extension-bear-notes)
+[![Supply Chain](https://github.com/vasylenko/bear-notes-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vasylenko/bear-notes-mcp/actions/workflows/ci.yml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vasylenko/bear-notes-mcp)
 
-# Bear Notes Claude Extension (aka MCP Bundle)
+# Bear Notes MCP Server
 
-Search, read, create, and update your Bear Notes directly from Claude conversations.
+Search, read, create, and update your Bear Notes from any AI assistant. Available as a one-click **Claude Desktop extension** and as a standalone **npm package** for any MCP client.
 
-This **local-only** extension reads Bear's SQLite database for fast search with OCR support, and uses Bear's native API for writes. Complete privacy: no external connections, all processing on your Mac.
+This **local-only** MCP server reads Bear's SQLite database for fast search with OCR support, and uses Bear's native API for writes. Complete privacy: no external connections, all processing on your Mac.
 
 Example prompts:
 
@@ -23,7 +21,7 @@ Example prompts:
 
 ## ✨ Key Features
 
-- **10 MCP tools** for searching, reading, creating, updating, tagging, and archiving notes
+- **12 MCP tools** for searching, reading, creating, updating, tagging, and archiving notes
 - **OCR search** — finds text inside attached images and PDFs
 - **Date-based search** with relative dates ("yesterday", "last week", "start of last month")
 - **Tag management** — list tags as a tree, find untagged notes, add tags to notes
@@ -32,7 +30,7 @@ Example prompts:
 - **Local-only** — no network calls, all data stays on your Mac
 
 > [!NOTE]
-> Complete privacy (except the data you send to your AI provider when using an AI assistant such as Claude, of course): this extension makes no external connections. All processing happens locally on your Mac using Bear's own database and API. There is no extra telemetry, usage statistics or anything like that.
+> Complete privacy (except the data you send to your AI provider when using an AI assistant, of course): this server makes no external connections. All processing happens locally on your Mac using Bear's own database and API. There is no extra telemetry, usage statistics or anything like that.
 
 ## 📦 Installation
 
@@ -40,7 +38,7 @@ Example prompts:
 
 **Prerequisites**: [Bear app](https://bear.app/) must be installed and [Claude Desktop](https://claude.ai/download) must be installed.
 
-1. Download the latest `bear-notes-mcpb.mcpb` extension from releases
+1. Download the latest `bear-notes-mcpb.mcpb` extension from [Releases](https://github.com/vasylenko/bear-notes-mcp/releases)
 2. Make sure your Claude Desktop is running (start if not)
 3. Doubleclick on the extension file – Claude Desktop should show you the installation prompt
 
@@ -178,13 +176,18 @@ This server reads your Bear Notes SQLite database directly for search/read opera
 macOS only because Bear desktop works only on macOS.
 
 ### Logs
+
+**Claude Desktop:**
 - MCP server logs go into `~/Library/Logs/Claude/main.log`, look for `bear-notes-mcp`
 - MCP transport logs go to `~/Library/Logs/Claude/mcp-server-Bear\ Notes.log`
+
+**Standalone MCP server:**
+- Logs are written to stderr; enable debug logging with `UI_DEBUG_TOGGLE=true`
 
 ## FAQ
 
 ### Could this steal my data?
-**No**. Extension only reads Bear's local database (same data Bear app shows you) and uses Bear's application native API to add text to the notes. No network transmission, no external servers.
+**No**. The server only reads Bear's local database (same data Bear app shows you) and uses Bear's native API to add text to the notes. No network transmission, no external servers.
 
 ### Why SQLite and not just a native Bear app's x-callback-url API?
 
@@ -192,9 +195,9 @@ For read operations (search/open), the x-callback-url API returns the note data 
 
 ### Why native Node.js SQLite instead of third-party packages?
 
-This avoids shipping an SQLite binary from third-party node packages, which poses supply chain risks and blocks the Claude extension from running on macOS.
+This avoids shipping an SQLite binary from third-party node packages, which poses supply chain risks and blocks the Claude Desktop extension from running on macOS.
 
-Anthropic does not sign third-party SQLite binaries (obviously), causing macOS security systems to flag that the Claude process from a binary signed by Anthropic is trying to run another binary signed by a third party. As a result, Claude cannot run the extension.
+Anthropic does not sign third-party SQLite binaries (obviously), causing macOS security systems to flag that the Claude process from a binary signed by Anthropic is trying to run another binary signed by a third party. As a result, Claude Desktop cannot run the extension.
 
 ### When I install the extension, I see a red warning: "Installing will grant access to everything on your computer." - what does this mean?
 
@@ -206,14 +209,12 @@ One of the ways to validate this is asking your Claude to analyze the codebase (
 
 ### How can I report a bug or contribute?
 
-Use issues or discussions! I'd be glad to see your feedback or suggestions, or your help to make this extension better! ❤️
+Use issues or discussions! I'd be glad to see your feedback or suggestions, or your help to make this project better! ❤️
 
 ## Staying Up To Date
 
-Consider subscribing to release announcements to know when a new version of the extension is released:
+Consider subscribing to release announcements to know when a new version is released:
 
 ![](./docs/stay-updated.png)
 
 I also post to [reddit.com/r/bearapp/](https://www.reddit.com/r/bearapp/) when there's a new release.
-
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/vasylenko-claude-desktop-extension-bear-notes-badge.png)](https://mseep.ai/app/vasylenko-claude-desktop-extension-bear-notes)

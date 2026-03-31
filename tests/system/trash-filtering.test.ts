@@ -35,19 +35,20 @@ afterAll(() => {
 
 describe('trash filtering in tag listing', () => {
   it('tag appears in bear-list-tags before trashing', () => {
-    const result = callTool({ toolName: 'bear-list-tags' });
+    const result = callTool({ toolName: 'bear-list-tags' }).content[0].text;
     expect(result).toContain(TAG);
   });
 
   it('trashed note tag disappears from bear-list-tags', () => {
     trashNote(noteId);
 
-    const result = callTool({ toolName: 'bear-list-tags' });
+    const result = callTool({ toolName: 'bear-list-tags' }).content[0].text;
     expect(result).not.toContain(TAG);
   });
 
   it('trashed note is excluded from bear-search-notes', () => {
-    const result = callTool({ toolName: 'bear-search-notes', args: { term: TITLE } });
+    const result = callTool({ toolName: 'bear-search-notes', args: { term: TITLE } }).content[0]
+      .text;
     expect(tryExtractNoteId(result)).toBeNull();
   });
 });

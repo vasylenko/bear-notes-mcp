@@ -42,7 +42,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Completely new content');
@@ -89,7 +89,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Updated details text');
@@ -141,7 +141,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Replaced details content');
@@ -173,7 +173,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'full-note-body', text: 'new content' },
         env: {},
-      });
+      }).content[0].text;
 
       expect(result).toContain('Content replacement is not enabled');
     } finally {
@@ -197,7 +197,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'section', text: 'new content', header: 'NonExistentSection' },
         env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
-      });
+      }).content[0].text;
 
       expect(result).toContain('"NonExistentSection" not found');
     } finally {
@@ -242,7 +242,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Updated details v2 content');
@@ -289,7 +289,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Replaced via markdown header');
@@ -330,7 +330,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Case-insensitive replace');
@@ -355,7 +355,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'section', text: 'new content' },
         env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
-      });
+      }).content[0].text;
 
       expect(result).toContain('scope is "section" but no header was provided');
     } finally {
@@ -379,7 +379,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'full-note-body', text: 'new content', header: 'Section' },
         env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
-      });
+      }).content[0].text;
 
       expect(result).toContain('scope is "full-note-body" but a header was provided');
     } finally {
@@ -411,7 +411,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Brand new body content');
@@ -468,7 +468,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Updated body text');

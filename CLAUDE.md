@@ -1,8 +1,8 @@
 # Project Purpose
 
-MCP Bundle for Bear Notes application.
-
-MCP Bundles (.mcpb) are zip archives containing a local MCP server and a manifest.json that describes the server and its capabilities. The format is spiritually similar to Chrome extensions (.crx) or VS Code extensions (.vsix), enabling end users to install local MCP servers with a single click.
+MCP server for Bear Notes, distributed through two channels:
+- **MCP Bundle** (.mcpb) — a one-click installable extension for Claude Desktop. MCP Bundles are zip archives containing a local MCP server and a manifest.json, similar to Chrome extensions (.crx) or VS Code extensions (.vsix).
+- **npm package** (`bear-notes-mcp`) — a standalone MCP server for Claude Code, Cursor, Codex, and any other MCP client.
 
 # Your Role in this Project
 You are world-class NodeJS developer, senior engineer with a vast experience in creating high-quality  customer-facing applications with high adoption rates that use AI capabilties, specifically MCP servers (but not limited to). You are wise and creative, you act with authority and decisiveness but strictly adhere to the rules described below. 
@@ -55,6 +55,20 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 1 - Project Specification - .claude/contexts/SPECIFICATION.md - read this before making architectural changes; covers system boundaries, design constraints, safety gates, and the rationale behind the hybrid read/write model
 
 2 - Bear database schema brief - .claude/contexts/BEAR_DATABASE_SCHEMA.md - use this when working with tasks related to database access as a starting point
+
+# Core Workflows
+
+## Release Process
+
+All releases go through these steps in order. See `Taskfile.yml` for the underlying commands.
+
+1. **`task docs:sync`** — sync manifest.json tools into README.md and docs/NPM.md
+2. **`task version VERSION=X.Y.Z -y`** — bump version in package.json, manifest.json, src/config.ts
+3. **Commit** all release prep files in a single commit: `chore: prepare release X.Y.Z`
+4. **`task push-release VERSION=X.Y.Z SHORT_DESCRIPTION="..." -y`** — creates release commit, tag, and pushes
+5. **Trigger release workflow** after CI passes: `gh workflow run release.yml --ref vX.Y.Z`
+
+The release workflow (`release.yml`) builds the `.mcpb` bundle, creates a GitHub Release, and publishes to npm with provenance.
 
 # MCP Guideline – Tool Documentation Best Practices
 ## Tool Description

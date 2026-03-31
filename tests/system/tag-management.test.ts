@@ -45,7 +45,7 @@ describe('bear-rename-tag via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-rename-tag',
       args: { name: TAG_ORIGINAL, new_name: TAG_RENAMED },
-    });
+    }).content[0].text;
 
     expect(result).toContain('renamed successfully');
 
@@ -54,7 +54,7 @@ describe('bear-rename-tag via MCP Inspector CLI', () => {
     const searchResult = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_RENAMED },
-    });
+    }).content[0].text;
 
     expect(searchResult).toContain(RENAME_NOTE_TITLE);
   });
@@ -63,7 +63,7 @@ describe('bear-rename-tag via MCP Inspector CLI', () => {
     const searchResult = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_ORIGINAL },
-    });
+    }).content[0].text;
 
     expect(searchResult).toContain('No notes found');
   });
@@ -89,7 +89,7 @@ describe('bear-delete-tag via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-delete-tag',
       args: { name: TAG_TO_DELETE },
-    });
+    }).content[0].text;
 
     expect(result).toContain('deleted successfully');
 
@@ -98,14 +98,14 @@ describe('bear-delete-tag via MCP Inspector CLI', () => {
     const searchResult = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_TO_DELETE },
-    });
+    }).content[0].text;
 
     expect(searchResult).toContain('No notes found');
 
     const openResult = callTool({
       toolName: 'bear-open-note',
       args: { id: deleteNoteId! },
-    });
+    }).content[0].text;
 
     expect(openResult).toContain(DELETE_NOTE_TITLE);
   });
@@ -136,7 +136,7 @@ describe('hierarchical tag rename via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-rename-tag',
       args: { name: TAG_NESTED_ORIGINAL, new_name: TAG_NESTED_RENAMED },
-    });
+    }).content[0].text;
 
     expect(result).toContain('renamed successfully');
 
@@ -145,7 +145,7 @@ describe('hierarchical tag rename via MCP Inspector CLI', () => {
     const searchResult = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_NESTED_RENAMED },
-    });
+    }).content[0].text;
 
     expect(searchResult).toContain(NESTED_RENAME_TITLE);
   });
@@ -175,7 +175,7 @@ describe('hierarchical tag delete via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-delete-tag',
       args: { name: TAG_NESTED_TO_DELETE },
-    });
+    }).content[0].text;
 
     expect(result).toContain('deleted successfully');
 
@@ -184,14 +184,14 @@ describe('hierarchical tag delete via MCP Inspector CLI', () => {
     const searchResult = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_NESTED_TO_DELETE },
-    });
+    }).content[0].text;
 
     expect(searchResult).toContain('No notes found');
 
     const openResult = callTool({
       toolName: 'bear-open-note',
       args: { id: nestedDeleteNoteId! },
-    });
+    }).content[0].text;
 
     expect(openResult).toContain(NESTED_DELETE_TITLE);
   });
@@ -221,7 +221,7 @@ describe('tag name # prefix stripping via MCP Inspector CLI', () => {
       const searchResult = callTool({
         toolName: 'bear-search-notes',
         args: { tag: TAG_HASH_RENAMED },
-      });
+      }).content[0].text;
 
       expect(searchResult).toContain(hashTitle);
     } finally {
@@ -251,7 +251,7 @@ describe('tag name # prefix stripping via MCP Inspector CLI', () => {
       const searchResult = callTool({
         toolName: 'bear-search-notes',
         args: { tag: TAG_HASH_DELETE },
-      });
+      }).content[0].text;
 
       expect(searchResult).toContain('No notes found');
     } finally {

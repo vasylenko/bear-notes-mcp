@@ -1,7 +1,8 @@
 import { spawnSync } from 'child_process';
 import { resolve } from 'path';
 
-export { setTimeout as sleep } from 'node:timers/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
+export { sleep };
 
 const SERVER_PATH = resolve(import.meta.dirname, '../../dist/main.js');
 
@@ -14,15 +15,15 @@ interface CallToolOptions {
   env?: Record<string, string>;
 }
 
-interface ToolResponse {
+export interface ToolResponse {
   content: { type: string; text: string }[];
 }
 
 /**
- * Invokes an MCP tool via the Inspector CLI and returns the text content.
+ * Invokes an MCP tool via the Inspector CLI and returns the full parsed response.
  * Each call spawns a fresh server process — no shared state between calls.
  */
-export function callTool({ toolName, args, env }: CallToolOptions): string {
+export function callTool({ toolName, args, env }: CallToolOptions): ToolResponse {
   const cliArgs = ['@modelcontextprotocol/inspector', '--cli'];
 
   // Inspector's -e flag passes env vars to the spawned server process
@@ -55,13 +56,13 @@ export function callTool({ toolName, args, env }: CallToolOptions): string {
     throw new Error(`Inspector returned empty content for tool "${toolName}": ${result.stdout}`);
   }
 
-  return response.content[0].text;
+  return response;
 }
 
 /**
  * Extracts the note body from bear-open-note response text.
  * The response has metadata (title, modified, ID) separated by `---`,
- * then the actual note content, then `---` and the attached files section.
+ * then the actual note content.
  */
 export function extractNoteBody(openNoteResponse: string): string {
   const sections = openNoteResponse.split('\n\n---\n\n');
@@ -72,15 +73,7 @@ export function extractNoteBody(openNoteResponse: string): string {
     );
   }
 
-  const bodyWithFooter = sections.slice(1).join('\n\n---\n\n');
-
-  // Strip the attached files footer Bear always appends
-  const attachedFilesIndex = bodyWithFooter.indexOf('\n\n---\n\n#Attached Files');
-  if (attachedFilesIndex !== -1) {
-    return bodyWithFooter.substring(0, attachedFilesIndex);
-  }
-
-  return bodyWithFooter;
+  return sections.slice(1).join('\n\n---\n\n');
 }
 
 const NOTE_ID_REGEX = /ID:\s+([A-Fa-f0-9-]+)/;
@@ -132,7 +125,7 @@ export function cleanupTestNotes(prefix: string): void {
     const searchResult = callTool({
       toolName: 'bear-search-notes',
       args: { term: prefix },
-    });
+    }).content[0].text;
     const idMatches = searchResult.matchAll(new RegExp(NOTE_ID_REGEX, 'g'));
     for (const match of idMatches) {
       trashNote(match[1]);
@@ -147,11 +140,36 @@ export function uniqueTitle(prefix: string, label: string, runId: number): strin
   return `${prefix} ${label} ${runId}`;
 }
 
+/**
+ * Polls bear-open-note until the attached-files content block contains the expected marker.
+ * Avoids flaky fixed sleeps by polling for actual content availability (e.g. OCR text or filename).
+ */
+export async function waitForFileContent(
+  noteId: string,
+  marker: string,
+  timeoutMs = 15_000
+): Promise<ToolResponse> {
+  const interval = 1_000;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const response = callTool({ toolName: 'bear-open-note', args: { id: noteId } });
+    if (response.content.length > 1 && response.content[1].text.includes(marker)) {
+      return response;
+    }
+    await sleep(interval);
+  }
+
+  throw new Error(
+    `Timed out after ${timeoutMs}ms waiting for file content containing "${marker}" in note ${noteId}`
+  );
+}
+
 /** Search for a note by title and return its ID. */
 export function findNoteId(noteTitle: string): string {
   const searchResult = callTool({
     toolName: 'bear-search-notes',
     args: { term: noteTitle },
-  });
+  }).content[0].text;
   return extractNoteId(searchResult);
 }

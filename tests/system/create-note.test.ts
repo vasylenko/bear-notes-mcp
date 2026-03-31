@@ -25,7 +25,7 @@ describe('bear-create-note returns note ID via MCP Inspector CLI', () => {
       const createResult = callTool({
         toolName: 'bear-create-note',
         args: { title, text: 'System test content', tags: 'system-test' },
-      });
+      }).content[0].text;
 
       // Response must contain Note ID with a UUID
       noteId = tryExtractNoteId(createResult) ?? undefined;
@@ -35,7 +35,7 @@ describe('bear-create-note returns note ID via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       expect(openResult).toContain(title);
     } finally {
@@ -51,7 +51,7 @@ describe('bear-create-note returns note ID via MCP Inspector CLI', () => {
       const createResult = callTool({
         toolName: 'bear-create-note',
         args: { text: marker, tags: 'system-test' },
-      });
+      }).content[0].text;
 
       // No title → no polling → no Note ID line
       expect(tryExtractNoteId(createResult)).toBeNull();

@@ -1,6 +1,6 @@
 import { setTimeout } from 'node:timers/promises';
 
-import type { BearNote, DateFilter, NoteTitleMatch } from './types.js';
+import type { AttachedFile, BearNote, DateFilter, NoteTitleMatch } from './types.js';
 import { DEFAULT_SEARCH_LIMIT } from './config.js';
 import {
   convertCoreDataTimestamp,
@@ -115,8 +115,9 @@ export function getNoteContent(identifier: string): BearNote | null {
     const firstRow = rows[0] as Record<string, unknown>;
     const formattedNote = formatBearNote(firstRow);
 
-    // Collect file content from all rows with clear source labeling
-    const fileContents: string[] = [];
+    // Collect file content into a structured array — kept separate from note text
+    // to prevent the synthetic file section from leaking into write operations (#86)
+    const files: AttachedFile[] = [];
     for (const row of rows) {
       const rowData = row as Record<string, unknown>;
       const filename = rowData.filename as string;
@@ -127,23 +128,16 @@ export function getNoteContent(identifier: string): BearNote | null {
         const content = trimmed
           ? trimmed
           : '*[File content not available — Bear has not extracted text from this file type]*';
-        fileContents.push(`##${filename}\n\n${content}`);
+        files.push({ filename, content });
       }
     }
 
-    // Always append file content section, even if empty, to show structure
-    const originalText = formattedNote.text || '';
-    const filesSectionHeader = '\n\n---\n\n#Attached Files\n\n';
-    if (fileContents.length > 0) {
-      const fileSection = `${filesSectionHeader}${fileContents.join('\n\n---\n\n')}`;
-      formattedNote.text = originalText + fileSection;
-    } else {
-      // Add a note that no files are attached for clarity
-      formattedNote.text = originalText + `${filesSectionHeader}*No files attached to this note.*`;
+    if (files.length > 0) {
+      formattedNote.files = files;
     }
 
     logger.info(
-      `Retrieved note content with ${fileContents.length} attached files for: ${formattedNote.title}`
+      `Retrieved note content with ${files.length} attached files for: ${formattedNote.title}`
     );
     return formattedNote;
   } catch (error) {

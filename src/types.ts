@@ -2,6 +2,11 @@
  * Represents a Bear note with metadata and optional content.
  * Fields match Bear's internal database structure for consistency.
  */
+export interface AttachedFile {
+  filename: string;
+  content: string;
+}
+
 export interface BearNote {
   title: string;
   identifier: string;
@@ -9,6 +14,7 @@ export interface BearNote {
   creation_date: string;
   pin: 'yes' | 'no';
   text?: string; // Only present in content queries
+  files?: AttachedFile[]; // Only present in getNoteContent()
 }
 
 /**

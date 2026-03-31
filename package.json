@@ -1,6 +1,6 @@
 {
   "name": "bear-notes-mcp",
-  "version": "2.7.0",
+  "version": "2.8.2",
   "description": "Bear Notes MCP server with TypeScript and native SQLite",
   "type": "module",
   "main": "dist/main.js",
@@ -49,7 +49,9 @@
     "notes management",
     "productivity",
     "typescript",
-    "mcp"
+    "mcp",
+    "mcp-server",
+    "ai-assistant"
   ],
   "author": {
     "name": "Serhii Vasylenko",
@@ -59,12 +61,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vasylenko/claude-desktop-extension-bear-notes.git"
+    "url": "git+https://github.com/vasylenko/bear-notes-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/vasylenko/claude-desktop-extension-bear-notes/issues"
+    "url": "https://github.com/vasylenko/bear-notes-mcp/issues"
   },
-  "homepage": "https://github.com/vasylenko/claude-desktop-extension-bear-notes#readme",
+  "homepage": "https://github.com/vasylenko/bear-notes-mcp#readme",
   "bin": {
     "bear-notes-mcp": "dist/main.js"
   },

@@ -40,7 +40,7 @@ describe('note conventions via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
 
@@ -70,7 +70,7 @@ describe('note conventions via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
 
@@ -99,7 +99,7 @@ describe('note conventions via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
 
@@ -128,7 +128,7 @@ describe('note conventions via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
 

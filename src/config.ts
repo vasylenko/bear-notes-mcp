@@ -1,4 +1,4 @@
-export const APP_VERSION = '2.7.0';
+export const APP_VERSION = '2.8.2';
 export const BEAR_URL_SCHEME = 'bear://x-callback-url/';
 export const CORE_DATA_EPOCH_OFFSET = 978307200; // 2001-01-01 to Unix epoch
 export const DEFAULT_SEARCH_LIMIT = 50;

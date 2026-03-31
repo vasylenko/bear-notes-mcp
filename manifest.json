@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "bear-notes",
   "display_name": "Bear Notes",
-  "version": "2.7.0",
+  "version": "2.8.2",
   "icon": "icon.png",
   "screenshots": ["screenshots/search-demo.png"],
   "description": "Bear Notes MCP server with TypeScript and native SQLite. Provides comprehensive Bear Notes integration for creating, searching, reading, and modifying notes.",
@@ -14,11 +14,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/vasylenko/claude-desktop-extension-bear-notes"
+    "url": "https://github.com/vasylenko/bear-notes-mcp"
   },  
-  "homepage": "https://github.com/vasylenko/claude-desktop-extension-bear-notes",
-  "documentation": "https://github.com/vasylenko/claude-desktop-extension-bear-notes/blob/main/README.md",
-  "support": "https://github.com/vasylenko/claude-desktop-extension-bear-notes/issues",
+  "homepage": "https://github.com/vasylenko/bear-notes-mcp",
+  "documentation": "https://github.com/vasylenko/bear-notes-mcp/blob/main/README.md",
+  "support": "https://github.com/vasylenko/bear-notes-mcp/issues",
   "server": {
     "type": "node",
     "entry_point": "main.js",

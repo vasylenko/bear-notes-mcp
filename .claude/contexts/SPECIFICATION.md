@@ -1,4 +1,4 @@
-# Project Specification: Bear Notes MCP Bundle
+# Project Specification: Bear Notes MCP Server
 
 ## What This Document Is For
 
@@ -13,7 +13,7 @@ Architecture decisions, system boundaries, and design constraints that shape how
 The server uses two distinct paths to interact with Bear, chosen to avoid corrupting Bear's database while maximizing read performance:
 
 ```
-  MCP Client (Claude Desktop)
+  MCP Client
         │
         ▼
   MCP Server (main.ts)
@@ -40,7 +40,7 @@ All write operations go through the URL path. This is intentionally one-way:
 
 ### Background Execution
 
-All write operations execute in the background without disrupting the user's Bear UI. The principle: the user is working in Claude Desktop, not Bear — writes should never steal focus, open windows, or switch the active note.
+All write operations execute in the background without disrupting the user's Bear UI. The principle: the user is working in their MCP client, not Bear — writes should never steal focus, open windows, or switch the active note.
 
 ---
 
@@ -48,7 +48,7 @@ All write operations execute in the background without disrupting the user's Bea
 
 ### Content Replacement Is Opt-In
 
-The ability to overwrite note content (full body or specific sections) is **disabled by default**. Users must explicitly enable "Content Replacement" in extension settings before `bear-replace-text` works. This prevents AI from accidentally destroying note content.
+The ability to overwrite note content (full body or specific sections) is **disabled by default**. Users must explicitly enable "Content Replacement" in server settings before `bear-replace-text` works. This prevents AI from accidentally destroying note content.
 
 ### No Note Deletion
 

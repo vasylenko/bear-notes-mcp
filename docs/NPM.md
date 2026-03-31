@@ -2,11 +2,11 @@
 
 Search, read, create, and update your Bear Notes from any AI assistant.
 
-**Full documentation and source code: [claude-desktop-extension-bear-notes](https://github.com/vasylenko/claude-desktop-extension-bear-notes)**
+**Full documentation and source code: [bear-notes-mcp](https://github.com/vasylenko/bear-notes-mcp)**
 
 ## Key Features
 
-- **10 MCP tools** for full Bear Notes integration
+- **12 MCP tools** for full Bear Notes integration
 - **OCR search** across images and PDFs attached to notes
 - **Date-based search** with relative dates ("yesterday", "last week", etc.)
 - **Configurable new note convention** for tag placement (opt-in)
@@ -83,8 +83,8 @@ Example with configuration:
 
 **Step 1: Clone and build**
 ```bash
-git clone https://github.com/vasylenko/claude-desktop-extension-bear-notes.git
-cd claude-desktop-extension-bear-notes
+git clone https://github.com/vasylenko/bear-notes-mcp.git
+cd bear-notes-mcp
 npm install
 npm run build
 ```

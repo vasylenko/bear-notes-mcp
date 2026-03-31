@@ -49,7 +49,7 @@ describe('tag search via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_BASE },
-    });
+    }).content[0].text;
 
     expect(result).toContain(TITLE_EXACT);
   });
@@ -58,7 +58,7 @@ describe('tag search via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_BASE },
-    });
+    }).content[0].text;
 
     expect(result).toContain(TITLE_NESTED);
   });
@@ -67,7 +67,7 @@ describe('tag search via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_BASE },
-    });
+    }).content[0].text;
 
     // TAG_SIMILAR ("stest67-...plus") is a different tag, not a child of TAG_BASE
     expect(result).not.toContain(TITLE_SIMILAR);
@@ -77,7 +77,7 @@ describe('tag search via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_NESTED },
-    });
+    }).content[0].text;
 
     expect(result).toContain(TITLE_NESTED);
     expect(result).not.toContain(TITLE_EXACT);
@@ -88,7 +88,7 @@ describe('tag search via MCP Inspector CLI', () => {
     const result = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_SIMILAR },
-    });
+    }).content[0].text;
 
     expect(result).toContain(TITLE_SIMILAR);
     expect(result).not.toContain(TITLE_EXACT);

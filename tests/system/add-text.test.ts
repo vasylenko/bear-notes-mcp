@@ -41,7 +41,7 @@ describe('bear-add-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Original content');
@@ -81,7 +81,7 @@ describe('bear-add-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('New action item appended');
@@ -113,7 +113,7 @@ describe('bear-add-text via MCP Inspector CLI', () => {
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { id: noteId },
-      });
+      }).content[0].text;
 
       const noteBody = extractNoteBody(openResult);
       expect(noteBody).toContain('Original content');

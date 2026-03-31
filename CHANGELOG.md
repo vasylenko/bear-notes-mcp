@@ -5,7 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [UNRELEASED]
+## [2.8.2] - 2026-03-29
+
+### Changed
+- **Repository renamed to `bear-notes-mcp`** ([#75](https://github.com/vasylenko/bear-notes-mcp/issues/75)): The project identity is now client-neutral — "Bear Notes MCP Server" instead of "Claude Desktop Extension". README, package metadata, and all repository URLs have been updated. GitHub redirects the old URL automatically, but update your bookmarks and clones when convenient.
+
+**No feature- or client-facing changes in this release**
+
+## [2.8.1] - 2026-03-14
+
+### Fixed
+- **File attachment data no longer contaminates note body during write operations** ([#86](https://github.com/vasylenko/claude-desktop-extension-bear-notes/issues/86)): `bear-open-note` previously appended a synthetic `# Attached Files` section directly into the note text. When an AI agent then used `bear-replace-text`, this synthetic section could be written back into the note as real content. File metadata is now returned as a separate MCP content block, keeping the note body clean for downstream edits.
+
+## [2.8.0] - 2026-03-13
 
 ### Added
 - **`bear-rename-tag`** tool ([#63](https://github.com/vasylenko/claude-desktop-extension-bear-notes/issues/63)) — rename a tag across all notes in your Bear library. Useful for reorganizing tag taxonomy, fixing typos, or restructuring tag hierarchies.
