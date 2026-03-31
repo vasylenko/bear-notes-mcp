@@ -82,35 +82,39 @@ describe('bear-open-note by title', () => {
 
   it('returns disambiguation list when multiple notes share the same title', () => {
     const sharedTitle = title('Duplicate');
-    const noteIds: string[] = [];
+
+    // Create two notes with the same title — don't rely on returned IDs
+    // because awaitNoteCreation resolves the most recent note by title,
+    // which is the same for both creates
+    for (const text of ['First duplicate', 'Second duplicate']) {
+      callTool({
+        toolName: 'bear-create-note',
+        args: { title: sharedTitle, text },
+      });
+    }
 
     try {
-      // Create two notes with the same title
-      for (const text of ['First duplicate', 'Second duplicate']) {
-        const createResult = callTool({
-          toolName: 'bear-create-note',
-          args: { title: sharedTitle, text },
-        }).content[0].text;
-        const id = tryExtractNoteId(createResult);
-        expect(id).toBeTruthy();
-        if (id) noteIds.push(id);
-      }
-
-      expect(new Set(noteIds).size).toBe(2);
-
       const openResult = callTool({
         toolName: 'bear-open-note',
         args: { title: sharedTitle },
       }).content[0].text;
 
       expect(openResult).toContain('Multiple notes found');
-      // Both IDs and modification dates should appear in the disambiguation list
-      for (const id of noteIds) {
-        expect(openResult).toContain(id);
-      }
+      expect(openResult).toContain(sharedTitle);
       expect(openResult).toMatch(/modified:\s*\d{4}-\d{2}-\d{2}/);
+
+      // Extract IDs from the disambiguation list for cleanup and verification
+      const idMatches = [...openResult.matchAll(/ID:\s*([A-F0-9-]+)/gi)];
+      expect(idMatches.length).toBe(2);
+      expect(new Set(idMatches.map((m) => m[1])).size).toBe(2);
     } finally {
-      for (const id of noteIds) {
+      // Search for all notes with this title and clean them up
+      const searchResult = callTool({
+        toolName: 'bear-search-notes',
+        args: { term: sharedTitle },
+      }).content[0].text;
+      const ids = [...searchResult.matchAll(/ID:\s*([A-F0-9-]+)/gi)].map((m) => m[1]);
+      for (const id of ids) {
         trashNote(id);
       }
     }
