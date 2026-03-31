@@ -466,7 +466,7 @@ server.registerTool(
         .min(1)
         .optional()
         .describe(
-          'Absolute path to a file on disk. Preferred over base64_content when the file already exists locally.'
+          'Path to a file on disk. Preferred over base64_content when the file already exists locally.'
         ),
       base64_content: z
         .string()
