@@ -3,7 +3,7 @@
 
 # Bear Notes MCP Server
 
-Search, read, create, and update your Bear Notes from any AI assistant. Available as a one-click **Claude Desktop extension** and as a standalone **npm package** for any MCP client.
+Search, read, create, and update your Bear Notes from any AI assistant. Available as a one-click **Claude Desktop extension**, a **Claude Code & Cowork plugin**, and as a standalone **npm package** for any MCP client.
 
 This **local-only** MCP server reads Bear's SQLite database for fast search with OCR support, and uses Bear's native API for writes. Complete privacy: no external connections, all processing on your Mac.
 
@@ -48,13 +48,30 @@ Example prompts:
 
 Ask Claude to search your Bear notes with a query like "Search my Bear notes for 'meeting'" - you should see your notes appear in the response!
 
+### Claude Code & Cowork Plugin
+
+Use Bear Notes as a full plugin in Claude Code or Cowork — includes best-practice skills, a setup wizard, and configuration via plugin settings.
+
+**Prerequisites**: [Bear app](https://bear.app/) must be installed, Node.js 24.13.0+
+
+```bash
+claude --plugin-dir /path/to/bear-notes-plugin
+```
+
+The plugin bundles this MCP server with:
+- **Bear Notes skill** — search strategy, section targeting, tag conventions, verify-after-write patterns, and safety guidance
+- **Setup skill** — run `/bear-notes:setup` to verify your environment and configure options
+- **Plugin settings** — debug logging, new note convention, and content replacement toggle managed through Claude's plugin UI
+
+See the [bear-notes-plugin](../bear-notes-plugin/) directory for the full plugin source.
+
 ### Standalone MCP Server
 
-Want to use this Bear Notes MCP server with Claude Code, Cursor, Codex, or other AI assistants?
+Want to use this Bear Notes MCP server with Cursor, Codex, or other AI assistants?
 
 **Requirements**: Node.js 24.13.0+
 
-#### Claude Code (one command)
+#### Claude Code (standalone, without plugin)
 
 ```bash
 claude mcp add bear-notes --transport stdio -- npx -y bear-notes-mcp@latest
@@ -100,6 +117,7 @@ Add to your MCP configuration file:
 Enable verbose logging for troubleshooting.
 
 - **Claude Desktop**: Settings → Extensions → Configure (next to Bear Notes) → toggle "Debug Logging" → Save → Restart Claude
+- **Claude Code/Cowork plugin**: set `debug` to `true` in plugin settings
 - **Standalone MCP server**: set environment variable `UI_DEBUG_TOGGLE=true`
 
 ### New Note Convention
@@ -126,6 +144,7 @@ By default, Bear places tags at the bottom of a note when created via API. Enabl
 > This convention is **disabled by default** — it's opt-in so existing behavior is preserved.
 
 - **Claude Desktop**: Settings → Extensions → Configure (next to Bear Notes) → toggle "New Note Convention" → Save → Restart Claude
+- **Claude Code/Cowork plugin**: set `enable_new_note_convention` to `true` in plugin settings
 - **Standalone MCP server**: set environment variable `UI_ENABLE_NEW_NOTE_CONVENTION=true`
 
 Example standalone configuration with the convention enabled:
@@ -151,6 +170,7 @@ Enable the `bear-replace-text` tool to replace content in existing notes — eit
 > This feature is **disabled by default** — it's opt-in because replacement is a destructive operation.
 
 - **Claude Desktop**: Settings → Extensions → Configure (next to Bear Notes) → toggle "Content Replacement" → Save → Restart Claude
+- **Claude Code/Cowork plugin**: set `enable_content_replacement` to `true` in plugin settings
 - **Standalone MCP server**: set environment variable `UI_ENABLE_CONTENT_REPLACEMENT=true`
 
 Example standalone configuration with content replacement enabled:
