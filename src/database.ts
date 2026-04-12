@@ -51,6 +51,13 @@ export function openBearDatabase(): DatabaseSync {
   try {
     const db = new DatabaseSync(databasePath, { readOnly: true });
 
+    // Bear uses journal_mode=delete (not WAL), so readers and writers block each other.
+    // Without busy_timeout, our reads fail instantly if Bear is mid-write.
+    // DatabaseSync has no constructor option for this (nodejs/node#57597),
+    // so we set it via PRAGMA after opening. Blocks the thread while waiting,
+    // which is fine for sequential stdio MCP transport.
+    db.exec('PRAGMA busy_timeout = 3000');
+
     logger.debug('Bear database opened successfully');
     return db;
   } catch (error) {
