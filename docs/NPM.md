@@ -6,7 +6,7 @@ Search, read, create, and update your Bear Notes from any AI assistant.
 
 ## Key Features
 
-- **12 MCP tools** for full Bear Notes integration
+- **13 MCP tools** for full Bear Notes integration
 - **OCR search** across images and PDFs attached to notes
 - **Date-based search** with relative dates ("yesterday", "last week", etc.)
 - **Configurable new note convention** for tag placement (opt-in)

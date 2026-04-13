@@ -21,7 +21,7 @@ Example prompts:
 
 ## ✨ Key Features
 
-- **12 MCP tools** for searching, reading, creating, updating, tagging, and archiving notes
+- **13 MCP tools** for searching, reading, creating, updating, tagging, and archiving notes
 - **OCR search** — finds text inside attached images and PDFs
 - **Date-based search** with relative dates ("yesterday", "last week", "start of last month")
 - **Tag management** — list tags as a tree, find untagged notes, add tags to notes
