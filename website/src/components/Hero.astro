@@ -11,13 +11,13 @@ import InstallTabs from './InstallTabs.astro';
     <div>
       <!-- Trust signals — populated client-side via shields.io JSON API -->
       <div id="trust-signals" class="hidden flex items-center justify-center xl:justify-start gap-3 mb-8 animate-on-scroll">
-        <a href={`${site.links.github}/stargazers`} class="trust-pill" target="_blank" rel="noopener">
+        <a href={`${site.links.github}/stargazers`} class="trust-pill" target="_blank" rel="noopener noreferrer">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-accent" fill="currentColor" viewBox="0 0 24 24" stroke="none" aria-hidden="true">
             <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
           </svg>
           <span id="stars-count" class="font-semibold text-text-primary"></span>
         </a>
-        <a href={site.links.npm} class="trust-pill" target="_blank" rel="noopener">
+        <a href={site.links.npm} class="trust-pill" target="_blank" rel="noopener noreferrer">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-text-muted" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
           </svg>
@@ -34,7 +34,7 @@ import InstallTabs from './InstallTabs.astro';
 
       <p class="mt-8 text-lg sm:text-xl text-text-secondary max-w-lg xl:max-w-2xl mx-auto xl:mx-0 leading-relaxed animate-on-scroll" style="animation-delay: 200ms;">
         An MCP server that gives your AI assistant full access to your
-        <a href={site.links.bearApp} class="text-text-primary font-semibold hover:text-accent transition-colors" target="_blank" rel="noopener">Bear</a>
+        <a href={site.links.bearApp} class="text-text-primary font-semibold hover:text-accent transition-colors" target="_blank" rel="noopener noreferrer">Bear</a>
         notes. Search with OCR, create, edit, and organize.
       </p>
 
