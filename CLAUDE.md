@@ -76,7 +76,8 @@ All releases go through these steps in order. See `Taskfile.yml` for the underly
 2. **`task version VERSION=X.Y.Z -y`** — bump version in package.json, manifest.json, src/config.ts
 3. **Commit** all release prep files in a single commit: `chore: prepare release X.Y.Z`
 4. **`task push-release VERSION=X.Y.Z SHORT_DESCRIPTION="..." -y`** — creates release commit, tag, and pushes
-5. **Trigger release workflow** after CI passes: `gh workflow run release.yml --ref vX.Y.Z`
+5. **Wait for CI on the tag** — `push-release` triggers CI on both `main` and the `vX.Y.Z` tag. The release workflow's `verify-ci` step checks CI status on the tag ref, so it must complete before proceeding. Verify with: `gh run list --workflow=ci.yml --branch vX.Y.Z --status=success --limit=1`
+6. **Trigger release workflow** after CI passes: `gh workflow run release.yml --ref vX.Y.Z`
 
 The release workflow (`release.yml`) builds the `.mcpb` bundle, creates a GitHub Release, and publishes to npm with provenance.
 
