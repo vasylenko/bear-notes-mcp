@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.10.0] - 2026-04-13
+## [Unreleased]
 
 ### Added
 - **`bear-grab-url`** tool — save a web page as a Bear note. Bear fetches the page and converts it to markdown. Supports optional comma-separated tags. The note is created in the background without bringing Bear to the foreground.
