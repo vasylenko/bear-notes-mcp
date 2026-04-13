@@ -28,6 +28,7 @@ Search, read, create, and update your Bear Notes from any AI assistant.
 - **`bear-archive-note`** - Archive a Bear note to remove it from active lists without deleting it
 - **`bear-rename-tag`** - Rename a tag across all notes in your Bear library
 - **`bear-delete-tag`** - Delete a tag from all notes in your Bear library without affecting the notes
+- **`bear-grab-url`** - Save a web page as a Bear note. Bear fetches the page and converts it to markdown.
 <!-- TOOLS:END -->
 
 **Requirements**: Node.js 24.13.0+
