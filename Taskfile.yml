@@ -48,18 +48,15 @@ tasks:
 
   # === Website ===
 
-  website:server:
-    desc: "Manage website dev server (ACTION=start|stop)"
-    requires:
-      vars:
-        - ACTION
-    preconditions:
-      - sh: echo "{{.ACTION}}" | grep -qE '^(start|stop)$'
-        msg: "ACTION must be 'start' or 'stop'"
+  website:dev:
+    desc: Start website dev server (network-accessible)
     cmds:
-      - |
-        {{if eq .ACTION "start"}}cd website && exec npx astro dev --host{{end}}
-        {{if eq .ACTION "stop"}}lsof -ti:4321 | xargs kill -9 2>/dev/null && echo "Stopped" || echo "Not running"{{end}}
+      - cd website && npx astro dev --host
+
+  website:stop:
+    desc: Stop website dev server
+    cmds:
+      - lsof -ti:4321 | xargs kill -9 2>/dev/null && echo "Stopped" || echo "Not running"
 
   # === Bundle Build ===
 
