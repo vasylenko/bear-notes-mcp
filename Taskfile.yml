@@ -46,6 +46,18 @@ tasks:
       - npm run test:system
 
 
+  # === Website ===
+
+  website:dev:
+    desc: Start website dev server (network-accessible)
+    cmds:
+      - cd website && npx astro dev --host
+
+  website:stop:
+    desc: Stop website dev server
+    cmds:
+      - lsof -ti:4321 | xargs kill -9 2>/dev/null && echo "Stopped" || echo "Not running"
+
   # === Bundle Build ===
 
   pack:
