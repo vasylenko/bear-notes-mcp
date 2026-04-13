@@ -37,7 +37,21 @@ const faqs = [
     answer: 'Because I can 😀 and I am not affiliated with Bear development team. I am a regular user of Bear notes just like you and want to have it in my AI tools.',
   },  
 ];
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((faq) => ({
+    '@type': 'Question',
+    name: faq.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: faq.answer,
+    },
+  })),
+};
 ---
+
+<script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
 
 <section class="py-14 sm:py-20">
   <div class="max-w-2xl mx-auto">

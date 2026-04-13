@@ -15,8 +15,8 @@
   --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
 
   /* Bear's red */
-  --color-accent: #da2c38;
-  --color-accent-muted: rgba(218, 44, 56, 0.15);
+  --color-accent: #d42a35;
+  --color-accent-muted: rgba(212, 42, 53, 0.15);
 
   /* Warm light surfaces */
   --color-surface-0: #f9f8f5;
@@ -25,11 +25,11 @@
   /* Warm dark text */
   --color-text-primary: #1a1917;
   --color-text-secondary: #6b6862;
-  --color-text-muted: #767370;
+  --color-text-muted: #716e6b;
 
   /* Soft borders */
   --color-border: rgba(0, 0, 0, 0.06);
-  --color-border-hover: rgba(218, 44, 56, 0.2);
+  --color-border-hover: rgba(212, 42, 53, 0.2);
 
   /* Radius — two tiers: pills (buttons/badges) and cards (content containers) */
   --radius-pill: 9999px;

@@ -3,7 +3,7 @@ export const site = {
   tagline: 'Your Bear Notes, in Every AI Assistant',
   description:
     "Local MCP server that connects Bear Notes to any AI assistant. Search, create, edit, and organize your notes — runs on your Mac, reads Bear's database directly.",
-  url: 'https://bear-notes-mcp.com',
+  url: 'https://bear-notes-mcp.vercel.app',
   ogImage: '/og-image.png',
   author: {
     name: 'Serhii Vasylenko',
