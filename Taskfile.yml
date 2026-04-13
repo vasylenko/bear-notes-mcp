@@ -50,24 +50,16 @@ tasks:
 
   website:server:
     desc: "Manage website dev server (ACTION=start|stop)"
-    interactive: true
+    requires:
+      vars:
+        - ACTION
+    preconditions:
+      - sh: echo "{{.ACTION}}" | grep -qE '^(start|stop)$'
+        msg: "ACTION must be 'start' or 'stop'"
     cmds:
       - |
-        ACTION="{{.ACTION}}"
-        if [ -z "$ACTION" ]; then
-          printf "Choose action:\n  1) start\n  2) stop\n> "
-          read -r choice
-          case "$choice" in
-            1|start) ACTION=start ;;
-            2|stop) ACTION=stop ;;
-            *) echo "Invalid choice"; exit 1 ;;
-          esac
-        fi
-        case "$ACTION" in
-          start) cd website && exec npx astro dev --host ;;
-          stop) lsof -ti:4321 | xargs kill -9 2>/dev/null && echo "Stopped" || echo "Not running" ;;
-          *) echo "Invalid action '${ACTION}'. Use start or stop."; exit 1 ;;
-        esac
+        {{if eq .ACTION "start"}}cd website && exec npx astro dev --host{{end}}
+        {{if eq .ACTION "stop"}}lsof -ti:4321 | xargs kill -9 2>/dev/null && echo "Stopped" || echo "Not running"{{end}}
 
   # === Bundle Build ===
 
