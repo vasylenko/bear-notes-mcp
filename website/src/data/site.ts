@@ -15,6 +15,7 @@ export const site = {
     releases: 'https://github.com/vasylenko/bear-notes-mcp/releases',
     bearApp: 'https://bear.app',
     mcpSpec: 'https://modelcontextprotocol.io',
+    support: 'https://buymeacoffee.com/vasylenko',
   },
   install: {
     claudeDesktop: {
