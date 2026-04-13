@@ -21,7 +21,7 @@ Example prompts:
 
 ## ✨ Key Features
 
-- **12 MCP tools** for searching, reading, creating, updating, tagging, and archiving notes
+- **13 MCP tools** for searching, reading, creating, updating, tagging, and archiving notes
 - **OCR search** — finds text inside attached images and PDFs
 - **Date-based search** with relative dates ("yesterday", "last week", "start of last month")
 - **Tag management** — list tags as a tree, find untagged notes, add tags to notes
@@ -91,6 +91,7 @@ Add to your MCP configuration file:
 - **`bear-archive-note`** - Archive a Bear note to remove it from active lists without deleting it
 - **`bear-rename-tag`** - Rename a tag across all notes in your Bear library
 - **`bear-delete-tag`** - Delete a tag from all notes in your Bear library without affecting the notes
+- **`bear-grab-url`** - Save a web page as a Bear note. Bear fetches the page and converts it to markdown.
 <!-- TOOLS:END -->
 
 ## ⚙️ Configuration

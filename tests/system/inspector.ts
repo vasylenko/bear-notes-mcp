@@ -140,6 +140,32 @@ export function uniqueTitle(prefix: string, label: string, runId: number): strin
   return `${prefix} ${label} ${runId}`;
 }
 
+interface PollOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
+  label?: string;
+}
+
+/**
+ * Polls an action until a predicate is satisfied or the timeout expires.
+ * Replaces ad-hoc while loops across system tests.
+ */
+export async function pollUntil<T>(
+  action: () => T,
+  predicate: (result: T) => boolean,
+  { timeoutMs = 5_000, intervalMs = 1_000, label = 'condition' }: PollOptions = {}
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const result = action();
+    if (predicate(result)) return result;
+    await sleep(intervalMs);
+  }
+
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for ${label}`);
+}
+
 /**
  * Polls bear-open-note until the attached-files content block contains the expected marker.
  * Avoids flaky fixed sleeps by polling for actual content availability (e.g. OCR text or filename).
@@ -149,19 +175,10 @@ export async function waitForFileContent(
   marker: string,
   timeoutMs = 15_000
 ): Promise<ToolResponse> {
-  const interval = 1_000;
-  const deadline = Date.now() + timeoutMs;
-
-  while (Date.now() < deadline) {
-    const response = callTool({ toolName: 'bear-open-note', args: { id: noteId } });
-    if (response.content.length > 1 && response.content[1].text.includes(marker)) {
-      return response;
-    }
-    await sleep(interval);
-  }
-
-  throw new Error(
-    `Timed out after ${timeoutMs}ms waiting for file content containing "${marker}" in note ${noteId}`
+  return pollUntil(
+    () => callTool({ toolName: 'bear-open-note', args: { id: noteId } }),
+    (r) => r.content.length > 1 && r.content[1].text.includes(marker),
+    { timeoutMs, label: `file content "${marker}" in note ${noteId}` }
   );
 }
 

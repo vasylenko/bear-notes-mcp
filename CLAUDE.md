@@ -34,17 +34,23 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 
 # Project Structure
 ```
-├── src/                   # Project source code
-│   ├── main.ts            # MCP server entry point
+├── src/                   # MCP server source code
+│   ├── main.ts            # Server entry point and tool registration
 │   ├── bear-urls.ts       # Bear app URL scheme handlers
 │   ├── database.ts        # SQLite database connection
 │   ├── notes.ts           # Note operations (search, content)
 │   ├── tags.ts            # Tag operations (list, hierarchy)
+│   ├── note-conventions.ts # Tag placement conventions for new notes
 │   ├── config.ts          # Configuration management
 │   ├── types.ts           # Type definitions
 │   └── utils.ts           # Shared utilities
+├── tests/system/          # System tests (require Bear app running)
+│   ├── inspector.ts       # Test helpers: callTool, pollUntil, cleanup
+│   └── *.test.ts          # Per-tool system test suites
+├── scripts/               # Build and doc automation scripts
 ├── dist/                  # Compiled JavaScript (build output)
 ├── assets/                # Static assets (icons, etc.)
+├── website/               # Promotional landing page (Astro + Tailwind)
 ├── manifest.json          # MCPB manifest
 ├── Taskfile.yml           # Task automation (build/test/pack)
 └── package.json           # Node.js dependencies and scripts
@@ -57,6 +63,10 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 2 - Bear database schema brief - .claude/contexts/BEAR_DATABASE_SCHEMA.md - use this when working with tasks related to database access as a starting point
 
 # Core Workflows
+
+## Website
+
+Promotional single-page landing at `bear-notes-mcp.vercel.app` (Vercel free domain, no custom domain). Built with Astro + Tailwind CSS, lives in `website/`. When adding or removing tools, update the tool count in `website/src/components/FeatureGrid.astro` alongside README.md and docs/NPM.md.
 
 ## Release Process
 
