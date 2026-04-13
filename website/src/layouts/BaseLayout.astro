@@ -2,6 +2,7 @@
 import { site } from '../data/site';
 import '../styles/global.css';
 import Footer from '../components/Footer.astro';
+import Analytics from '@vercel/analytics/astro';
 
 interface Props {
   title?: string;
@@ -101,5 +102,6 @@ const jsonLd = {
         });
       });
     </script>
+    <Analytics />
   </body>
 </html>
