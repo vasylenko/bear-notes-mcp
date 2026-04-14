@@ -551,6 +551,7 @@ server.registerTool(
       }
 
       // Fail fast with helpful message rather than cryptic Bear error
+      let noteTitle: string | undefined;
       if (id) {
         const existingNote = getNoteContent(id);
         if (!existingNote) {
@@ -558,6 +559,7 @@ server.registerTool(
 
 Use bear-search-notes to find the correct note identifier.`);
         }
+        noteTitle = existingNote.title;
       }
 
       const url = buildBearUrl('add-file', {
@@ -571,7 +573,8 @@ Use bear-search-notes to find the correct note identifier.`);
       logger.debug(`Executing Bear add-file URL for: ${resolvedFilename}`);
       await executeBearXCallbackApi(url);
 
-      const noteIdentifier = id ? `Note ID: ${id}` : `Note title: "${title!}"`;
+      // Title-only path omits ID: no pre-flight DB lookup, so ID is unavailable
+      const noteIdentifier = id ? `Note: "${noteTitle}"\nID: ${id}` : `Note: "${title!}"`;
 
       return createToolResponse(`File "${resolvedFilename}" added successfully!
 
@@ -763,6 +766,7 @@ Use bear-search-notes to find the correct note identifier.`);
       return createToolResponse(`Tags added successfully!
 
 Note: "${existingNote.title}"
+ID: ${id}
 Tags: ${tagList}
 
 The tags have been added to the beginning of the note.`);

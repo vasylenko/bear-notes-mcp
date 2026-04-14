@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`bear-add-tag` and `bear-add-file` now return complete note metadata** — mutation tool responses previously had gaps: `bear-add-tag` omitted the note ID, and `bear-add-file` (when called with an ID) omitted the note title. Both tools now consistently return the note title and ID, matching all other mutation tools. This gives LLM clients the metadata they need for follow-up operations without an extra lookup step.
+
 ## [2.10.0] - 2026-04-13
 
 ### Added

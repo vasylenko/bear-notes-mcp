@@ -277,9 +277,11 @@ describe('attached files content separation', () => {
         args: { id: noteId, file_path: OCR_JPG_PATH },
       }).content[0].text;
 
-      // Server should infer filename from path
+      // Server should infer filename from path and return complete metadata
       expect(addResult).toContain('ocr-text.jpg');
       expect(addResult).toContain('added successfully');
+      expect(addResult).toContain(title);
+      expect(addResult).toContain(noteId);
 
       // Poll until Bear finishes OCR — proves the file was actually attached
       const response = await waitForFileContent(noteId, 'simple');
