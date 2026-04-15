@@ -42,7 +42,7 @@ export function logAndThrow(message: string): never {
  * Keep in sync with DECODED_TAG_TITLE in notes.ts — both MUST apply the same transformations.
  */
 export function decodeTagName(encodedName: string): string {
-  return encodedName.replace(/\+/g, ' ').trim().toLowerCase();
+  return encodedName.replaceAll('+', ' ').trim().toLowerCase();
 }
 
 /**
