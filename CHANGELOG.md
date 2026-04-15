@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`bear-add-tag` correctly marked as idempotent** — the tool's MCP annotation now reflects that adding an already-present tag is a no-op. MCP clients can safely retry `bear-add-tag` calls on transient failures without risk of unintended side effects.
+
 ### Fixed
 - **`bear-add-tag` and `bear-add-file` now return complete note metadata** — mutation tool responses previously had gaps: `bear-add-tag` omitted the note ID, and `bear-add-file` (when called with an ID) omitted the note title. Both tools now consistently return the note title and ID, matching all other mutation tools. This gives LLM clients the metadata they need for follow-up operations without an extra lookup step.
 

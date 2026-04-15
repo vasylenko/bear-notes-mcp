@@ -733,7 +733,7 @@ server.registerTool(
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: false,
+      idempotentHint: true,
       openWorldHint: true,
     },
   },

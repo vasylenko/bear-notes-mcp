@@ -1,17 +1,6 @@
 import type { BearNote, BearTag } from './types.js';
-import { convertCoreDataTimestamp, logAndThrow, logger } from './utils.js';
+import { convertCoreDataTimestamp, decodeTagName, logAndThrow, logger } from './utils.js';
 import { closeBearDatabase, openBearDatabase } from './database.js';
-
-/**
- * Decodes and normalizes Bear tag names.
- * - Replaces '+' with spaces (Bear's URL encoding)
- * - Converts to lowercase (matches Bear UI behavior)
- * - Trims whitespace
- * Keep in sync with DECODED_TAG_TITLE in notes.ts — both MUST apply the same transformations.
- */
-function decodeTagName(encodedName: string): string {
-  return encodedName.replace(/\+/g, ' ').trim().toLowerCase();
-}
 
 /**
  * Extracts the display name (leaf) from a full tag path.

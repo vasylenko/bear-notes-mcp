@@ -16,7 +16,7 @@ const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
 
-// SQL equivalent of decodeTagName() in tags.ts — both MUST apply the same transformations
+// SQL equivalent of decodeTagName() in utils.ts — both MUST apply the same transformations
 const DECODED_TAG_TITLE = "LOWER(TRIM(REPLACE(t.ZTITLE, '+', ' ')))";
 
 /**
