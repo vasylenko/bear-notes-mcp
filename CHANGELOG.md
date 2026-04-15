@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`bear-search-notes` now includes tags in results** — each search result with tags shows a `Tags:` line alongside existing metadata (title, dates, ID). This lets LLMs cross-reference tags across multiple notes without opening each one individually.
+
 ### Changed
 - **`bear-add-tag` correctly marked as idempotent** — the tool's MCP annotation now reflects that adding an already-present tag is a no-op. MCP clients can safely retry `bear-add-tag` calls on transient failures without risk of unintended side effects.
 
