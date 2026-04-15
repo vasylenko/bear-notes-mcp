@@ -332,12 +332,13 @@ describe('attached files content separation', () => {
 
       noteId = findNoteId(title);
 
-      const result = callTool({
+      const response = callTool({
         toolName: 'bear-add-file',
         args: { id: noteId, file_path: '/tmp/does-not-exist-12345.pdf' },
-      }).content[0].text;
+      });
 
-      expect(result).toContain('File not found');
+      expect(response.content[0].text).toContain('File not found');
+      expect(response.isError).toBe(true);
     } finally {
       if (noteId) trashNote(noteId);
     }

@@ -169,13 +169,14 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
 
       noteId = findNoteId(title);
 
-      const result = callTool({
+      const response = callTool({
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'full-note-body', text: 'new content' },
         env: {},
-      }).content[0].text;
+      });
 
-      expect(result).toContain('Content replacement is not enabled');
+      expect(response.content[0].text).toContain('Content replacement is not enabled');
+      expect(response.isError).toBe(true);
     } finally {
       if (noteId) trashNote(noteId);
     }
@@ -193,13 +194,14 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
 
       noteId = findNoteId(title);
 
-      const result = callTool({
+      const response = callTool({
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'section', text: 'new content', header: 'NonExistentSection' },
         env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
-      }).content[0].text;
+      });
 
-      expect(result).toContain('"NonExistentSection" not found');
+      expect(response.content[0].text).toContain('"NonExistentSection" not found');
+      expect(response.isError).toBe(true);
     } finally {
       if (noteId) trashNote(noteId);
     }
@@ -351,13 +353,14 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
 
       noteId = findNoteId(title);
 
-      const result = callTool({
+      const response = callTool({
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'section', text: 'new content' },
         env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
-      }).content[0].text;
+      });
 
-      expect(result).toContain('scope is "section" but no header was provided');
+      expect(response.content[0].text).toContain('scope is "section" but no header was provided');
+      expect(response.isError).toBe(true);
     } finally {
       if (noteId) trashNote(noteId);
     }
@@ -375,13 +378,16 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
 
       noteId = findNoteId(title);
 
-      const result = callTool({
+      const response = callTool({
         toolName: 'bear-replace-text',
         args: { id: noteId, scope: 'full-note-body', text: 'new content', header: 'Section' },
         env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
-      }).content[0].text;
+      });
 
-      expect(result).toContain('scope is "full-note-body" but a header was provided');
+      expect(response.content[0].text).toContain(
+        'scope is "full-note-body" but a header was provided'
+      );
+      expect(response.isError).toBe(true);
     } finally {
       if (noteId) trashNote(noteId);
     }

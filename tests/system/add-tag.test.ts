@@ -66,11 +66,12 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
   });
 
   it('returns error for non-existent note ID', () => {
-    const result = callTool({
+    const response = callTool({
       toolName: 'bear-add-tag',
       args: { id: '00000000-0000-0000-0000-000000000000', tags: '["bogus"]' },
-    }).content[0].text;
+    });
 
-    expect(result).toContain('not found');
+    expect(response.content[0].text).toContain('not found');
+    expect(response.isError).toBe(true);
   });
 });

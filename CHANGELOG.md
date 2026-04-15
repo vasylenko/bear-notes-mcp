@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`bear-search-notes` now includes tags in results** — each search result with tags shows a `Tags:` line alongside existing metadata (title, dates, ID). This lets LLMs cross-reference tags across multiple notes without opening each one individually.
 
 ### Changed
+- **Soft errors now signal `isError: true` in tool responses** — for recoverable failures handled inside tool implementations (such as a missing note, handler-level parameter validation, a disabled feature, or a file error), the tool response now sets `isError: true` instead of returning the error message as a normal result. This lets MCP clients distinguish failures from successful empty results (like "no notes found") and gives LLMs a clear signal to self-correct. Permanent conditions (e.g., feature disabled) include explicit "do not retry" guidance.
 - **`bear-add-tag` correctly marked as idempotent** — the tool's MCP annotation now reflects that adding an already-present tag is a no-op. MCP clients can safely retry `bear-add-tag` calls on transient failures without risk of unintended side effects.
 
 ### Fixed

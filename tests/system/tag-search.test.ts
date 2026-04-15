@@ -58,12 +58,14 @@ afterAll(() => {
 
 describe('tag search via MCP Inspector CLI', () => {
   it('exact tag returns the matching note', () => {
-    const result = callTool({
+    const response = callTool({
       toolName: 'bear-search-notes',
       args: { tag: TAG_BASE },
-    }).content[0].text;
+    });
 
-    expect(result).toContain(TITLE_EXACT);
+    expect(response.content[0].text).toContain(TITLE_EXACT);
+    // Successful search must not be flagged as error — isError is only for tool failures
+    expect(response.isError).not.toBe(true);
   });
 
   it('parent tag search includes notes with nested child tags', () => {

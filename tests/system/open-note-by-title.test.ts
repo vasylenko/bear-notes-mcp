@@ -72,12 +72,13 @@ describe('bear-open-note by title', () => {
   });
 
   it('returns not-found error for non-existent title', () => {
-    const openResult = callTool({
+    const response = callTool({
       toolName: 'bear-open-note',
       args: { title: `Non-existent note ${RUN_ID}` },
-    }).content[0].text;
+    });
 
-    expect(openResult).toContain('No note found with title');
+    expect(response.content[0].text).toContain('No note found with title');
+    expect(response.isError).toBe(true);
   });
 
   it('returns disambiguation list when multiple notes share the same title', () => {
@@ -121,12 +122,13 @@ describe('bear-open-note by title', () => {
   });
 
   it('returns error when neither id nor title is provided', () => {
-    const openResult = callTool({
+    const response = callTool({
       toolName: 'bear-open-note',
       args: {},
-    }).content[0].text;
+    });
 
-    expect(openResult).toContain('Either note ID or title is required');
+    expect(response.content[0].text).toContain('Either note ID or title is required');
+    expect(response.isError).toBe(true);
   });
 
   it('excludes trashed notes from title lookup', () => {

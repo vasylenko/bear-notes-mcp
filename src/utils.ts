@@ -160,6 +160,19 @@ export function createToolResponse(text: string): Pick<CallToolResult, 'content'
 }
 
 /**
+ * Creates a standardized MCP error response with isError flag.
+ * Signals to the LLM that the tool failed and self-correction may be needed.
+ * Per the MCP spec, tool errors use isError: true inside the result object
+ * so the LLM can see the failure and retry or adjust its approach.
+ *
+ * @param text - The error description with recovery guidance
+ * @returns Formatted CallToolResult with isError: true
+ */
+export function createErrorResponse(text: string): Pick<CallToolResult, 'content' | 'isError'> {
+  return { ...createToolResponse(text), isError: true };
+}
+
+/**
  * Strips a matching markdown heading from the start of text to prevent header duplication.
  * Bear's add-text API with mode=replace keeps the original section header, so if the
  * replacement text also starts with that header, it appears twice in the note.
@@ -209,7 +222,7 @@ export async function handleNoteTextUpdate(
     const existingNote = getNoteContent(id);
 
     if (!existingNote) {
-      return createToolResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+      return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
     }
@@ -220,7 +233,7 @@ Use bear-search-notes to find the correct note identifier.`);
     // Bear silently ignores replace-with-header when the section doesn't exist — fail early with a clear message
     if (mode === 'replace' && cleanHeader) {
       if (!existingNote.text || !noteHasHeader(existingNote.text, cleanHeader)) {
-        return createToolResponse(`Section "${cleanHeader}" not found in note "${existingNote.title}".
+        return createErrorResponse(`Section "${cleanHeader}" not found in note "${existingNote.title}".
 
 Check the note content with bear-open-note to see available sections.`);
       }

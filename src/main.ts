@@ -9,7 +9,13 @@ import { z } from 'zod';
 
 import { APP_VERSION, ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from './config.js';
 import { applyNoteConventions } from './note-conventions.js';
-import { cleanBase64, createToolResponse, handleNoteTextUpdate, logger } from './utils.js';
+import {
+  cleanBase64,
+  createErrorResponse,
+  createToolResponse,
+  handleNoteTextUpdate,
+  logger,
+} from './utils.js';
 import { awaitNoteCreation, findNotesByTitle, getNoteContent, searchNotes } from './notes.js';
 import { findUntaggedNotes, listTags } from './tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from './bear-urls.js';
@@ -67,7 +73,7 @@ server.registerTool(
     );
 
     if (!id && !title) {
-      return createToolResponse(
+      return createErrorResponse(
         'Either note ID or title is required. Use bear-search-notes to find the note ID, or provide the exact title.'
       );
     }
@@ -78,7 +84,7 @@ server.registerTool(
         const matches = findNotesByTitle(title);
 
         if (matches.length === 0) {
-          return createToolResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
+          return createErrorResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
 
 Use bear-search-notes to find notes by partial text match.`);
         }
@@ -102,7 +108,7 @@ Use bear-open-note with a specific ID to open the desired note.`);
       const noteWithContent = getNoteContent(id!);
 
       if (!noteWithContent) {
-        return createToolResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+        return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
       }
@@ -435,19 +441,19 @@ server.registerTool(
   },
   async ({ id, scope, text, header }): Promise<CallToolResult> => {
     if (!ENABLE_CONTENT_REPLACEMENT) {
-      return createToolResponse(`Content replacement is not enabled.
+      return createErrorResponse(`Content replacement is not enabled. Do not retry — this requires a settings change by the user.
 
-To use replace mode, enable "Content Replacement" in the Bear Notes server settings.`);
+To use replace mode, the user must enable "Content Replacement" in the Bear Notes server settings.`);
     }
 
     if (scope === 'section' && !header) {
-      return createToolResponse(`scope is "section" but no header was provided.
+      return createErrorResponse(`scope is "section" but no header was provided.
 
 Set the header parameter to the section heading you want to replace.`);
     }
 
     if (scope === 'full-note-body' && header) {
-      return createToolResponse(`scope is "full-note-body" but a header was provided.
+      return createErrorResponse(`scope is "full-note-body" but a header was provided.
 
 Remove the header parameter to replace the full note body, or change scope to "section".`);
     }
@@ -507,19 +513,19 @@ server.registerTool(
     );
 
     if (!id && !title) {
-      return createToolResponse(
+      return createErrorResponse(
         'Either note ID or title is required. Use bear-search-notes to find the note ID.'
       );
     }
 
     if (file_path && base64_content) {
-      return createToolResponse('Provide either file_path or base64_content, not both.');
+      return createErrorResponse('Provide either file_path or base64_content, not both.');
     }
     if (!file_path && !base64_content) {
-      return createToolResponse('Either file_path or base64_content is required.');
+      return createErrorResponse('Either file_path or base64_content is required.');
     }
     if (base64_content && !filename) {
-      return createToolResponse('filename is required when using base64_content.');
+      return createErrorResponse('filename is required when using base64_content.');
     }
 
     try {
@@ -531,18 +537,18 @@ server.registerTool(
         try {
           const buffer = readFileSync(file_path);
           if (buffer.length === 0) {
-            return createToolResponse(`File is empty: ${file_path}`);
+            return createErrorResponse(`File is empty: ${file_path}`);
           }
           fileData = buffer.toString('base64');
         } catch (err) {
           const code = (err as { code?: string }).code;
           if (code === 'ENOENT') {
-            return createToolResponse(`File not found: ${file_path}`);
+            return createErrorResponse(`File not found: ${file_path}`);
           }
           if (code === 'EACCES') {
-            return createToolResponse(`Permission denied: ${file_path}`);
+            return createErrorResponse(`Permission denied: ${file_path}`);
           }
-          return createToolResponse(
+          return createErrorResponse(
             `Cannot read file: ${err instanceof Error ? err.message : String(err)}`
           );
         }
@@ -558,7 +564,7 @@ server.registerTool(
       if (id) {
         const existingNote = getNoteContent(id);
         if (!existingNote) {
-          return createToolResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+          return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
         }
@@ -746,7 +752,7 @@ server.registerTool(
     try {
       const existingNote = getNoteContent(id);
       if (!existingNote) {
-        return createToolResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+        return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
       }
@@ -806,7 +812,7 @@ server.registerTool(
     try {
       const existingNote = getNoteContent(id);
       if (!existingNote) {
-        return createToolResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+        return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
       }

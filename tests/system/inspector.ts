@@ -17,6 +17,7 @@ interface CallToolOptions {
 
 export interface ToolResponse {
   content: { type: string; text: string }[];
+  isError?: boolean;
 }
 
 /**

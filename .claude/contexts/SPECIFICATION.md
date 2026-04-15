@@ -91,12 +91,14 @@ Two tiers of errors, from the client's perspective:
 
 | Tier | When | What the client sees |
 |------|------|---------------------|
-| Soft error | Expected condition (note not found, section missing, feature disabled) | Normal text response describing the problem and suggesting a fix |
-| Hard error | Unexpected failure (subprocess crash, DB error) | MCP-level error response |
+| Soft error | Expected condition handled inside tool handlers (note not found, section missing, feature disabled, handler-level parameter validation, file errors) | `isError: true` response with text describing the problem and suggesting a fix |
+| Hard error | Unexpected failure or deep validation error (subprocess crash, DB error, invalid date format) | MCP-level error response (thrown exception — SDK wraps these in `isError: true` automatically) |
 
-Note-level write tools do pre-flight DB validation to turn silent Bear failures into clear soft errors. Global tag operations cannot be pre-validated.
+The classification boundary is: **"Did the tool accomplish what it was asked to do?"** If yes (even with zero results), it stays a normal response via `createToolResponse()`. If no, it becomes `isError: true` via `createErrorResponse()`.
 
-Neither tier uses the MCP SDK's `isError` field — this is a potential future improvement.
+Normal responses (not errors): empty search results, no tags found, no untagged notes, title disambiguation — these are correct answers, not failures.
+
+Note-level write tools do pre-flight DB validation to turn silent Bear failures into clear soft errors. Global tag operations cannot be pre-validated. Permanent conditions (e.g., feature disabled) include explicit non-retryability language to prevent LLM retry loops.
 
 ---
 
