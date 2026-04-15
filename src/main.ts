@@ -329,6 +329,9 @@ Try different search criteria or check if notes exist in Bear Notes.`);
         resultLines.push(`${index + 1}. **${noteTitle}**`);
         resultLines.push(`   Created: ${createdDate}`);
         resultLines.push(`   Modified: ${modifiedDate}`);
+        if (note.tags && note.tags.length > 0) {
+          resultLines.push(`   Tags: ${note.tags.join(', ')}`);
+        }
         resultLines.push(`   ID: ${note.identifier}`);
         resultLines.push('');
       });

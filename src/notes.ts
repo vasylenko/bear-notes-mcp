@@ -5,6 +5,7 @@ import { DEFAULT_SEARCH_LIMIT } from './config.js';
 import {
   convertCoreDataTimestamp,
   convertDateToCoreDataTimestamp,
+  decodeTagName,
   logAndThrow,
   logger,
   parseDateString,
@@ -43,6 +44,7 @@ function formatBearNote(row: Record<string, unknown>): BearNote {
   const creationDate = row.creationDate as number;
   const pinned = row.pinned as number | undefined;
   const text = row.text as string | undefined;
+  const rawTags = row.rawTags as string | undefined;
 
   if (!identifier) {
     logAndThrow('Database error: Note identifier is missing from database row');
@@ -57,12 +59,16 @@ function formatBearNote(row: Record<string, unknown>): BearNote {
   // Bear stores pinned as integer; API expects string literal (only needed when pinned is queried)
   const pin: 'yes' | 'no' = pinned ? 'yes' : 'no';
 
+  // Tags come from a correlated subquery as comma-separated encoded names (e.g., "+What+is+Gravity")
+  const tags = rawTags ? rawTags.split(',').map(decodeTagName) : undefined;
+
   return {
     title,
     identifier,
     modification_date,
     creation_date,
     pin,
+    ...(tags && { tags }),
     ...(text !== undefined && { text }),
   };
 }
@@ -259,7 +265,11 @@ export function searchNotes(
              note.ZUNIQUEIDENTIFIER as identifier,
              note.ZCREATIONDATE as creationDate,
              note.ZMODIFICATIONDATE as modificationDate,
-             note.ZPINNED as pinned
+             note.ZPINNED as pinned,
+             (SELECT GROUP_CONCAT(t2.ZTITLE, ',')
+              FROM Z_5TAGS nt2
+              JOIN ZSFNOTETAG t2 ON t2.Z_PK = nt2.Z_13TAGS
+              WHERE nt2.Z_5NOTES = note.Z_PK) as rawTags
       FROM ZSFNOTE note
       LEFT JOIN ZSFNOTEFILE f ON f.ZNOTE = note.Z_PK`;
 

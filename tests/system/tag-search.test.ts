@@ -94,4 +94,18 @@ describe('tag search via MCP Inspector CLI', () => {
     expect(result).not.toContain(TITLE_EXACT);
     expect(result).not.toContain(TITLE_NESTED);
   });
+
+  it('search results include decoded tag names', () => {
+    const result = callTool({
+      toolName: 'bear-search-notes',
+      args: { tag: TAG_BASE },
+    }).content[0].text;
+
+    // Verify the Tags: line exists and contains decoded tag names.
+    // Bear auto-assigns parent tags to nested-tagged notes, so the "Nested" note
+    // has both TAG_BASE and TAG_NESTED — match each tag independently.
+    expect(result).toContain('Tags:');
+    expect(result).toContain(TAG_BASE);
+    expect(result).toContain(TAG_NESTED);
+  });
 });

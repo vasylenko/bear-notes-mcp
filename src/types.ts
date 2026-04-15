@@ -13,6 +13,7 @@ export interface BearNote {
   modification_date: string;
   creation_date: string;
   pin: 'yes' | 'no';
+  tags?: string[]; // Only present in search results
   text?: string; // Only present in content queries
   files?: AttachedFile[]; // Only present in getNoteContent()
 }
