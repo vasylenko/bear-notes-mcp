@@ -91,8 +91,8 @@ Two tiers of errors, from the client's perspective:
 
 | Tier | When | What the client sees |
 |------|------|---------------------|
-| Soft error | Expected condition (note not found, section missing, feature disabled, parameter validation, file errors) | `isError: true` response with text describing the problem and suggesting a fix |
-| Hard error | Unexpected failure (subprocess crash, DB error) | MCP-level error response (thrown exception) |
+| Soft error | Expected condition handled inside tool handlers (note not found, section missing, feature disabled, handler-level parameter validation, file errors) | `isError: true` response with text describing the problem and suggesting a fix |
+| Hard error | Unexpected failure or deep validation error (subprocess crash, DB error, invalid date format) | MCP-level error response (thrown exception — SDK wraps these in `isError: true` automatically) |
 
 The classification boundary is: **"Did the tool accomplish what it was asked to do?"** If yes (even with zero results), it stays a normal response via `createToolResponse()`. If no, it becomes `isError: true` via `createErrorResponse()`.
 

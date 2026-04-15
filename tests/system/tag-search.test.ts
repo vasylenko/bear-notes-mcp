@@ -65,7 +65,7 @@ describe('tag search via MCP Inspector CLI', () => {
 
     expect(response.content[0].text).toContain(TITLE_EXACT);
     // Successful search must not be flagged as error — isError is only for tool failures
-    expect(response.isError).toBeUndefined();
+    expect(response.isError).not.toBe(true);
   });
 
   it('parent tag search includes notes with nested child tags', () => {
