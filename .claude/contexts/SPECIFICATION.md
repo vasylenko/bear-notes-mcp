@@ -60,7 +60,7 @@ There is no delete tool. Too destructive for AI-assisted workflows — a misiden
 
 ### Bear's Database
 
-Bear uses Core Data with SQLite. The schema is undocumented — our understanding comes from reverse-engineering (see `BEAR_DATABASE_SCHEMA.md`). The database path is discovered via Bear's app container at `~/Library/Group Containers/group.com.shinyfrog.bear/`. Key fragility points:
+Bear uses Core Data with SQLite. The schema is undocumented — our understanding comes from reverse-engineering (see `BEAR_DATABASE_SCHEMA.md`). The database path is hardcoded to Bear's app group container at `~/Library/Group Containers/9K33E3U3T4.net.shinyfrog.bear/Application Data/database.sqlite` (overridable via `BEAR_DB_PATH` env var for tests). Key fragility points:
 
 - Tag name decoding logic exists in two places (SQL expression in `notes.ts` and TypeScript function in `tags.ts`) — these must produce identical results. Bidirectional comments link them.
 - Tag hierarchy is not stored relationally — it's reconstructed at query time by splitting slash-delimited paths.
