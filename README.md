@@ -1,5 +1,7 @@
 [![Supply Chain](https://github.com/vasylenko/bear-notes-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/vasylenko/bear-notes-mcp/actions/workflows/ci.yml)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vasylenko/bear-notes-mcp)
+[![bear-notes-mcp MCP server](https://glama.ai/mcp/servers/vasylenko/bear-notes-mcp/badges/score.svg)](https://glama.ai/mcp/servers/vasylenko/bear-notes-mcp)
+
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-d42a35?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/vasylenko)
 
 # Bear Notes MCP Server
