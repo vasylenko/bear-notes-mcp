@@ -9,6 +9,10 @@ dist/**
 .DS_Store
 *.dxt
 .astro/
+# Eval artifacts: downloaded released server + promptfoo cache (run outputs)
+evals/released/
+evals/outputs/
+.promptfoo/
 ####
 
 # Logs
