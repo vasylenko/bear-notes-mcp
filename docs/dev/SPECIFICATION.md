@@ -121,4 +121,4 @@ Note-level write tools do pre-flight DB validation to turn silent Bear failures 
 
 ### Bear Notes API
 - [Bear x-callback-url API](https://bear.app/faq/X-callback-url%20Scheme%20documentation/)
-- Bear Database Schema: see `.claude/contexts/BEAR_DATABASE_SCHEMA.md`
+- Bear Database Schema: see `docs/dev/BEAR_DATABASE_SCHEMA.md`

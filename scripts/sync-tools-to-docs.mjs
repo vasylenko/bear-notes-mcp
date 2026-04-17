@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Syncs the tools list from manifest.json into README.md and docs/NPM.md.
+ * Syncs the tools list from manifest.json into README.md and docs/user/NPM.md.
  * Replaces content between <!-- TOOLS:START --> and <!-- TOOLS:END --> markers.
  */
 
@@ -21,7 +21,7 @@ const END_MARKER = '<!-- TOOLS:END -->';
 const pattern = new RegExp(`${START_MARKER}[\\s\\S]*?${END_MARKER}`, 'g');
 const replacement = `${START_MARKER}\n${toolsMarkdown}\n${END_MARKER}`;
 
-const docs = ['README.md', 'docs/NPM.md'];
+const docs = ['README.md', 'docs/user/NPM.md'];
 
 for (const file of docs) {
   const path = join(root, file);

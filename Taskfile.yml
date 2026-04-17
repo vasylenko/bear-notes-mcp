@@ -79,7 +79,7 @@ tasks:
       - npx mcpb info {{.BUNDLE_NAME}}
   
   docs:sync:
-    desc: Sync tools list from manifest.json into README.md and docs/NPM.md
+    desc: Sync tools list from manifest.json into README.md and docs/user/NPM.md
     cmds:
       - node scripts/sync-tools-to-docs.mjs
   

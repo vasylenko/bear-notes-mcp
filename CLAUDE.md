@@ -58,21 +58,21 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 
 ## Additional technical context
 
-1 - Project Specification - .claude/contexts/SPECIFICATION.md - read this before making architectural changes; covers system boundaries, design constraints, safety gates, and the rationale behind the hybrid read/write model
+1 - Project Specification - docs/dev/SPECIFICATION.md - read this before making architectural changes; covers system boundaries, design constraints, safety gates, and the rationale behind the hybrid read/write model
 
-2 - Bear database schema brief - .claude/contexts/BEAR_DATABASE_SCHEMA.md - use this when working with tasks related to database access as a starting point
+2 - Bear database schema brief - docs/dev/BEAR_DATABASE_SCHEMA.md - use this when working with tasks related to database access as a starting point
 
 ## Core Workflows
 
 ### Website
 
-Promotional single-page landing at `bear-notes-mcp.vercel.app` (Vercel free domain, no custom domain). Built with Astro + Tailwind CSS, lives in `website/`. When adding or removing tools, update the tool count in `website/src/components/FeatureGrid.astro` alongside README.md and docs/NPM.md.
+Promotional single-page landing at `bear-notes-mcp.vercel.app` (Vercel free domain, no custom domain). Built with Astro + Tailwind CSS, lives in `website/`. When adding or removing tools, update the tool count in `website/src/components/FeatureGrid.astro` alongside README.md and docs/user/NPM.md.
 
 ### Release Process
 
 All releases go through these steps in order. See `Taskfile.yml` for the underlying commands.
 
-1. **`task docs:sync`** — sync manifest.json tools into README.md and docs/NPM.md
+1. **`task docs:sync`** — sync manifest.json tools into README.md and docs/user/NPM.md
 2. **`task version VERSION=X.Y.Z -y`** — bump version in package.json, manifest.json, src/config.ts
 3. **Commit** all release prep files in a single commit: `chore: prepare release X.Y.Z`
 4. **`task push-release VERSION=X.Y.Z SHORT_DESCRIPTION="..." -y`** — creates release commit, tag, and pushes

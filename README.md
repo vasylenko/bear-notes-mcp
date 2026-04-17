@@ -20,7 +20,7 @@ Example prompts:
 
 > Let's brainstorm blog post ideas — save the best ones to my Bear note and refine them as we go
 
-![](./docs/demo.gif)
+![](./docs/assets/demo.gif)
 
 ## ✨ Key Features
 
@@ -77,7 +77,7 @@ Add to your MCP configuration file:
 }
 ```
 
-**More installation options and local development setup — [NPM.md](./docs/NPM.md)**
+**More installation options and local development setup — [NPM.md](./docs/user/NPM.md)**
 
 ## 🛠️ Tools
 
@@ -219,6 +219,6 @@ Use issues or discussions! I'd be glad to see your feedback or suggestions, or y
 
 Consider subscribing to release announcements to know when a new version is released:
 
-![](./docs/stay-updated.png)
+![](./docs/assets/stay-updated.png)
 
 I also post to [reddit.com/r/bearapp/](https://www.reddit.com/r/bearapp/) when there's a new release.

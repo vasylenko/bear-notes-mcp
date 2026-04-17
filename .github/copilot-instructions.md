@@ -20,6 +20,6 @@ Never assume — only state what you know for sure based on the new code you rev
 # When working on a new feature or an idea
 
 1. Start from carefully reading the CLAUDE.md and README.md documents to get the context of this project
-2. Then, read the .claude/contexts/SPECIFICATION.md document to deep dive into the technical details
+2. Then, read the docs/dev/SPECIFICATION.md document to deep dive into the technical details
 3. Then, read the CHANGELOG.md to know what has been already shipped
 4. IMPORTANT! Only after completion of those three steps, you may start working on a new feature requested by the user.
