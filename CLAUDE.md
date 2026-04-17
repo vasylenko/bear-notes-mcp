@@ -40,10 +40,13 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 │   ├── note-conventions.ts # Tag placement conventions for new notes
 │   ├── config.ts          # Configuration management
 │   ├── types.ts           # Type definitions
-│   └── utils.ts           # Shared utilities
-├── tests/system/          # System tests (require Bear app running)
-│   ├── inspector.ts       # Test helpers: callTool, pollUntil, cleanup
-│   └── *.test.ts          # Per-tool system test suites
+│   ├── utils.ts           # Shared utilities
+│   └── *.test.ts          # Unit tests (co-located with source files)
+├── tests/
+│   ├── fixtures/          # Test fixtures (sample notes, images)
+│   └── system/            # System tests (require Bear app running)
+│       ├── inspector.ts   # Test helpers: callTool, pollUntil, cleanup
+│       └── *.test.ts      # Per-tool system test suites
 ├── scripts/               # Build and doc automation scripts
 ├── dist/                  # Compiled JavaScript (build output)
 ├── assets/                # Static assets (icons, etc.)
