@@ -14,7 +14,7 @@ Not a compliance document.
 
 Bear Notes MCP is a single-user desktop server. It runs locally on macOS, reads the user's Bear SQLite database, and writes to Bear via `x-callback-url`. It is invoked by an MCP client (Claude Desktop, Claude Code, Cursor, etc.) under the same UID as the user.
 
-The operator and the beneficiary are the same person. There is no multi-tenancy, no remote surface, no authentication layer — the OS user account is the trust boundary.
+The operator and the beneficiary are the same person. There is no multi-tenancy, no inbound remote surface, no authentication layer — the OS user account is the trust boundary. (Outbound network access happens via Bear when the user invokes a URL-grabbing tool.)
 
 ---
 
@@ -62,7 +62,7 @@ Standing rules. These are how new code is expected to be written and how existin
 | Database reads | Every query goes through `db.prepare(...)` with bound parameters. String interpolation of user or LLM input into SQL is forbidden. `LIKE` queries escape `%`, `_`, `\` before binding when those characters are meant to be treated literally. The connection is opened read-only. |
 | Subprocess | Every invocation uses `spawn()` (or equivalent) with an argv array. Shell-string concatenation is forbidden. |
 | URL construction | URLs are built with `URLSearchParams`, not string concatenation. The `bear://` scheme is a constant, not input. |
-| Tool inputs | Tool inputs use zod schemas: required strings use a `.trim().min(1)` baseline; optional strings use `.trim()` with explicit handling of empty values. Enum restriction where values are bounded, scheme restriction for URL inputs, integer bounds on numeric limits. |
+| Tool inputs | Tool inputs use zod schemas: required strings use a `.trim().min(1)` baseline; optional strings use `.trim()` with explicit handling of empty values. Use enum restriction where values are bounded and scheme restriction for URL inputs. |
 | Destructive writes | Operations that overwrite user content are gated behind an opt-in env var (the `ENABLE_CONTENT_REPLACEMENT` pattern). No tool permanently deletes user data — archive is the substitute. |
 | Surface-expanding tools | New tools that grant the Node process a capability the MCP client does not already provide (file read, network fetch) must narrow what the LLM can reach: path policy and size cap for filesystem, host filter for network. |
 
@@ -72,9 +72,9 @@ Standing rules. These are how new code is expected to be written and how existin
 
 These sit underneath the project's general KISS / YAGNI principles.
 
-1. **Prefer input validation over feature flags.** A feature flag hides a tool; validation narrows it. Validation preserves UX and is the right default unless the capability is genuinely irrecoverable when misused.
+1. **Prefer input validation over feature flags.** A feature flag hides a tool; validation narrows it. Validation preserves UX and is the right default unless the capability is genuinely irreversible when misused.
 
-2. **Safety gates are for irreversibility plus regret.** `ENABLE_CONTENT_REPLACEMENT` exists because overwriting a note with the wrong content is hard to undo and the user would be unhappy. A gate for a tool whose worst case is recoverable inside Bear — an unwanted note created, a tag applied wrong — is overkill; the user can undo it. Note that Bear-side reversibility is not the same as capability-level reversibility: a tool that reads arbitrary files or fetches arbitrary hosts may still need narrowing even if its Bear-side output is archivable, because the confidentiality or network side-effect already happened.
+2. **Safety gates are for irreversibility plus regret.** `ENABLE_CONTENT_REPLACEMENT` exists because overwriting a note with the wrong content is hard to undo and the user would be unhappy. A gate for a tool whose worst case is reversible inside Bear — an unwanted note created, a tag applied wrong — is overkill; the user can undo it. Note that Bear-side reversibility is not the same as capability-level reversibility: a tool that reads arbitrary files or fetches arbitrary hosts may still need narrowing even if its Bear-side output is reversible, because the confidentiality or network side-effect already happened.
 
 3. **Do not ship defense-in-depth as dead code.** If a guard is unreachable (for example, a runtime check inside a handler that cannot be invoked because its registration was skipped), pick one layer. Unreachable branches are not defense; they are future confusion.
 
