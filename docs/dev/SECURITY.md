@@ -2,7 +2,9 @@
 
 ## What This Document Is For
 
-Bear Notes MCP is a small open-source tool distributed via npm and MCPB to a real, if modest, user base. Security decisions here shape everyday UX for those users, which means they need to live somewhere other than chat logs and maintainer memory. This doc is the reference for evaluating security-flavored PRs and issues: what this project defends against, what it doesn't, and the principles that settle the question when a new PR appears.
+Bear Notes MCP is a small open-source tool distributed via npm and MCPB to a real, if modest, user base. Security decisions here shape everyday UX for those users, which means they need to live somewhere other than chat logs and maintainer memory.
+
+This doc is the reference for anyone working on the project — the maintainer, AI collaborators, outside contributors — when validating an idea, reviewing an implementation, or deciding whether a new capability belongs here. It states what this project defends against, what it doesn't, and the principles that settle the question when a new proposal is on the table.
 
 Not a compliance document.
 
