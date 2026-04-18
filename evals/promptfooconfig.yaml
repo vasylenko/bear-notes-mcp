@@ -41,8 +41,8 @@ providers:
       # server's tools are callable; all built-in tools (Read, Bash, etc.)
       # are blocked because they're not on the list.
       custom_allowed_tools: ['mcp__v2-10-0__*']
-      debug: true
-      debug_file: ./outputs/sdk-v2.10.0.log
+      # debug: true
+      # debug_file: ./outputs/sdk-v2.10.0.log
       mcp:
         servers:
           - name: v2-10-0
@@ -57,8 +57,8 @@ providers:
       persist_session: false
       setting_sources: []
       custom_allowed_tools: ['mcp__release-candidate__*']
-      debug: true
-      debug_file: ./outputs/sdk-release-candidate.log
+      # debug: true
+      # debug_file: ./outputs/sdk-release-candidate.log
       mcp:
         servers:
           - name: release-candidate
