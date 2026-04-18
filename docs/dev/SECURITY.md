@@ -48,7 +48,7 @@ Content already inside the user's Bear library is not treated as a threat vector
 1. A fully compromised LLM or client. If the client is malicious or the LLM is jailbroken into adversarial behavior, this server is not the last line of defense.
 2. Local attackers already on the user's machine. They have broader primitives than this server exposes.
 3. Bear app vulnerabilities. Bugs in Bear's x-callback-url handling or its database schema are upstream.
-4. Supply-chain compromise of dependencies. We rely on Snyk for known CVEs.
+4. Supply-chain compromise of dependencies.
 5. Content the user themselves wrote into Bear being exposed to the LLM. That is the intended function of the server.
 
 ---
@@ -59,12 +59,12 @@ Standing rules. These are how new code is expected to be written and how existin
 
 | Class | Rule |
 |-------|------|
-| Database reads | Every query goes through `db.prepare(...)` with bound parameters. String interpolation of user or LLM input into SQL is forbidden. `LIKE` queries escape `%`, `_`, `\` before binding. The connection is opened read-only. |
+| Database reads | Every query goes through `db.prepare(...)` with bound parameters. String interpolation of user or LLM input into SQL is forbidden. `LIKE` queries escape `%`, `_`, `\` before binding when those characters are meant to be treated literally. The connection is opened read-only. |
 | Subprocess | Every invocation uses `spawn()` (or equivalent) with an argv array. Shell-string concatenation is forbidden. |
 | URL construction | URLs are built with `URLSearchParams`, not string concatenation. The `bear://` scheme is a constant, not input. |
-| Tool inputs | Tool inputs use zod schemas with a `.trim().min(1)` baseline on strings, enum restriction where values are bounded, scheme restriction for URL inputs, and integer bounds on numeric limits. |
+| Tool inputs | Tool inputs use zod schemas: required strings use a `.trim().min(1)` baseline; optional strings use `.trim()` with explicit handling of empty values. Enum restriction where values are bounded, scheme restriction for URL inputs, integer bounds on numeric limits. |
 | Destructive writes | Operations that overwrite user content are gated behind an opt-in env var (the `ENABLE_CONTENT_REPLACEMENT` pattern). No tool permanently deletes user data — archive is the substitute. |
-| Surface-expanding tools | Tools that grant the Node process a capability the MCP client does not already provide (file read, network fetch) narrow what the LLM can reach: path policy and size cap for filesystem, host filter for network. |
+| Surface-expanding tools | New tools that grant the Node process a capability the MCP client does not already provide (file read, network fetch) must narrow what the LLM can reach: path policy and size cap for filesystem, host filter for network. |
 
 ---
 
@@ -74,7 +74,7 @@ These sit underneath the project's general KISS / YAGNI principles.
 
 1. **Prefer input validation over feature flags.** A feature flag hides a tool; validation narrows it. Validation preserves UX and is the right default unless the capability is genuinely irrecoverable when misused.
 
-2. **Safety gates are for irreversibility plus regret.** `ENABLE_CONTENT_REPLACEMENT` exists because overwriting a note with the wrong content is hard to undo and the user would be unhappy. A gate for a tool whose worst case is "a note got created with an unexpected file attached" is overkill — the user can archive it.
+2. **Safety gates are for irreversibility plus regret.** `ENABLE_CONTENT_REPLACEMENT` exists because overwriting a note with the wrong content is hard to undo and the user would be unhappy. A gate for a tool whose worst case is recoverable inside Bear — an unwanted note created, a tag applied wrong — is overkill; the user can undo it. Note that Bear-side reversibility is not the same as capability-level reversibility: a tool that reads arbitrary files or fetches arbitrary hosts may still need narrowing even if its Bear-side output is archivable, because the confidentiality or network side-effect already happened.
 
 3. **Do not ship defense-in-depth as dead code.** If a guard is unreachable (for example, a runtime check inside a handler that cannot be invoked because its registration was skipped), pick one layer. Unreachable branches are not defense; they are future confusion.
 
