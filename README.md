@@ -172,6 +172,60 @@ Example standalone configuration with content replacement enabled:
 }
 ```
 
+### File Attachment
+
+Enable the `bear-add-file` tool to attach files from disk to Bear notes.
+
+> [!WARNING]
+> This feature is **disabled by default** for security reasons. When enabled, the AI can read any file path it is given and attach it to a note — with no path restrictions. If you paste untrusted content into Bear (e.g. a webpage fetched via `bear-grab-url`) while this server is connected, a prompt-injected instruction could cause the AI to read a sensitive file (such as `~/.ssh/id_rsa`) and attach it to a note where you could then read it back.
+>
+> Only enable this if you understand and accept the risk.
+
+- **Claude Desktop**: Settings → Extensions → Configure (next to Bear Notes) → toggle "File Attachment" → Save → Restart Claude
+- **Standalone MCP server**: set environment variable `UI_ENABLE_FILE_ATTACHMENT=true`
+
+Example standalone configuration with file attachment enabled:
+```json
+{
+  "mcpServers": {
+    "bear-notes": {
+      "command": "npx",
+      "args": ["-y", "bear-notes-mcp@latest"],
+      "env": {
+        "UI_ENABLE_FILE_ATTACHMENT": "true"
+      }
+    }
+  }
+}
+```
+
+### URL Grabbing
+
+Enable the `bear-grab-url` tool to save web pages as Bear notes.
+
+> [!WARNING]
+> This feature is **disabled by default** for security reasons. When enabled, the AI can cause your machine to make outbound HTTP(S) requests to arbitrary URLs via Bear — including addresses on your local network.
+>
+> Only enable this if you understand and accept the risk.
+
+- **Claude Desktop**: Settings → Extensions → Configure (next to Bear Notes) → toggle "URL Grabbing" → Save → Restart Claude
+- **Standalone MCP server**: set environment variable `UI_ENABLE_URL_GRAB=true`
+
+Example standalone configuration with URL grabbing enabled:
+```json
+{
+  "mcpServers": {
+    "bear-notes": {
+      "command": "npx",
+      "args": ["-y", "bear-notes-mcp@latest"],
+      "env": {
+        "UI_ENABLE_URL_GRAB": "true"
+      }
+    }
+  }
+}
+```
+
 ## Technical Details
 
 This server reads your Bear Notes SQLite database directly for search/read operations and uses Bear's X-callback-URL API for write operations. All data processing happens locally on your machine with no external network calls.
