@@ -38,10 +38,10 @@ Content already inside the user's Bear library is not treated as a threat vector
 
 ## What We Defend Against
 
-1. **Accidental data loss in the user's notes** — covered by the `bear-replace-text` opt-in gate and the absence of a delete tool (see `SPECIFICATION.md` § Safety Gates).
-2. **SQL injection via user or LLM input** — covered by parameterized queries and a read-only database connection.
-3. **Shell injection via the subprocess path** — covered by `spawn()` with an argv array; no shell interpolation.
-4. **LLM overreach on tools that expose new primitives** — tools that grant file-read or network-fetch capabilities narrow what the LLM can reach. These are the capabilities that expand the server's surface beyond what the MCP client already provides.
+1. Accidental data loss in the user's notes.
+2. SQL injection via user or LLM input.
+3. Shell injection via the subprocess path.
+4. LLM overreach on tools that expose primitives beyond what the MCP client already provides (file read, network fetch).
 
 ## What We Do Not Defend Against
 
@@ -53,17 +53,18 @@ Content already inside the user's Bear library is not treated as a threat vector
 
 ---
 
-## Current Protections
+## How We Defend
 
-| Layer | Protection | Where |
-|-------|------------|-------|
-| SQL | Parameterized queries, read-only DB, LIKE wildcard escaping | `database.ts`, `notes.ts`, `tags.ts` |
-| Subprocess | `spawn()` with argv array, no shell | `bear-urls.ts` |
-| URL construction | `URLSearchParams` + `%20` post-pass, fixed `bear://` scheme | `bear-urls.ts`, `config.ts` |
-| Tool input | Zod schemas with `.trim().min(1)` baseline, enum-restricted fields where applicable | `main.ts` |
-| Destructive writes | `ENABLE_CONTENT_REPLACEMENT` opt-in gate on `bear-replace-text` | `main.ts`, `config.ts` |
-| Delete operations | No tool exists. Archive only. | by omission |
-| `bear-grab-url` | `http`/`https` scheme enforcement | `main.ts` |
+Standing rules. These are how new code is expected to be written and how existing code is already structured. A PR that cannot follow one of these should explain why in its description.
+
+| Class | Rule |
+|-------|------|
+| Database reads | Every query goes through `db.prepare(...)` with bound parameters. String interpolation of user or LLM input into SQL is forbidden. `LIKE` queries escape `%`, `_`, `\` before binding. The connection is opened read-only. |
+| Subprocess | Every invocation uses `spawn()` (or equivalent) with an argv array. Shell-string concatenation is forbidden. |
+| URL construction | URLs are built with `URLSearchParams`, not string concatenation. The `bear://` scheme is a constant, not input. |
+| Tool inputs | Tool inputs use zod schemas with a `.trim().min(1)` baseline on strings, enum restriction where values are bounded, scheme restriction for URL inputs, and integer bounds on numeric limits. |
+| Destructive writes | Operations that overwrite user content are gated behind an opt-in env var (the `ENABLE_CONTENT_REPLACEMENT` pattern). No tool permanently deletes user data — archive is the substitute. |
+| Surface-expanding tools | Tools that grant the Node process a capability the MCP client does not already provide (file read, network fetch) narrow what the LLM can reach: path policy and size cap for filesystem, host filter for network. |
 
 ---
 
