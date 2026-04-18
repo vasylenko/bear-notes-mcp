@@ -80,4 +80,4 @@ These sit underneath the project's general KISS / YAGNI principles.
 
 4. **Any new tool that grants the Node process a capability the MCP client does not already provide requires a threat-model note in the PR.** `bear-add-file` grants arbitrary disk read; `bear-grab-url` grants arbitrary HTTP fetch. These are the capabilities that need narrowing. A tool that only reads Bear's own database or writes via `x-callback-url` does not expand the client's surface and does not need a special note.
 
-5. **Honesty over theater.** An opt-in flag that the user will always flip on is not a defense — it is a UX tax disguised as one. If a mitigation does not actually reduce risk for the realistic user, do not ship it.
+5. **Honesty over theater.** A gate defends only when enabling it is a real risk-acceptance — the user is actively deciding to live with a specific failure mode. A gate that every realistic user flips on reflexively ("I just wanted the tool") is UX tax, not defense. This is why gates sit on irreversible operations, where enabling asks a real question, rather than on recoverable ones, where there is nothing to accept.
