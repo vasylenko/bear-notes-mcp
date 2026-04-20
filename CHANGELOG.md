@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-04-21
+
 ### Added
 - **`bear-search-notes` now includes tags in results** — each search result with tags shows a `Tags:` line alongside existing metadata (title, dates, ID). This lets LLMs cross-reference tags across multiple notes without opening each one individually.
 

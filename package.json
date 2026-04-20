@@ -1,6 +1,6 @@
 {
   "name": "bear-notes-mcp",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "description": "Bear Notes MCP server with TypeScript and native SQLite",
   "type": "module",
   "main": "dist/main.js",
