@@ -14,7 +14,7 @@ Not a compliance document.
 
 Bear Notes MCP is a single-user desktop server. It runs locally on macOS, reads the user's Bear SQLite database, and writes to Bear via `x-callback-url`. It is invoked by an MCP client (Claude Desktop, Claude Code, Cursor, etc.) under the same UID as the user.
 
-The operator and the beneficiary are the same person. There is no multi-tenancy, no inbound remote surface, no authentication layer — the OS user account is the trust boundary. (Outbound network access happens via Bear when the user invokes a URL-grabbing tool.)
+The operator and the beneficiary are the same person. There is no multi-tenancy, no inbound remote surface, no authentication layer — the OS user account is the trust boundary.
 
 ---
 
@@ -78,6 +78,6 @@ These sit underneath the project's general KISS / YAGNI principles.
 
 3. **Do not ship defense-in-depth as dead code.** If a guard is unreachable (for example, a runtime check inside a handler that cannot be invoked because its registration was skipped), pick one layer. Unreachable branches are not defense; they are future confusion.
 
-4. **Any new tool that grants the Node process a capability the MCP client does not already provide requires a threat-model note in the PR.** `bear-add-file` grants arbitrary disk read; `bear-grab-url` grants arbitrary HTTP fetch. These are the capabilities that need narrowing. A tool that only reads Bear's own database or writes via `x-callback-url` does not expand the client's surface and does not need a special note.
+4. **Any new tool that grants the Node process a capability the MCP client does not already provide requires a threat-model note in the PR.** `bear-add-file` grants arbitrary disk read — that is the kind of capability that needs narrowing. A tool that only reads Bear's own database or writes via `x-callback-url` does not expand the client's surface and does not need a special note.
 
 5. **Honesty over theater.** A gate defends only when enabling it is a real risk-acceptance — the user is actively deciding to live with a specific failure mode. A gate that every realistic user flips on reflexively ("I just wanted the tool") is UX tax, not defense. This is why gates sit on irreversible operations, where enabling asks a real question, rather than on recoverable ones, where there is nothing to accept.

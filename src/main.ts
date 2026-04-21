@@ -939,62 +939,6 @@ The tag has been removed from all notes. The notes themselves are not affected.`
   }
 );
 
-server.registerTool(
-  'bear-grab-url',
-  {
-    title: 'Grab URL as Note',
-    description:
-      'Save a web page as a Bear note. Bear fetches the page and converts it to markdown. The note is created in the background without bringing Bear to the foreground.',
-    inputSchema: {
-      url: z
-        .string()
-        .trim()
-        .url('A valid URL is required (e.g., https://example.com)')
-        .refine((u) => /^https?:\/\//i.test(u), 'Only http and https URLs are supported')
-        .describe('URL of the web page to save as a Bear note'),
-      tags: z
-        .string()
-        .trim()
-        .optional()
-        .describe('Tags separated by commas, e.g., "research,article,tech"'),
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: true,
-    },
-  },
-  async ({ url, tags }): Promise<CallToolResult> => {
-    logger.info(`bear-grab-url called with url: "${url}", tags: ${tags || 'none'}`);
-
-    try {
-      const bearUrl = buildBearUrl('grab-url', {
-        url,
-        tags,
-        pin: 'no',
-        wait: 'yes',
-        open_note: 'no',
-        show_window: 'no',
-        new_window: 'no',
-      });
-
-      await executeBearXCallbackApi(bearUrl);
-
-      const tagLine = tags ? `\nTags: ${tags}` : '';
-
-      return createToolResponse(`Web page grab request sent to Bear!
-
-URL: ${url}${tagLine}
-
-Bear is fetching the page and converting it to a note. This may take a moment for large pages.`);
-    } catch (error) {
-      logger.error('bear-grab-url failed:', error);
-      throw error;
-    }
-  }
-);
-
 async function main(): Promise<void> {
   logger.info(`Bear Notes MCP Server initializing... Version: ${APP_VERSION}`);
   logger.debug(`Debug logs enabled: ${logger.debug.enabled}`);
