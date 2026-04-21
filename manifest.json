@@ -105,10 +105,6 @@
     {
       "name": "bear-delete-tag",
       "description": "Delete a tag from all notes in your Bear library without affecting the notes"
-    },
-    {
-      "name": "bear-grab-url",
-      "description": "Save a web page as a Bear note. Bear fetches the page and converts it to markdown."
     }
   ],
   "keywords": [

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **`bear-grab-url`** tool — removed to keep the server network-free and eliminate prompt-injection risk from fetched content.
+
 ## [2.11.0] - 2026-04-21
 
 ### Added

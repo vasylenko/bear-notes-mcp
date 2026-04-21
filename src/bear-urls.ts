@@ -18,9 +18,6 @@ export interface BearUrlParams {
   filename?: string | undefined;
   name?: string | undefined;
   new_name?: string | undefined;
-  url?: string | undefined;
-  pin?: 'yes' | 'no' | undefined;
-  wait?: 'yes' | 'no' | undefined;
   open_note?: 'yes' | 'no' | undefined;
   new_window?: 'yes' | 'no' | undefined;
   show_window?: 'yes' | 'no' | undefined;
@@ -55,7 +52,6 @@ export function buildBearUrl(action: string, params: BearUrlParams = {}): string
     'filename',
     'name',
     'new_name',
-    'url',
   ] as const;
   for (const key of stringParams) {
     const value = params[key];
@@ -70,14 +66,6 @@ export function buildBearUrl(action: string, params: BearUrlParams = {}): string
 
   if (params.new_line !== undefined) {
     urlParams.set('new_line', params.new_line);
-  }
-
-  if (params.pin !== undefined) {
-    urlParams.set('pin', params.pin);
-  }
-
-  if (params.wait !== undefined) {
-    urlParams.set('wait', params.wait);
   }
 
   // UX params with defaults
