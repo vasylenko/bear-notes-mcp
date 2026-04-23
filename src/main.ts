@@ -8,7 +8,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import { APP_VERSION, ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from './config.js';
-import { applyNoteConventions } from './note-conventions.js';
+import { applyNoteConventions } from './operations/note-conventions.js';
 import { handleNoteTextUpdate } from './utils.js';
 import { logger } from './logging.js';
 import { cleanBase64 } from './operations/bear-encoding.js';
