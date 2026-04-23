@@ -2,13 +2,13 @@ import { setTimeout } from 'node:timers/promises';
 
 import type { AttachedFile, BearNote, DateFilter, NoteTitleMatch } from './types.js';
 import { DEFAULT_SEARCH_LIMIT } from './config.js';
+import { parseDateString } from './utils.js';
+import { logAndThrow, logger } from './logging.js';
 import {
   convertCoreDataTimestamp,
   convertDateToCoreDataTimestamp,
   decodeTagName,
-  parseDateString,
-} from './utils.js';
-import { logAndThrow, logger } from './logging.js';
+} from './operations/bear-encoding.js';
 import { closeBearDatabase, openBearDatabase } from './database.js';
 
 const POLL_INTERVAL_MS = 25;
@@ -16,7 +16,7 @@ const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
 
-// SQL equivalent of decodeTagName() in utils.ts — both MUST apply the same transformations
+// SQL equivalent of decodeTagName() in operations/bear-encoding.ts — both MUST apply the same transformations
 const DECODED_TAG_TITLE = "LOWER(TRIM(REPLACE(t.ZTITLE, '+', ' ')))";
 
 /**

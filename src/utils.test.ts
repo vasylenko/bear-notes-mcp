@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  convertCoreDataTimestamp,
-  noteHasHeader,
-  parseDateString,
-  stripLeadingHeader,
-} from './utils.js';
+import { noteHasHeader, parseDateString, stripLeadingHeader } from './utils.js';
 
 describe('parseDateString', () => {
   beforeEach(() => {
@@ -125,14 +120,5 @@ describe('stripLeadingHeader', () => {
 
   it('returns text unchanged when header is empty string', () => {
     expect(stripLeadingHeader('## Details\nNew content', '')).toBe('## Details\nNew content');
-  });
-});
-
-describe('convertCoreDataTimestamp', () => {
-  it('converts Core Data timestamp to correct ISO string', () => {
-    // Core Data timestamp 0 = 2001-01-01 00:00:00 UTC
-    const result = convertCoreDataTimestamp(0);
-
-    expect(result).toBe('2001-01-01T00:00:00.000Z');
   });
 });
