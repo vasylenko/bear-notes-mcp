@@ -19,7 +19,7 @@ import {
   getNoteContent,
   searchNotes,
 } from './operations/notes.js';
-import { findUntaggedNotes, listTags } from './tags.js';
+import { findUntaggedNotes, listTags } from './operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from './infra/bear-urls.js';
 import type { BearTag } from './types.js';
 
