@@ -1,7 +1,7 @@
 import type { BearNote, BearTag } from './types.js';
 import { convertCoreDataTimestamp, decodeTagName } from './operations/bear-encoding.js';
 import { logAndThrow, logger } from './logging.js';
-import { closeBearDatabase, openBearDatabase } from './database.js';
+import { closeBearDatabase, openBearDatabase } from './infra/database.js';
 
 /**
  * Extracts the display name (leaf) from a full tag path.
