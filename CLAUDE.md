@@ -47,6 +47,10 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 │   └── system/            # System tests (require Bear app running)
 │       ├── inspector.ts   # Test helpers: callTool, pollUntil, cleanup
 │       └── *.test.ts      # Per-tool system test suites
+├── docs/
+│   ├── dev/               # Developer documentation (SPECIFICATION.md, BEAR_DATABASE_SCHEMA.md, SECURITY.md)
+│   └── user/              # User documentation published to npm (NPM.md)
+├── evals/                 # LLM evaluation suite (promptfoo-based A/B testing)
 ├── scripts/               # Build and doc automation scripts
 ├── dist/                  # Compiled JavaScript (build output)
 ├── assets/                # Static assets (icons, etc.)
