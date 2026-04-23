@@ -9,13 +9,9 @@ import { z } from 'zod';
 
 import { APP_VERSION, ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from './config.js';
 import { applyNoteConventions } from './note-conventions.js';
-import {
-  cleanBase64,
-  createErrorResponse,
-  createToolResponse,
-  handleNoteTextUpdate,
-} from './utils.js';
+import { cleanBase64, handleNoteTextUpdate } from './utils.js';
 import { logger } from './logging.js';
+import { createErrorResponse, createToolResponse } from './tools/responses.js';
 import { awaitNoteCreation, findNotesByTitle, getNoteContent, searchNotes } from './notes.js';
 import { findUntaggedNotes, listTags } from './tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from './bear-urls.js';
