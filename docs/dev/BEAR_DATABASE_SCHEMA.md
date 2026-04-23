@@ -239,16 +239,9 @@ ZSFNOTE (N) ←→ (N) ZSFNOTETAG           [via Z_5PINNEDINTAGS for pinned stat
 
 ## Query Patterns
 
-### Current Implementation (Text Only)
-```sql
-SELECT ZTITLE, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZMODIFICATIONDATE
-FROM ZSFNOTE 
-WHERE ZARCHIVED = 0 AND ZTRASHED = 0 AND ZENCRYPTED = 0
-  AND (ZTITLE LIKE '%search%' OR ZTEXT LIKE '%search%')
-ORDER BY ZMODIFICATIONDATE DESC;
-```
+### Current Implementation (with OCR File Search)
+The server always joins `ZSFNOTEFILE` to include OCR'd text from attached images and PDFs in every search:
 
-### Enhanced with File Search
 ```sql
 SELECT DISTINCT n.ZTITLE, n.ZUNIQUEIDENTIFIER, n.ZCREATIONDATE, n.ZMODIFICATIONDATE
 FROM ZSFNOTE n
@@ -277,17 +270,11 @@ WHERE t.ZTITLE = 'science' AND n.ZARCHIVED = 0 AND n.ZTRASHED = 0;
 
 ## Opportunities for Enhancement
 
-### Immediate (File Search)
-- Leverage `ZSFNOTEFILE.ZSEARCHTEXT` for OCR content search
-- Use `ZHASFILES`/`ZHASIMAGES` flags for optimized filtering
-
-### Future Possibilities
 1. **Advanced Tag Queries**: Hierarchical tag support using `ZISROOT`
 2. **Backlink Analysis**: Note relationship mapping via `ZSFNOTEBACKLINK`
 3. **Content Type Filtering**: Use `ZHAS*` boolean flags for targeted searches
-4. **Date Range Queries**: Leverage comprehensive timestamp fields
-5. **File Type Filtering**: Query by `ZNORMALIZEDFILEEXTENSION`
-6. **Todo Management**: Track completion via `ZTODOCOMPLETED`/`ZTODOINCOMPLETED`
+4. **File Type Filtering**: Query by `ZNORMALIZEDFILEEXTENSION`
+5. **Todo Management**: Track completion via `ZTODOCOMPLETED`/`ZTODOINCOMPLETED`
 
 ## Core Data Notes
 
