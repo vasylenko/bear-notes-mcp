@@ -1,97 +1,9 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { getNoteContent } from './notes.js';
+import { getNoteContent, noteHasHeader, stripLeadingHeader } from './operations/notes.js';
 import { buildBearUrl, executeBearXCallbackApi } from './infra/bear-urls.js';
-import { logAndThrow, logger } from './logging.js';
+import { logger } from './logging.js';
 import { createErrorResponse, createToolResponse } from './tools/responses.js';
-
-/**
- * Parses a date string and returns a JavaScript Date object.
- * Supports relative dates ("today", "yesterday", "last week", "last month") and ISO date strings.
- *
- * @param dateString - Date string to parse (e.g., "today", "2024-01-15", "last week")
- * @returns Parsed Date object
- * @throws Error if the date string is invalid
- */
-export function parseDateString(dateString: string): Date {
-  const lowerDateString = dateString.trim().toLowerCase();
-  const now = new Date();
-
-  // Handle relative dates to provide user-friendly natural language date input
-  switch (lowerDateString) {
-    case 'today': {
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-      return today;
-    }
-    case 'yesterday': {
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      yesterday.setHours(0, 0, 0, 0);
-      return yesterday;
-    }
-    case 'last week':
-    case 'week ago': {
-      const lastWeek = new Date(now);
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      lastWeek.setHours(0, 0, 0, 0);
-      return lastWeek;
-    }
-    case 'last month':
-    case 'month ago':
-    case 'start of last month': {
-      // Calculate the first day of last month; month arithmetic handles year transitions correctly via JavaScript Date constructor
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      lastMonth.setHours(0, 0, 0, 0);
-      return lastMonth;
-    }
-    case 'end of last month': {
-      // Calculate the last day of last month; day 0 of current month equals last day of previous month
-      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-      endOfLastMonth.setHours(23, 59, 59, 999);
-      return endOfLastMonth;
-    }
-    default: {
-      // Try parsing as ISO date or other standard formats as fallback for user-provided explicit dates
-      const parsed = new Date(dateString);
-      if (isNaN(parsed.getTime())) {
-        logAndThrow(
-          `Invalid date format: "${dateString}". Use ISO format (YYYY-MM-DD) or relative dates (today, yesterday, last week, last month, start of last month, end of last month).`
-        );
-      }
-      return parsed;
-    }
-  }
-}
-
-/**
- * Strips a matching markdown heading from the start of text to prevent header duplication.
- * Bear's add-text API with mode=replace keeps the original section header, so if the
- * replacement text also starts with that header, it appears twice in the note.
- *
- * @param text - The replacement text that may start with a duplicate heading
- * @param header - The cleaned header name (no # prefix) to match against
- * @returns Text with the leading heading removed if it matched, otherwise unchanged
- */
-export function stripLeadingHeader(text: string, header: string): string {
-  if (!header) return text;
-
-  const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const leadingHeaderRegex = new RegExp(`^#{1,6}\\s+${escaped}\\s*\\n?`, 'i');
-  return text.replace(leadingHeaderRegex, '');
-}
-
-/**
- * Checks whether a markdown heading matching the given header text exists in the note.
- * Strips markdown prefix from input (e.g., "## Foo" → "Foo") and matches case-insensitively.
- * Escapes regex special characters so headers like "Q&A" or "Details (v2)" match literally.
- */
-export function noteHasHeader(noteText: string, header: string): boolean {
-  const cleanHeader = header.replace(/^#+\s*/, '');
-  const escaped = cleanHeader.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headerRegex = new RegExp(`^#{1,6}\\s+${escaped}\\s*$`, 'mi');
-  return headerRegex.test(noteText);
-}
 
 /**
  * Shared handler for note text operations (append, prepend, or replace).

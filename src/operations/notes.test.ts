@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { noteHasHeader, parseDateString, stripLeadingHeader } from './utils.js';
+import { noteHasHeader, parseDateString, stripLeadingHeader } from './notes.js';
 
 describe('parseDateString', () => {
   beforeEach(() => {
