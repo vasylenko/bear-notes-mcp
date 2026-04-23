@@ -9,7 +9,7 @@ import {
   convertDateToCoreDataTimestamp,
   decodeTagName,
 } from './operations/bear-encoding.js';
-import { closeBearDatabase, openBearDatabase } from './database.js';
+import { closeBearDatabase, openBearDatabase } from './infra/database.js';
 
 const POLL_INTERVAL_MS = 25;
 const POLL_TIMEOUT_MS = 2_000;
