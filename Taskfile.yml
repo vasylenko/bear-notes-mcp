@@ -102,7 +102,13 @@ tasks:
       - task: build      
       - task: test:system # In CI, when skipped, this will be considered as success run
       - rm -rf tmp/bundle && mkdir -p tmp/bundle
-      - cp -r dist/*.js manifest.json assets/* package.json tmp/bundle/
+      # `cp -R dist/. tmp/bundle/` copies the contents of dist/ (including the
+      # tools/, operations/, infra/ subdirectories produced by the layered
+      # src/ tree) into tmp/bundle/. The trailing `/.` matters: without it,
+      # we'd get tmp/bundle/dist/ and manifest.json's entry_point="main.js"
+      # would fail to resolve.
+      - cp -R dist/. tmp/bundle/
+      - cp -r assets/* manifest.json package.json tmp/bundle/
       - cd tmp/bundle && npx mcpb validate manifest.json
       - cd tmp/bundle && npm install --omit=dev    
       - npx mcpb pack tmp/bundle {{.BUNDLE_NAME}}
