@@ -14,8 +14,8 @@ import {
   createErrorResponse,
   createToolResponse,
   handleNoteTextUpdate,
-  logger,
 } from './utils.js';
+import { logger } from './logging.js';
 import { awaitNoteCreation, findNotesByTitle, getNoteContent, searchNotes } from './notes.js';
 import { findUntaggedNotes, listTags } from './tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from './bear-urls.js';

@@ -6,10 +6,9 @@ import {
   convertCoreDataTimestamp,
   convertDateToCoreDataTimestamp,
   decodeTagName,
-  logAndThrow,
-  logger,
   parseDateString,
 } from './utils.js';
+import { logAndThrow, logger } from './logging.js';
 import { closeBearDatabase, openBearDatabase } from './database.js';
 
 const POLL_INTERVAL_MS = 25;

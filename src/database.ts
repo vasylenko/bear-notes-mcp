@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 import { BEAR_DATABASE_PATH, ERROR_MESSAGES } from './config.js';
-import { logAndThrow, logger } from './utils.js';
+import { logAndThrow, logger } from './logging.js';
 
 function getBearDatabasePath(): string {
   // Environment override for testing
