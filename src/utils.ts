@@ -1,7 +1,7 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { getNoteContent } from './notes.js';
-import { buildBearUrl, executeBearXCallbackApi } from './bear-urls.js';
+import { buildBearUrl, executeBearXCallbackApi } from './infra/bear-urls.js';
 import { logAndThrow, logger } from './logging.js';
 import { createErrorResponse, createToolResponse } from './tools/responses.js';
 

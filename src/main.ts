@@ -15,7 +15,7 @@ import { cleanBase64 } from './operations/bear-encoding.js';
 import { createErrorResponse, createToolResponse } from './tools/responses.js';
 import { awaitNoteCreation, findNotesByTitle, getNoteContent, searchNotes } from './notes.js';
 import { findUntaggedNotes, listTags } from './tags.js';
-import { buildBearUrl, executeBearXCallbackApi } from './bear-urls.js';
+import { buildBearUrl, executeBearXCallbackApi } from './infra/bear-urls.js';
 import type { BearTag } from './types.js';
 
 const server = new McpServer(
