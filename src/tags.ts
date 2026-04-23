@@ -1,5 +1,6 @@
 import type { BearNote, BearTag } from './types.js';
-import { convertCoreDataTimestamp, decodeTagName, logAndThrow, logger } from './utils.js';
+import { convertCoreDataTimestamp, decodeTagName } from './utils.js';
+import { logAndThrow, logger } from './logging.js';
 import { closeBearDatabase, openBearDatabase } from './database.js';
 
 /**
