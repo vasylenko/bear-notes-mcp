@@ -7,7 +7,11 @@ import { z } from 'zod';
 
 import { ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
 import { logger } from '../logging.js';
-import { applyNoteConventions } from '../operations/note-conventions.js';
+import {
+  applyNoteConventions,
+  formatTagsAsInlineSyntax,
+  parseFrontmatter,
+} from '../operations/note-conventions.js';
 import { cleanBase64 } from '../operations/bear-encoding.js';
 import {
   awaitNoteCreation,
@@ -265,16 +269,35 @@ Use bear-search-notes to find the correct note identifier.`);
       );
 
       try {
-        // If ENABLE_NOTE_CONVENTIONS is true, embed tags in the text body using Bear's inline tag syntax, rather than passing as URL parameters
-        const { text: createText, tags: createTags } = ENABLE_NEW_NOTE_CONVENTIONS
-          ? applyNoteConventions({ text, tags })
-          : { text, tags };
+        const parsed = text ? parseFrontmatter(text) : null;
 
-        const url = buildBearUrl('create', { title, text: createText, tags: createTags });
+        let url: string;
+        let pollTitle: string | undefined;
+
+        if (parsed?.frontmatter !== null && parsed !== null) {
+          // Frontmatter path: assemble the full note content so Bear doesn't
+          // insert a title H1 or tags outside the frontmatter block.
+          const tagLine = tags ? formatTagsAsInlineSyntax(tags) : '';
+          const segments: string[] = [parsed.frontmatter];
+          if (title) segments.push(`# ${title}`);
+          if (tagLine) segments.push(tagLine);
+          if (parsed.body) segments.push(parsed.body);
+          const assembled = segments.join('\n');
+
+          url = buildBearUrl('create', { text: assembled });
+          pollTitle = title;
+        } else {
+          // Standard path: no frontmatter detected
+          const { text: createText, tags: createTags } = ENABLE_NEW_NOTE_CONVENTIONS
+            ? applyNoteConventions({ text, tags })
+            : { text, tags };
+          url = buildBearUrl('create', { title, text: createText, tags: createTags });
+          pollTitle = title;
+        }
 
         await executeBearXCallbackApi(url);
 
-        const createdNoteId = title ? await awaitNoteCreation(title) : undefined;
+        const createdNoteId = pollTitle ? await awaitNoteCreation(pollTitle) : undefined;
 
         const responseLines: string[] = ['Bear note created successfully!', ''];
 
