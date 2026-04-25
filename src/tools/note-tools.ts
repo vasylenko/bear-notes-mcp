@@ -760,7 +760,7 @@ The file has been attached to your Bear note.`);
     {
       title: 'Add Tags to Note',
       description:
-        'Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags.',
+        'Add one or more tags to an existing Bear note. Tags are inserted after any YAML frontmatter, preserving document structure. Use bear-list-tags to see available tags.',
       inputSchema: {
         id: z
           .string()
@@ -790,16 +790,34 @@ The file has been attached to your Bear note.`);
 Use bear-search-notes to find the correct note identifier.`);
         }
 
-        const tagsString = tags.join(',');
+        const noteText = existingNote.text || '';
+        const parsed = parseFrontmatter(noteText);
+        let url: string;
 
-        const url = buildBearUrl('add-text', {
-          id,
-          tags: tagsString,
-          mode: 'prepend',
-          open_note: 'no',
-          show_window: 'no',
-          new_window: 'no',
-        });
+        if (parsed.frontmatter !== null) {
+          // Frontmatter present: rebuild the full note with tags after the closing ---
+          // so the frontmatter block is not clobbered by a blind prepend.
+          const tagLine = formatTagsAsInlineSyntax(tags.join(','));
+          const newText = `${parsed.frontmatter}\n${tagLine}\n${parsed.body}`;
+          url = buildBearUrl('add-text', {
+            id,
+            text: newText,
+            mode: 'replace_all',
+            open_note: 'no',
+            show_window: 'no',
+            new_window: 'no',
+          });
+        } else {
+          // No frontmatter: original prepend behavior
+          url = buildBearUrl('add-text', {
+            id,
+            tags: tags.join(','),
+            mode: 'prepend',
+            open_note: 'no',
+            show_window: 'no',
+            new_window: 'no',
+          });
+        }
 
         await executeBearXCallbackApi(url);
 
@@ -811,7 +829,7 @@ Note: "${existingNote.title}"
 ID: ${id}
 Tags: ${tagList}
 
-The tags have been added to the beginning of the note.`);
+The tags have been added to the note.`);
       } catch (error) {
         logger.error('bear-add-tag failed:', error);
         throw error;
