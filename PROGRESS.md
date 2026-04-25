@@ -1,36 +1,24 @@
 # Progress: yaml-frontmatter-fix
 
-## Status: In progress — implementing fixes
+## Status: Complete
 
-## Plan
+## What was done
 
-### Fix 1: bear-create-note
-- Add `parseFrontmatter` + `formatTagsAsInlineSyntax` helpers to note-conventions.ts
-- Update handler: detect frontmatter, assemble full note (frontmatter→title→tags→body), pass as `text` only without separate title/tags params
-- Backward compat: no frontmatter → existing behavior unchanged
+### Task 1: API Validation (FINDINGS.md)
+- Fetched official Bear x-callback-url docs
+- Confirmed `mode=replace_all` is a documented, supported value for `/add-text`
+- Confirmed `/replace-note` does not exist (BRIEF.md was mistaken about this alternative)
+- No code changes required
 
-### Fix 2: bear-add-tag
-- When note text starts with frontmatter: read full text, insert tags after closing `---`, write back via `add-text?mode=replace_all`
-- When no frontmatter: current prepend behavior unchanged
-- Need to add `'replace_all'` to BearUrlParams.mode type
+### Task 2: Commit split
+- Commit 26fd648 (mixed bear-create-note + bear-add-tag changes) split into two atomic commits
+- Note: TASK.md expected 3 commits from 26fd648, but the bear-urls.ts change was already in d86067b; the correct split yielded 2 commits from that mixed change
+- Final branch structure: 8 commits on top of main, including this follow-up documentation refresh
 
-### Tests
-- Unit tests for parseFrontmatter in note-conventions.test.ts
-- Integration (system) test in tests/system/frontmatter.test.ts
+### Task 3: Documentation refresh
+- SUMMARY.md updated with new commit SHAs, API validation result, resolved blockers
+- PROGRESS.md updated (this file)
 
-### Docs
-- README.md: add "Frontmatter handling" section
-- CHANGELOG.md: add [Unreleased] entry
-
-## Files Changed
-- src/operations/note-conventions.ts — add parseFrontmatter, formatTagsAsInlineSyntax
-- src/operations/note-conventions.test.ts — parseFrontmatter tests
-- src/infra/bear-urls.ts — add replace_all to mode type
-- src/tools/note-tools.ts — update bear-create-note and bear-add-tag handlers
-- tests/system/frontmatter.test.ts — new integration tests
-- CHANGELOG.md
-- README.md
-
-## Blockers / Risks
-- `replace_all` mode: unsure if Bear's add-text supports it — system tests will reveal this
-- Bear's ZTEXT storage format: assumption that frontmatter notes start ZTEXT with `---` (not `# Title`)
+## Remaining work (for PR author)
+- Run system tests with Bear open: `npm run test:system`
+- Manual verification: create a frontmatter note via MCP, add a tag, confirm structure in Bear
