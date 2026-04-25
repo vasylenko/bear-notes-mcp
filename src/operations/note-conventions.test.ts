@@ -1,6 +1,61 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyNoteConventions } from './note-conventions.js';
+import { applyNoteConventions, formatTagsAsInlineSyntax, parseFrontmatter } from './note-conventions.js';
+
+describe('parseFrontmatter', () => {
+  it('returns null frontmatter when text does not start with ---', () => {
+    const text = '# Title\nbody';
+    expect(parseFrontmatter(text)).toEqual({ frontmatter: null, body: text });
+  });
+
+  it('detects frontmatter when --- is first line with closing ---', () => {
+    const result = parseFrontmatter('---\ntitle: Test\n---\nbody');
+    expect(result.frontmatter).toBe('---\ntitle: Test\n---');
+    expect(result.body).toBe('body');
+  });
+
+  it('returns null frontmatter when no closing --- exists', () => {
+    const text = '---\nno closing line\ncontent';
+    expect(parseFrontmatter(text)).toEqual({ frontmatter: null, body: text });
+  });
+
+  it('ignores horizontal rules in body — --- not at line 1', () => {
+    const text = '# Title\n---\nhorizontal rule\n---\nbody';
+    expect(parseFrontmatter(text)).toEqual({ frontmatter: null, body: text });
+  });
+
+  it('handles empty body after frontmatter', () => {
+    const result = parseFrontmatter('---\nkey: val\n---\n');
+    expect(result.frontmatter).toBe('---\nkey: val\n---');
+    expect(result.body).toBe('');
+  });
+
+  it('handles multi-key frontmatter with body including H1', () => {
+    const text = '---\ntitle: My Note\ntags: [work]\n---\n# My Note\ncontent';
+    const result = parseFrontmatter(text);
+    expect(result.frontmatter).toBe('---\ntitle: My Note\ntags: [work]\n---');
+    expect(result.body).toBe('# My Note\ncontent');
+  });
+
+  it('returns null frontmatter when --- is present but not at line 1', () => {
+    const text = '\n---\nkey: val\n---\nbody';
+    expect(parseFrontmatter(text)).toEqual({ frontmatter: null, body: text });
+  });
+});
+
+describe('formatTagsAsInlineSyntax', () => {
+  it('converts comma-separated tags to Bear inline syntax', () => {
+    expect(formatTagsAsInlineSyntax('work,urgent')).toBe('#work #urgent');
+  });
+
+  it('adds closing hash for tags with spaces', () => {
+    expect(formatTagsAsInlineSyntax('my tag')).toBe('#my tag#');
+  });
+
+  it('returns empty string for all-invalid tags', () => {
+    expect(formatTagsAsInlineSyntax('###,,,')).toBe('');
+  });
+});
 
 describe('applyNoteConventions', () => {
   describe('pass-through when no tags provided', () => {
