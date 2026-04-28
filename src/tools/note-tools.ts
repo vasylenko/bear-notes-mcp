@@ -7,7 +7,12 @@ import { z } from 'zod';
 
 import { ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
 import { logger } from '../logging.js';
-import { applyNoteConventions } from '../operations/note-conventions.js';
+import {
+  applyNoteConventions,
+  formatTagsAsInlineSyntax,
+  insertInlineTags,
+  parseFrontmatter,
+} from '../operations/note-conventions.js';
 import { cleanBase64 } from '../operations/bear-encoding.js';
 import {
   awaitNoteCreation,
@@ -265,16 +270,40 @@ Use bear-search-notes to find the correct note identifier.`);
       );
 
       try {
-        // If ENABLE_NOTE_CONVENTIONS is true, embed tags in the text body using Bear's inline tag syntax, rather than passing as URL parameters
-        const { text: createText, tags: createTags } = ENABLE_NEW_NOTE_CONVENTIONS
-          ? applyNoteConventions({ text, tags })
-          : { text, tags };
+        const parsed = text ? parseFrontmatter(text) : null;
 
-        const url = buildBearUrl('create', { title, text: createText, tags: createTags });
+        let url: string;
+        let pollTitle: string | undefined;
+
+        if (parsed?.frontmatter !== null && parsed !== null) {
+          // Frontmatter path: assemble the full note content so Bear doesn't
+          // insert a title H1 or tags outside the frontmatter block.
+          const tagLine = tags ? formatTagsAsInlineSyntax(tags) : '';
+          const bodySegments: string[] = [];
+          if (title) bodySegments.push(`# ${title}`);
+          if (parsed.body) bodySegments.push(parsed.body);
+          const body = insertInlineTags(
+            bodySegments.join('\n'),
+            tagLine,
+            ENABLE_NEW_NOTE_CONVENTIONS ? 'after-title' : 'end',
+            { separatorAfterTags: ENABLE_NEW_NOTE_CONVENTIONS }
+          );
+          const assembled = body ? `${parsed.frontmatter}\n${body}` : parsed.frontmatter;
+
+          url = buildBearUrl('create', { text: assembled });
+          pollTitle = title;
+        } else {
+          // Standard path: no frontmatter detected
+          const { text: createText, tags: createTags } = ENABLE_NEW_NOTE_CONVENTIONS
+            ? applyNoteConventions({ text, tags })
+            : { text, tags };
+          url = buildBearUrl('create', { title, text: createText, tags: createTags });
+          pollTitle = title;
+        }
 
         await executeBearXCallbackApi(url);
 
-        const createdNoteId = title ? await awaitNoteCreation(title) : undefined;
+        const createdNoteId = pollTitle ? await awaitNoteCreation(pollTitle) : undefined;
 
         const responseLines: string[] = ['Bear note created successfully!', ''];
 
@@ -737,7 +766,7 @@ The file has been attached to your Bear note.`);
     {
       title: 'Add Tags to Note',
       description:
-        'Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags.',
+        'Add one or more tags to an existing Bear note. Tags are inserted after any YAML frontmatter, preserving document structure. Use bear-list-tags to see available tags.',
       inputSchema: {
         id: z
           .string()
@@ -767,16 +796,39 @@ The file has been attached to your Bear note.`);
 Use bear-search-notes to find the correct note identifier.`);
         }
 
-        const tagsString = tags.join(',');
+        const noteText = existingNote.text || '';
+        const parsed = parseFrontmatter(noteText);
+        let url: string;
 
-        const url = buildBearUrl('add-text', {
-          id,
-          tags: tagsString,
-          mode: 'prepend',
-          open_note: 'no',
-          show_window: 'no',
-          new_window: 'no',
-        });
+        if (parsed.frontmatter !== null) {
+          // Frontmatter present: rebuild the full note so tags follow the configured
+          // placement without clobbering the YAML block.
+          const tagLine = formatTagsAsInlineSyntax(tags.join(','));
+          const body = insertInlineTags(
+            parsed.body,
+            tagLine,
+            ENABLE_NEW_NOTE_CONVENTIONS ? 'after-title' : 'end'
+          );
+          const newText = body ? `${parsed.frontmatter}\n${body}` : parsed.frontmatter;
+          url = buildBearUrl('add-text', {
+            id,
+            text: newText,
+            mode: 'replace_all',
+            open_note: 'no',
+            show_window: 'no',
+            new_window: 'no',
+          });
+        } else {
+          // No frontmatter: original prepend behavior
+          url = buildBearUrl('add-text', {
+            id,
+            tags: tags.join(','),
+            mode: 'prepend',
+            open_note: 'no',
+            show_window: 'no',
+            new_window: 'no',
+          });
+        }
 
         await executeBearXCallbackApi(url);
 
@@ -788,7 +840,7 @@ Note: "${existingNote.title}"
 ID: ${id}
 Tags: ${tagList}
 
-The tags have been added to the beginning of the note.`);
+The tags have been added to the note.`);
       } catch (error) {
         logger.error('bear-add-tag failed:', error);
         throw error;

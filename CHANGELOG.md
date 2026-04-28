@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Frontmatter handling in `bear-create-note`** — when the `text` parameter begins with a YAML frontmatter block (`---`…`---`), the tool assembles the note as a single text payload, bypassing Bear's own title/tag insertion so frontmatter stays at the top. Tags follow the configured convention: at the end by default, or after the title when `UI_ENABLE_NEW_NOTE_CONVENTION=true`. Notes without frontmatter behave exactly as before.
+- **Frontmatter-safe tag insertion in `bear-add-tag`** — instead of blindly prepending tags to the beginning of the note (which overwrites YAML frontmatter), the tool now detects frontmatter and rewrites the note with tags at the configured location: at the end by default, or after the title when `UI_ENABLE_NEW_NOTE_CONVENTION=true`. Notes without frontmatter continue to use the original Bear tag insertion path.
+
 ## [2.12.0] - 2026-04-21
 
 ### Removed
