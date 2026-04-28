@@ -62,6 +62,60 @@ export function applyNoteConventions(input: {
 }
 
 /**
+ * Inserts a Bear inline tag line into text that may be the body following YAML frontmatter.
+ * The "after-title" placement inserts tags immediately after the opening H1.
+ * New note creation may request the same horizontal-rule separator used by applyNoteConventions().
+ */
+export function insertInlineTags(
+  text: string,
+  tagLine: string,
+  placement: 'after-title' | 'end',
+  options: { separatorAfterTags?: boolean } = {}
+): string {
+  if (!tagLine) return text;
+
+  if (placement === 'end') {
+    return text ? `${text}\n${tagLine}` : tagLine;
+  }
+
+  const titleMatch = text.match(/^(#\s+.+?)(?:\n|$)/);
+  if (!titleMatch) {
+    if (!text) return tagLine;
+    const merged = mergeWithLeadingTagLine(text, tagLine);
+    if (merged) return merged;
+    const separator = options.separatorAfterTags ? '\n---' : '';
+    return `${tagLine}${separator}\n${text}`;
+  }
+
+  const titleLine = titleMatch[1];
+  const remainingBody = text.slice(titleMatch[0].length);
+  const merged = mergeWithLeadingTagLine(remainingBody, tagLine);
+  if (merged) return [titleLine, merged].join('\n');
+
+  const segments = [titleLine, tagLine];
+  if (remainingBody) {
+    if (options.separatorAfterTags) segments.push('---');
+    segments.push(remainingBody);
+  }
+
+  return segments.join('\n');
+}
+
+function mergeWithLeadingTagLine(text: string, tagLine: string): string | null {
+  const lineEnd = text.indexOf('\n');
+  const firstLine = lineEnd === -1 ? text : text.slice(0, lineEnd);
+  if (!isInlineTagLine(firstLine)) return null;
+
+  const rest = lineEnd === -1 ? '' : text.slice(lineEnd);
+  return `${firstLine.trimEnd()} ${tagLine}${rest}`;
+}
+
+function isInlineTagLine(line: string): boolean {
+  const trimmed = line.trimStart();
+  return trimmed.startsWith('#') && !trimmed.startsWith('# ') && !trimmed.startsWith('##');
+}
+
+/**
  * Bear uses `#tag` for simple tags and `#tag#` (closing hash) for
  * multi-word tags containing spaces. Slashes create hierarchy without
  * requiring a closing hash.

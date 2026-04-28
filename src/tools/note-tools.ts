@@ -10,6 +10,7 @@ import { logger } from '../logging.js';
 import {
   applyNoteConventions,
   formatTagsAsInlineSyntax,
+  insertInlineTags,
   parseFrontmatter,
 } from '../operations/note-conventions.js';
 import { cleanBase64 } from '../operations/bear-encoding.js';
@@ -278,11 +279,16 @@ Use bear-search-notes to find the correct note identifier.`);
           // Frontmatter path: assemble the full note content so Bear doesn't
           // insert a title H1 or tags outside the frontmatter block.
           const tagLine = tags ? formatTagsAsInlineSyntax(tags) : '';
-          const segments: string[] = [parsed.frontmatter];
-          if (title) segments.push(`# ${title}`);
-          if (tagLine) segments.push(tagLine);
-          if (parsed.body) segments.push(parsed.body);
-          const assembled = segments.join('\n');
+          const bodySegments: string[] = [];
+          if (title) bodySegments.push(`# ${title}`);
+          if (parsed.body) bodySegments.push(parsed.body);
+          const body = insertInlineTags(
+            bodySegments.join('\n'),
+            tagLine,
+            ENABLE_NEW_NOTE_CONVENTIONS ? 'after-title' : 'end',
+            { separatorAfterTags: ENABLE_NEW_NOTE_CONVENTIONS }
+          );
+          const assembled = body ? `${parsed.frontmatter}\n${body}` : parsed.frontmatter;
 
           url = buildBearUrl('create', { text: assembled });
           pollTitle = title;
@@ -795,10 +801,15 @@ Use bear-search-notes to find the correct note identifier.`);
         let url: string;
 
         if (parsed.frontmatter !== null) {
-          // Frontmatter present: rebuild the full note with tags after the closing ---
-          // so the frontmatter block is not clobbered by a blind prepend.
+          // Frontmatter present: rebuild the full note so tags follow the configured
+          // placement without clobbering the YAML block.
           const tagLine = formatTagsAsInlineSyntax(tags.join(','));
-          const newText = `${parsed.frontmatter}\n${tagLine}\n${parsed.body}`;
+          const body = insertInlineTags(
+            parsed.body,
+            tagLine,
+            ENABLE_NEW_NOTE_CONVENTIONS ? 'after-title' : 'end'
+          );
+          const newText = body ? `${parsed.frontmatter}\n${body}` : parsed.frontmatter;
           url = buildBearUrl('add-text', {
             id,
             text: newText,
