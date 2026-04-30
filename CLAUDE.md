@@ -32,16 +32,24 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 ## Project Structure
 ```
 ├── src/                   # MCP server source code
-│   ├── main.ts            # Server entry point and tool registration
-│   ├── bear-urls.ts       # Bear app URL scheme handlers
-│   ├── database.ts        # SQLite database connection
-│   ├── notes.ts           # Note operations (search, content)
-│   ├── tags.ts            # Tag operations (list, hierarchy)
-│   ├── note-conventions.ts # Tag placement conventions for new notes
+│   ├── main.ts            # Server entry point
 │   ├── config.ts          # Configuration management
+│   ├── logging.ts         # Logging setup
 │   ├── types.ts           # Type definitions
-│   ├── utils.ts           # Shared utilities
-│   └── *.test.ts          # Unit tests (co-located with source files)
+│   ├── infra/             # Infrastructure layer
+│   │   ├── bear-urls.ts   # Bear app URL scheme handlers
+│   │   ├── database.ts    # SQLite database connection
+│   │   └── *.test.ts      # Unit tests (co-located with source files)
+│   ├── operations/        # Business logic layer
+│   │   ├── bear-encoding.ts # Bear encoding/decoding utilities
+│   │   ├── notes.ts       # Note operations (search, content)
+│   │   ├── note-conventions.ts # Tag placement conventions for new notes
+│   │   ├── tags.ts        # Tag operations (list, hierarchy)
+│   │   └── *.test.ts      # Unit tests (co-located with source files)
+│   └── tools/             # MCP tool handlers
+│       ├── note-tools.ts  # Note tool registrations and handlers
+│       ├── tag-tools.ts   # Tag tool registrations and handlers
+│       └── responses.ts   # Tool response helpers
 ├── tests/
 │   ├── fixtures/          # Test fixtures (sample notes, images)
 │   └── system/            # System tests (require Bear app running)
