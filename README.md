@@ -146,6 +146,33 @@ Example standalone configuration with the convention enabled:
 }
 ```
 
+### Frontmatter Handling
+
+The server understands [YAML frontmatter](https://jekyllrb.com/docs/front-matter/) — a `---`…`---` block at the start of a note — and keeps it intact across create and tag operations.
+
+**Creating a note with frontmatter** (`bear-create-note`): if the `text` parameter begins with a frontmatter block, the server assembles the final note itself before sending it to Bear. This prevents Bear from inserting the title or tags outside the frontmatter block. Tags follow the configured convention: by default they are placed at the end of the note; when `UI_ENABLE_NEW_NOTE_CONVENTION=true`, they are placed after the title.
+
+```
+# Input
+text:  "---\nstatus: draft\n---\nBody content."
+title: "My Note"
+tags:  "project"
+
+# Stored note
+---
+status: draft
+---
+# My Note
+Body content.
+#project
+```
+
+Notes without frontmatter behave exactly as before — no behavior change.
+
+**Adding tags to a note with frontmatter** (`bear-add-tag`): instead of prepending tags at the very top of the note (which would overwrite the frontmatter), the tool rewrites the note so tags follow the configured convention: at the end by default, or after the title when `UI_ENABLE_NEW_NOTE_CONVENTION=true`. Notes without frontmatter use the original Bear tag insertion path.
+
+Frontmatter is detected only when `---` is the very first line of the note text **and** a closing `---` exists on its own line later. A `---` horizontal rule in the note body is never mistaken for frontmatter.
+
 ### Content Replacement
 
 Enable the `bear-replace-text` tool to replace content in existing notes — either the full note body or a specific section under a header.
