@@ -68,24 +68,6 @@ tasks:
       - node evals/generate-report.js
       - open evals/outputs/report.html
 
-  eval:fts5:
-    desc: Run SVA-28 FTS5 search A/B eval and generate HTML report
-    interactive: true
-    preconditions:
-      - sh: test -n "$ANTHROPIC_API_KEY"
-        msg: "ANTHROPIC_API_KEY must be exported"
-      - sh: test -f dist/main.js
-        msg: "Run 'task build' first — HEAD-FTS5 provider needs dist/main.js"
-      - sh: test -f evals/released/dist/main.js
-        msg: "Run 'task eval:setup VERSION=2.11.0' first — baseline provider needs evals/released/dist/main.js"
-    cmds:
-      - rm -rf /tmp/bear-mcp-eval-claude-config
-      - mkdir -p /tmp/bear-mcp-eval-claude-config
-      - rm -f evals/outputs/sdk-*.log
-      - npx promptfoo eval --config evals/fts5-promptfooconfig.yaml --no-cache {{.CLI_ARGS}}
-      - node evals/generate-report.js
-      - open evals/outputs/report.html
-
   eval:setup:
     desc: "Download released baseline server (usage: task eval:setup VERSION=2.10.0)"
     requires:
