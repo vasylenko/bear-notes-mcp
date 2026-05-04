@@ -154,44 +154,38 @@ describe('discoverBearSchema', () => {
     }
   });
 
-  it('throws a clear error when SFNote entity is missing from Z_PRIMARYKEY', () => {
-    const db = buildSyntheticBearDb({
-      primaryKeyEntries: [['SFNoteTag', 13]],
-    });
+  // Each row exercises a distinct branch in discoverBearSchema /
+  // verifyJoinExists. The "missing column" case is the subtle one: the table
+  // exists (so the "table not found" path doesn't fire) but the note-PK column
+  // has been renamed, which would otherwise surface as a cryptic SQL error at
+  // query time.
+  it.each<{ when: string; options: SyntheticSchemaOptions; patterns: RegExp[] }>([
+    {
+      when: 'SFNote entity is missing from Z_PRIMARYKEY',
+      options: { primaryKeyEntries: [['SFNoteTag', 13]] },
+      patterns: [/required Core Data entities not found/, /SFNote/],
+    },
+    {
+      when: 'the tag-join table is missing',
+      options: { includeTagsTable: false },
+      patterns: [/Z_5TAGS not found/],
+    },
+    {
+      when: 'the pinned-tag join table is missing',
+      options: { includePinnedTable: false },
+      patterns: [/Z_5PINNEDINTAGS not found/],
+    },
+    {
+      when: 'a join table exists but is missing expected columns',
+      options: { tagsTableNoteColOverride: 'Z_5RENAMED' },
+      patterns: [/Z_5TAGS is missing expected columns Z_5NOTES/],
+    },
+  ])('throws a clear error when $when', ({ options, patterns }) => {
+    const db = buildSyntheticBearDb(options);
     try {
-      expect(() => discoverBearSchema(db)).toThrow(/required Core Data entities not found/);
-      expect(() => discoverBearSchema(db)).toThrow(/SFNote/);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('throws a clear error when the tag-join table is missing', () => {
-    const db = buildSyntheticBearDb({ includeTagsTable: false });
-    try {
-      expect(() => discoverBearSchema(db)).toThrow(/Z_5TAGS not found/);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('throws a clear error when the pinned-tag join table is missing', () => {
-    const db = buildSyntheticBearDb({ includePinnedTable: false });
-    try {
-      expect(() => discoverBearSchema(db)).toThrow(/Z_5PINNEDINTAGS not found/);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('throws a clear error when a join table exists but is missing expected columns', () => {
-    // Distinct branch in verifyJoinExists: the table exists (so the
-    // "table not found" path doesn't fire) but the note-PK column has been
-    // renamed. Without this guard, queries against the join table would fail
-    // later with a cryptic "no such column: Z_5NOTES" SQL error.
-    const db = buildSyntheticBearDb({ tagsTableNoteColOverride: 'Z_5RENAMED' });
-    try {
-      expect(() => discoverBearSchema(db)).toThrow(/Z_5TAGS is missing expected columns Z_5NOTES/);
+      for (const pattern of patterns) {
+        expect(() => discoverBearSchema(db)).toThrow(pattern);
+      }
     } finally {
       db.close();
     }

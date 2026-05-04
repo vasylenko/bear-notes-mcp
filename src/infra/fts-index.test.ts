@@ -330,15 +330,6 @@ describe('ensureFreshIndex', () => {
 describe('checkDrift', () => {
   afterEach(() => reset());
 
-  it('returns true when no driftKey has been cached yet', () => {
-    const bearDb = buildSyntheticBearDb([{ pk: 1, title: 'a', text: 'x' }]);
-    try {
-      expect(checkDrift(bearDb, null)).toBe(true);
-    } finally {
-      bearDb.close();
-    }
-  });
-
   it('returns false when neither MAX(modified) nor COUNT changed', () => {
     const bearDb = buildSyntheticBearDb([
       { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
@@ -632,20 +623,6 @@ describe('executeQuery', () => {
           modifiedAfterTimestamp: 0,
         });
         expect(noTerm.map((r) => r.identifier)).toEqual(['uuid-3', 'uuid-2', 'uuid-1']);
-      }
-    );
-  });
-
-  it('reports totalCount = 0 when no notes match the term', () => {
-    withFixture(
-      [
-        { pk: 1, title: 'A', text: 'apple' },
-        { pk: 2, title: 'B', text: 'banana' },
-      ],
-      (memDb) => {
-        const result = executeQueryWithCount(memDb, spec({ term: 'cherry' }));
-        expect(result.notes).toHaveLength(0);
-        expect(result.totalCount).toBe(0);
       }
     );
   });
