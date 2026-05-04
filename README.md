@@ -84,7 +84,7 @@ Add to your MCP configuration file:
 <!-- TOOLS:START -->
 - **`bear-open-note`** - Read the full text content of a Bear note including OCR'd text from attached images and PDFs
 - **`bear-create-note`** - Create a new note in your Bear library with optional title, content, and tags
-- **`bear-search-notes`** - Find notes by searching text content, filtering by tags, or date ranges. Includes OCR search in attachments
+- **`bear-search-notes`** - Find notes with relevance-ranked full-text search across titles, body, and OCR-extracted text from attached images and PDFs. Supports multi-word queries, exact phrases, boolean operators (AND/OR/NOT), and prefix matching. Each result includes a context snippet.
 - **`bear-add-text`** - Insert text at the beginning or end of a Bear note, or within a specific section identified by its header
 - **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section. Requires content replacement to be enabled in settings.
 - **`bear-add-file`** - Attach a file to an existing Bear note. Provide a local file path (preferred) or base64-encoded content.

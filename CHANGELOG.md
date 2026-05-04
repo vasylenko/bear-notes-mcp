@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`bear-search-notes` now uses full-text search** — the `term` parameter is interpreted as an FTS5 query, unlocking boolean operators (`AND`, `OR`, `NOT`), quoted phrases for exact matches, and prefix wildcards (e.g., `meet*`). Previously `term` matched as a literal substring.
+- **Results ranked by relevance instead of recency** — `bear-search-notes` now orders results by BM25 relevance against the query, not by modification date. Multi-word natural-language queries (e.g., `quarterly planning offsite notes`) are tokenized and OR-joined so notes matching more terms rank higher — better recall for paraphrased queries than the prior implicit-AND behavior.
+- **Schema discovery is now resilient to Bear migrations** — internal references to Bear's relational tag tables are resolved at runtime from Core Data metadata instead of hardcoded entity IDs, so tag search and tag-aware filters keep working if Bear renumbers its schema in a future update.
+
+### Added
+- **Search results include matching snippets** — each result from `bear-search-notes` now includes a short context excerpt around the match, alongside the existing title, dates, ID, and tags. This lets LLMs assess relevance without opening every note.
+- **Structured error response for malformed search queries** — invalid FTS5 syntax (unbalanced quotes, dangling operators, etc.) now returns a clear syntax-error envelope identifying the offending term, instead of a raw SQLite error.
+
+### Removed
+- **LIKE-substring search fallback** — `bear-search-notes` no longer falls back to substring matching. All term searches go through FTS5. Tag-only searches (no `term`) are unchanged.
+
 ## [2.12.0] - 2026-04-21
 
 ### Removed

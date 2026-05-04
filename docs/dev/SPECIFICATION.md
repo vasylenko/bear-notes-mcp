@@ -42,6 +42,49 @@ All write operations go through the URL path. This is intentionally one-way:
 
 All write operations execute in the background without disrupting the user's Bear UI. The principle: the user is working in their MCP client, not Bear — writes should never steal focus, open windows, or switch the active note.
 
+### Search: In-Memory FTS5 Index
+
+`bear-search-notes` is backed by a separate in-memory SQLite full-text search index, rebuilt on demand from Bear's read-only DB:
+
+```
+  bear-search-notes call
+        │
+        ▼
+  searchByQuery (src/infra/fts-index.ts)
+        │
+        ├──▶ Drift check: MAX(ZMODIFICATIONDATE) + COUNT(*) of active notes
+        │     vs. cached values. Sub-millisecond. Mismatch → rebuild.
+        │
+        ├──▶ (Re)build: read non-trashed/non-archived/non-encrypted notes
+        │     from ZSFNOTE, concat OCR text from ZSFNOTEFILE, capture per-tag
+        │     pinned status from the discovered Z_<n>TAGS / Z_<n>PINNEDINTAGS
+        │     join tables. Bulk-insert into a :memory: FTS5 virtual table
+        │     (unicode61 tokenizer, remove_diacritics=2) plus a side
+        │     note_tags table.
+        │
+        └──▶ Run: FTS5 MATCH + bm25() ranking + snippet() output for term
+              queries; mod-date DESC for filter-only queries. Filters
+              (tag, pinned, date) compose with AND.
+```
+
+**Why in-memory, not persistent.** Bear syncs notes across the user's machines via iCloud. Any persistent derived state (a side-car DB, a shadow FTS5 file) would diverge from Bear's authoritative state without coordination. In-memory rebuild satisfies cross-Mac consistency by construction. Build cost (~70 ms / 229 notes empirically) is small enough to absorb on first search per server process.
+
+**Why MAX + COUNT, not MAX alone.** A bulk import of pre-dated notes (ZMODIFICATIONDATE < the previous max) would not move the maximum. COUNT closes that gap. Both aggregates fit a single SELECT.
+
+**Concurrency.** `node:sqlite` is synchronous. JSON-RPC handlers run on Node's single event loop, so a search call that triggers a rebuild completes the rebuild atomically before the next call starts. No mutex needed; do not refactor the entry point to async/await without re-establishing this invariant.
+
+**FTS5 query handling.** User-supplied terms are inspected by `prepareFTS5Term`:
+
+- Terms with explicit FTS5 syntax (double-quotes or parentheses) pass through verbatim — the user opted into FTS5.
+- Terms containing uppercase boolean operators (`AND` / `OR` / `NOT` / `NEAR`) pass through verbatim. FTS5 itself only recognizes these operators in uppercase, so the case-sensitive check matches FTS5's own semantics — lowercase variants are treated as content tokens.
+- Single bareword input (with optional `*` suffix) passes through so FTS5's prefix rule does the right thing.
+- Multi-word bare input is tokenized and OR-joined so BM25 ranks by term-overlap density. FTS5's bareword default is implicit-AND, which silently filters out notes missing any single token — including notes that paraphrase or use a different word for one of the user's referents. OR-rank with BM25 lets density-rich notes still surface, matching the user/agent expectation that ranked search returns relevance-ordered results rather than a strict filter.
+- Everything else (brackets, hyphens, colons, other punctuation) is wrapped in a phrase quote so FTS5 treats it as a literal phrase rather than throwing a syntax error.
+
+**Schema discovery.** Bear's tag-join table names embed Core Data entity IDs (`Z_5TAGS`, `Z_13TAGS`, etc.) that can shift across Bear schema migrations. `src/infra/bear-schema.ts:discoverBearSchema` resolves the actual names at runtime via `Z_PRIMARYKEY` (Core Data's entity registry). Both the FTS5 build path and `src/operations/tags.ts` consume this utility — no hardcoded entity IDs remain in the codebase.
+
+**Load-bearing assumption.** `node:sqlite`'s bundled SQLite must include FTS5. Verified at planning time on Node 24.14.1 / SQLite 3.51.2; locked into CI by `src/infra/bear-schema.test.ts` so any future Node version that disables FTS5 fails before the rest of the search subsystem panics.
+
 ---
 
 ## Safety Gates
@@ -62,7 +105,7 @@ There is no delete tool. Too destructive for AI-assisted workflows — a misiden
 
 Bear uses Core Data with SQLite. The schema is undocumented — our understanding comes from reverse-engineering (see `BEAR_DATABASE_SCHEMA.md`). The database path is hardcoded to Bear's app group container at `~/Library/Group Containers/9K33E3U3T4.net.shinyfrog.bear/Application Data/database.sqlite` (overridable via `BEAR_DB_PATH` env var for tests). Key fragility points:
 
-- Tag name decoding logic exists in two places (SQL expression in `notes.ts` and TypeScript function in `bear-encoding.ts`) — these must produce identical results. Bidirectional comments link them.
+- Tag name decoding goes through a single function — `decodeTagName` in `operations/bear-encoding.ts`. Both the in-memory index build (`infra/fts-index.ts`) and the query path call it, so index-side and query-side normalization can never drift. Doing this in JS rather than SQL is deliberate: SQLite's built-in `LOWER()` is ASCII-only, while JS `toLowerCase()` folds Unicode — required for non-ASCII tag matching.
 - Tag hierarchy is not stored relationally — it's reconstructed at query time by splitting slash-delimited paths.
 - All queries exclude trashed, archived, and encrypted notes to match what Bear's UI shows.
 

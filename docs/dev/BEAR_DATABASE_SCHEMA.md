@@ -239,27 +239,37 @@ ZSFNOTE (N) ←→ (N) ZSFNOTETAG           [via Z_5PINNEDINTAGS for pinned stat
 
 ## Query Patterns
 
-### Current Implementation (with OCR File Search)
-The server always joins `ZSFNOTEFILE` to include OCR'd text from attached images and PDFs in every search:
+### Term Search (FTS5 + BM25, In-Memory Index)
+
+The server does not run `LIKE` against Bear's source tables. Instead, on first search per server process it projects active notes (`ZARCHIVED = 0 AND ZTRASHED = 0 AND ZENCRYPTED = 0`) — joined with `ZSFNOTEFILE` to include OCR'd attachment text — into an in-memory FTS5 virtual table, then runs `MATCH` queries against it:
 
 ```sql
-SELECT DISTINCT n.ZTITLE, n.ZUNIQUEIDENTIFIER, n.ZCREATIONDATE, n.ZMODIFICATIONDATE
-FROM ZSFNOTE n
-LEFT JOIN ZSFNOTEFILE f ON f.ZNOTE = n.Z_PK
-WHERE n.ZARCHIVED = 0 AND n.ZTRASHED = 0 AND n.ZENCRYPTED = 0
-  AND (n.ZTITLE LIKE '%search%' OR n.ZTEXT LIKE '%search%' OR f.ZSEARCHTEXT LIKE '%search%')
-ORDER BY n.ZMODIFICATIONDATE DESC;
+-- Conceptual shape of the in-memory query (built in src/infra/fts-index.ts):
+SELECT n.identifier, n.title, snippet(notes, -1, '[', ']', '...', 80) AS snippet,
+       n.created, n.modified, bm25(notes) AS rank
+FROM notes
+WHERE notes MATCH ?
+  -- additional WHERE filters: tag, pinned, date range
+ORDER BY rank;
 ```
+
+The `notes` virtual table is built from `ZSFNOTE` projections (title, body, OCR'd `ZSEARCHTEXT` aggregated per note, plus tag/pinned/date side data) using `unicode61 remove_diacritics 2`. Drift is detected via `MAX(ZMODIFICATIONDATE) + COUNT(*)` over the active-note set; the index is rebuilt when either changes. Filter-only queries (no `term`) skip FTS5 and sort by `ZMODIFICATIONDATE DESC`. See `docs/dev/SPECIFICATION.md` for the full architectural rationale.
 
 ### Tag-Based Queries
+
+Bear's tag-join tables embed Core Data entity IDs (`Z_5TAGS`, `Z_13TAGS`, ...) that can shift across schema migrations, so the server resolves them at runtime via `Z_PRIMARYKEY` and interpolates the discovered names into queries. The shape — with placeholders for the runtime-discovered IDs — is:
+
 ```sql
--- Notes with specific tag
+-- Notes with specific tag (entity IDs noteEntityId / tagEntityId
+-- come from src/infra/bear-schema.ts:discoverBearSchema)
 SELECT n.ZTITLE, n.ZUNIQUEIDENTIFIER
 FROM ZSFNOTE n
-JOIN Z_5TAGS nt ON nt.Z_5NOTES = n.Z_PK
-JOIN ZSFNOTETAG t ON t.Z_PK = nt.Z_13TAGS
+JOIN Z_<noteEntityId>TAGS nt ON nt.Z_<noteEntityId>NOTES = n.Z_PK
+JOIN ZSFNOTETAG t ON t.Z_PK = nt.Z_<tagEntityId>TAGS
 WHERE t.ZTITLE = 'science' AND n.ZARCHIVED = 0 AND n.ZTRASHED = 0;
 ```
+
+No hardcoded entity IDs remain in the codebase — adding new tag queries should consume `discoverBearSchema` rather than literals.
 
 ## Security & Access Considerations
 
