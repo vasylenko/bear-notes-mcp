@@ -308,13 +308,15 @@ The note has been added to your Bear Notes library.`);
     {
       title: 'Find Bear Notes',
       description:
-        'Find notes in your Bear library by searching text content, filtering by tags, or date ranges. Always searches within attached images and PDF files via OCR. Returns a list with titles, tags, and IDs - use "Open Bear Note" to read full content.',
+        "Search your Bear notes for words or phrases. The search looks across note titles, body content, and OCR text in attached images and PDFs, returning matching notes ranked by relevance with a snippet of the matching context — so you can see what matched without opening the note. For best results, search with a phrase or several words from what you're looking for; a single word also works. Trashed and archived notes are not included.",
       inputSchema: {
         term: z
           .string()
           .trim()
           .optional()
-          .describe('Text to search for in note titles and content'),
+          .describe(
+            'A phrase or word to search for. Phrases or several words generally match best because results are ranked by relevance; a single word also works.'
+          ),
         tag: z.string().trim().optional().describe('Tag to filter notes by (without # symbol)'),
         limit: z.number().optional().describe('Maximum number of results to return (default: 50)'),
         createdAfter: z
@@ -413,6 +415,16 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           const createdDate = new Date(note.creation_date).toLocaleDateString();
 
           resultLines.push(`${index + 1}. **${noteTitle}**`);
+          // Snippet (when present) immediately follows the title so the LLM has
+          // the matched context inline without needing a follow-up bear-open-note.
+          // For term searches the bracketed [matches] highlight the hit; for
+          // filter-only searches the snippet is the body's leading prefix. Bear
+          // bodies often include internal newlines (markdown title prefix,
+          // paragraph breaks); collapse them so the snippet renders as one line.
+          if (note.snippet) {
+            const flat = note.snippet.replace(/\s+/g, ' ').trim();
+            resultLines.push(`   ${flat}`);
+          }
           resultLines.push(`   Created: ${createdDate}`);
           resultLines.push(`   Modified: ${modifiedDate}`);
           if (note.tags && note.tags.length > 0) {

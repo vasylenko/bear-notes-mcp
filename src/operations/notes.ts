@@ -2,8 +2,9 @@ import { setTimeout } from 'node:timers/promises';
 
 import type { AttachedFile, BearNote, DateFilter, NoteTitleMatch } from '../types.js';
 import { DEFAULT_SEARCH_LIMIT } from '../config.js';
-import { logAndThrow, logger } from '../logging.js';
 import { closeBearDatabase, openBearDatabase } from '../infra/database.js';
+import { type SearchResults, type SearchSpec, searchByQuery } from '../infra/fts-index.js';
+import { logAndThrow, logger } from '../logging.js';
 
 import {
   convertCoreDataTimestamp,
@@ -15,26 +16,6 @@ const POLL_INTERVAL_MS = 25;
 const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
-
-// SQL equivalent of decodeTagName() in operations/bear-encoding.ts — both MUST apply the same transformations
-const DECODED_TAG_TITLE = "LOWER(TRIM(REPLACE(t.ZTITLE, '+', ' ')))";
-
-/**
- * Builds a SQL WHERE clause that matches a tag exactly or its nested children.
- * Escapes LIKE wildcards (%, _) in the tag name to prevent unintended pattern matching.
- */
-function buildTagMatchClause(tag: string): { sql: string; params: string[] } {
-  const normalizedTag = tag.trim().toLowerCase();
-  const escapedTag = normalizedTag.replace(/[%_\\]/g, '\\$&');
-
-  return {
-    sql: ` AND (
-        ${DECODED_TAG_TITLE} = ?
-        OR ${DECODED_TAG_TITLE} LIKE ? || '/%' ESCAPE '\\'
-      )`,
-    params: [normalizedTag, escapedTag],
-  };
-}
 
 function formatBearNote(row: Record<string, unknown>): BearNote {
   const title = (row.title as string) || 'Untitled';
@@ -234,15 +215,17 @@ export function searchNotes(
   limit?: number,
   dateFilter?: DateFilter,
   pinned?: boolean
-): { notes: BearNote[]; totalCount: number } {
+): SearchResults {
   logger.info(
-    `searchNotes called with term: "${searchTerm || 'none'}", tag: "${tag || 'none'}", limit: ${limit || DEFAULT_SEARCH_LIMIT}, dateFilter: ${dateFilter ? JSON.stringify(dateFilter) : 'none'}, pinned: ${pinned ?? 'none'}, includeFiles: always`
+    `searchNotes called with term: "${searchTerm || 'none'}", tag: "${tag || 'none'}", limit: ${limit || DEFAULT_SEARCH_LIMIT}, dateFilter: ${dateFilter ? JSON.stringify(dateFilter) : 'none'}, pinned: ${pinned ?? 'none'}`
   );
 
-  // Validate search parameters - at least one must be provided
-  const hasSearchTerm = searchTerm && typeof searchTerm === 'string' && searchTerm.trim();
-  const hasTag = tag && typeof tag === 'string' && tag.trim();
-  const hasDateFilter = dateFilter && Object.keys(dateFilter).length > 0;
+  // Validate search parameters - at least one must be provided. This stays in the
+  // operations layer; the infra layer's searchByQuery is called with whatever spec
+  // we hand it.
+  const hasSearchTerm = !!(searchTerm && typeof searchTerm === 'string' && searchTerm.trim());
+  const hasTag = !!(tag && typeof tag === 'string' && tag.trim());
+  const hasDateFilter = !!(dateFilter && Object.keys(dateFilter).length > 0);
   const hasPinnedFilter = pinned === true;
 
   if (!hasSearchTerm && !hasTag && !hasDateFilter && !hasPinnedFilter) {
@@ -251,135 +234,41 @@ export function searchNotes(
     );
   }
 
-  const db = openBearDatabase();
-  const queryLimit = limit || DEFAULT_SEARCH_LIMIT;
-
-  try {
-    const queryParams: (string | number)[] = [];
-
-    // Build inner query that handles filtering and DISTINCT
-    // CTE ensures window function counts distinct notes, not duplicated rows from JOIN
-    let innerQuery = `
-      SELECT DISTINCT note.ZTITLE as title,
-             note.ZUNIQUEIDENTIFIER as identifier,
-             note.ZCREATIONDATE as creationDate,
-             note.ZMODIFICATIONDATE as modificationDate,
-             note.ZPINNED as pinned,
-             (SELECT GROUP_CONCAT(t2.ZTITLE, ',')
-              FROM Z_5TAGS nt2
-              JOIN ZSFNOTETAG t2 ON t2.Z_PK = nt2.Z_13TAGS
-              WHERE nt2.Z_5NOTES = note.Z_PK) as rawTags
-      FROM ZSFNOTE note
-      LEFT JOIN ZSFNOTEFILE f ON f.ZNOTE = note.Z_PK`;
-
-    // Tag-pinned search requires joining the pinned-in-tags relationship tables
-    if (hasPinnedFilter && hasTag) {
-      innerQuery += `
-      JOIN Z_5PINNEDINTAGS pt ON pt.Z_5PINNEDNOTES = note.Z_PK
-      JOIN ZSFNOTETAG t ON t.Z_PK = pt.Z_13PINNEDINTAGS`;
-    } else if (hasTag) {
-      innerQuery += `
-      JOIN Z_5TAGS nt ON nt.Z_5NOTES = note.Z_PK
-      JOIN ZSFNOTETAG t ON t.Z_PK = nt.Z_13TAGS`;
+  // Resolve user-facing date strings (e.g. "yesterday", "2026-04-01") into Core
+  // Data timestamps. The infra layer takes pre-resolved numeric timestamps so it
+  // doesn't need to know about Bear's relative-date conventions.
+  const spec: SearchSpec = { limit: limit || DEFAULT_SEARCH_LIMIT };
+  if (hasSearchTerm) spec.term = searchTerm!.trim();
+  if (hasTag) spec.tag = tag!.trim();
+  if (hasPinnedFilter) spec.pinned = true;
+  if (dateFilter) {
+    if (dateFilter.createdAfter) {
+      const d = parseDateString(dateFilter.createdAfter);
+      d.setHours(0, 0, 0, 0);
+      spec.createdAfterTimestamp = convertDateToCoreDataTimestamp(d);
     }
-
-    innerQuery += `
-      WHERE note.ZARCHIVED = 0
-        AND note.ZTRASHED = 0
-        AND note.ZENCRYPTED = 0`;
-
-    // Add search term filtering
-    if (hasSearchTerm) {
-      const searchPattern = `%${searchTerm.trim()}%`;
-      // Search in note title, text, and file OCR content
-      innerQuery += ' AND (note.ZTITLE LIKE ? OR note.ZTEXT LIKE ? OR f.ZSEARCHTEXT LIKE ?)';
-      queryParams.push(searchPattern, searchPattern, searchPattern);
+    if (dateFilter.createdBefore) {
+      const d = parseDateString(dateFilter.createdBefore);
+      d.setHours(23, 59, 59, 999);
+      spec.createdBeforeTimestamp = convertDateToCoreDataTimestamp(d);
     }
-
-    // Tag clause applies to both pinned+tag and tag-only paths (JOINs differ above)
-    if (hasTag) {
-      const tagClause = buildTagMatchClause(tag);
-      innerQuery += tagClause.sql;
-      queryParams.push(...tagClause.params);
-    } else if (hasPinnedFilter) {
-      // All pinned notes: globally pinned OR pinned in any tag (matches Bear's "Pinned" section)
-      innerQuery +=
-        ' AND (note.ZPINNED = 1 OR EXISTS (SELECT 1 FROM Z_5PINNEDINTAGS pt WHERE pt.Z_5PINNEDNOTES = note.Z_PK))';
+    if (dateFilter.modifiedAfter) {
+      const d = parseDateString(dateFilter.modifiedAfter);
+      d.setHours(0, 0, 0, 0);
+      spec.modifiedAfterTimestamp = convertDateToCoreDataTimestamp(d);
     }
-
-    // Add date filtering
-    if (hasDateFilter && dateFilter) {
-      if (dateFilter.createdAfter) {
-        const afterDate = parseDateString(dateFilter.createdAfter);
-        // Set to start of day (00:00:00) to include notes from the entire specified day onwards
-        afterDate.setHours(0, 0, 0, 0);
-        const timestamp = convertDateToCoreDataTimestamp(afterDate);
-        innerQuery += ' AND note.ZCREATIONDATE >= ?';
-        queryParams.push(timestamp);
-      }
-      if (dateFilter.createdBefore) {
-        const beforeDate = parseDateString(dateFilter.createdBefore);
-        // Set to end of day (23:59:59.999) to include notes through the entire specified day
-        beforeDate.setHours(23, 59, 59, 999);
-        const timestamp = convertDateToCoreDataTimestamp(beforeDate);
-        innerQuery += ' AND note.ZCREATIONDATE <= ?';
-        queryParams.push(timestamp);
-      }
-      if (dateFilter.modifiedAfter) {
-        const afterDate = parseDateString(dateFilter.modifiedAfter);
-        // Set to start of day (00:00:00) to include notes from the entire specified day onwards
-        afterDate.setHours(0, 0, 0, 0);
-        const timestamp = convertDateToCoreDataTimestamp(afterDate);
-        innerQuery += ' AND note.ZMODIFICATIONDATE >= ?';
-        queryParams.push(timestamp);
-      }
-      if (dateFilter.modifiedBefore) {
-        const beforeDate = parseDateString(dateFilter.modifiedBefore);
-        // Set to end of day (23:59:59.999) to include notes through the entire specified day
-        beforeDate.setHours(23, 59, 59, 999);
-        const timestamp = convertDateToCoreDataTimestamp(beforeDate);
-        innerQuery += ' AND note.ZMODIFICATIONDATE <= ?';
-        queryParams.push(timestamp);
-      }
+    if (dateFilter.modifiedBefore) {
+      const d = parseDateString(dateFilter.modifiedBefore);
+      d.setHours(23, 59, 59, 999);
+      spec.modifiedBeforeTimestamp = convertDateToCoreDataTimestamp(d);
     }
-
-    // Wrap in CTE: inner query gets distinct notes, outer query adds total count and applies limit
-    const query = `
-      WITH filtered_notes AS (${innerQuery})
-      SELECT *, COUNT(*) OVER() as totalCount
-      FROM filtered_notes
-      ORDER BY modificationDate DESC
-      LIMIT ?`;
-    queryParams.push(queryLimit);
-
-    logger.debug(`Executing search query with ${queryParams.length} parameters`);
-
-    // Use parameter binding to prevent SQL injection attacks
-    const stmt = db.prepare(query);
-    const rows = stmt.all(...queryParams);
-
-    if (!rows || rows.length === 0) {
-      logger.info('No notes found matching search criteria');
-      return { notes: [], totalCount: 0 };
-    }
-
-    // Extract totalCount from first row (window function adds same value to all rows)
-    const firstRow = rows[0] as Record<string, unknown>;
-    const totalCount = (firstRow.totalCount as number) || rows.length;
-
-    const notes = rows.map((row) => formatBearNote(row as Record<string, unknown>));
-    logger.info(`Found ${notes.length} notes (${totalCount} total) matching search criteria`);
-
-    return { notes, totalCount };
-  } catch (error) {
-    logAndThrow(
-      `SQLite search query failed: ${error instanceof Error ? error.message : String(error)}`
-    );
-  } finally {
-    closeBearDatabase(db);
   }
 
-  return { notes: [], totalCount: 0 };
+  const result = searchByQuery(spec);
+  logger.info(
+    `Found ${result.notes.length} notes (${result.totalCount} total) matching search criteria`
+  );
+  return result;
 }
 
 /**
