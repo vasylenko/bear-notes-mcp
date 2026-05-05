@@ -714,7 +714,7 @@ The file has been attached to your Bear note.`);
     {
       title: 'Find Untagged Notes',
       description:
-        'Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes.',
+        'Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes. Trashed and archived notes are not included.',
       inputSchema: {
         limit: z
           .number()

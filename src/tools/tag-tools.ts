@@ -49,7 +49,7 @@ export function registerTagTools(server: McpServer): void {
     {
       title: 'List Bear Tags',
       description:
-        'List all tags in your Bear library as a hierarchical tree. Shows tag names with note counts. Useful for understanding your tag structure and finding tags to apply to untagged notes.',
+        'List all tags in your Bear library as a hierarchical tree. Shows tag names with note counts. Useful for understanding your tag structure and finding tags to apply to untagged notes. Counts include only active notes (trashed and archived are excluded). Tags with zero active notes are not shown.',
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
