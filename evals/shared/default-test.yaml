@@ -1,0 +1,41 @@
+# Shared defaultTest assertions for all bear-notes-mcp eval configs.
+#
+# Promptfoo merges defaultTest.assert into every test case's assert array,
+# so these run in addition to per-test assertions (T1 ground-truth checks).
+# Per-test assertions can tighten constraints but cannot loosen what's here.
+#
+# Both metrics come from metadata fields the agent SDK exposes per response:
+#   metadata.toolCalls — array of every tool the agent invoked
+#   metadata.numTurns  — count of agent <-> tool conversation turns
+#
+# Both assertions are pure metric emitters with `pass: true` — no test fails
+# on tool-call or turn counts. Different providers legitimately use different
+# call counts for the same task, and the gap is the signal we want surfaced
+# in the report rather than a binary gate. namedScores aggregates per-provider
+# averages in promptfoo's output for direct comparison.
+
+assert:
+  # toolCalls includes SDK-internal tools (e.g. ToolSearch) alongside actual
+  # MCP server calls. Filter by the `mcp__` prefix to count only calls into
+  # bear-notes-mcp itself, which is the efficiency metric we care about.
+  - type: javascript
+    value: |
+      const calls = context.providerResponse?.metadata?.toolCalls ?? [];
+      const serverCalls = calls.filter(c => c.name?.startsWith('mcp__')).length;
+      return {
+        pass: true,
+        score: 1,
+        reason: `MCP server tool calls: ${serverCalls}`,
+        namedScores: { toolCalls: serverCalls },
+      };
+
+  # Turn counts depend on prompt complexity. Pure metric emission, no gate.
+  - type: javascript
+    value: |
+      const turns = context.providerResponse?.metadata?.numTurns ?? 0;
+      return {
+        pass: true,
+        score: 1,
+        reason: `turns: ${turns}`,
+        namedScores: { turns },
+      };

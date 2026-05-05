@@ -10,31 +10,39 @@ Two versions of the MCP server run against the same prompt. The eval measures ho
 - **Turns**: conversation turns between the agent and MCP server
 - **Cost**: USD per run
 
-The current eval tests the tags-in-search feature (PR #100) — search results include tags, so the agent doesn't need follow-up calls to read tag data.
+Two evals live here:
+
+- **`promptfooconfig.yaml`** — tags-in-search efficiency (PR #100): search results include tags so the agent skips follow-up reads
+- **`fts5-promptfooconfig.yaml`** — SVA-28 FTS5 BM25 ranking: relevance vs the prior LIKE+mod-date ordering
 
 ## Prerequisites
 
 1. **Bear app running** — the MCP server reads Bear's SQLite DB
-2. **`dist/main.js` built** — `task build` from project root
-3. **`evals/released/` populated** — `task eval:setup` (one-time)
+2. **`dist/main.js` built** — run `task build` from project root
+3. **`evals/released/` populated** — drop a baseline npm release into it (see Quick Start)
 4. **`ANTHROPIC_API_KEY` exported** in your shell
 
 ## Quick Start
 
 ```bash
-task eval:setup VERSION=2.10.0   # one-time: download baseline
-task build               # build current HEAD
-task eval                # run eval, generate report, open in browser
+# One-time: place a baseline build in evals/released/ (FTS5 eval expects 2.11.0)
+mkdir -p evals/released && (cd evals && npm pack bear-notes-mcp@2.11.0 \
+  && tar xzf bear-notes-mcp-2.11.0.tgz -C released --strip-components=1 \
+  && rm bear-notes-mcp-2.11.0.tgz)
+
+task build  # build current HEAD
+npx promptfoo eval --config evals/fts5-promptfooconfig.yaml --no-cache
+npx promptfoo view evals/outputs/results.json
 ```
 
-Extra args pass through to promptfoo: `task eval -- --repeat 3`
+Higher-level automation (orchestration, fresh isolation dir per run) is being rewritten — until it lands, the raw promptfoo commands above work.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `promptfooconfig.yaml` | Eval config — providers, assertions, prompt, test case |
-| `generate-report.js` | Reads `results.json`, produces self-contained `report.html` |
+| `promptfooconfig.yaml` / `fts5-promptfooconfig.yaml` | Eval configs — providers, assertions, prompts |
+| `shared/default-test.yaml` | Shared assertion (reads `namedScores.toolCalls` for per-provider metrics) |
 | `outputs/` | Results, report, SDK debug logs (gitignored) |
 | `released/` | Baseline server from npm (gitignored) |
 
@@ -46,11 +54,3 @@ Each eval run is isolated from host Claude Code settings:
 - `custom_allowed_tools` — strict allowlist; only the eval's MCP server tools are callable
 - `mcp.servers` — passed via `--mcp-config`, independent of settings files
 - `persist_session: false` — no session transcripts written
-
-## Adding a New Eval
-
-The current config is a self-contained single file. When adding a second eval, extract the shared parts:
-
-1. Move providers to `shared/providers.yaml`, reference as `providers: file://shared/providers.yaml`
-2. Move `defaultTest` to `shared/default-test.yaml`, reference as `defaultTest: file://shared/default-test.yaml`
-3. Create a new config with its own prompt and test case, reusing the shared files

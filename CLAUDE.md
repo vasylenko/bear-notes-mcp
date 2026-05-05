@@ -12,6 +12,10 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
     - when adding a new feature – you ensure the new code add exactly that functional requirement, nothing extra
     - when refactoring – you ensure that you simplify the maintenance and reduce lines of code (if possible)
 - All project dependencies must be managed ONLY through their respective CLI tools, and NEVER through editing package lock files.
+- Tests:
+    - System tests are the default. Unit tests are justified only when a situation is genuinely hard to recreate via system tests due to test setup complexity. Unit tests are a last resort.
+    - If the assertion is about something the server decided before calling Bear (input validation, schema rejection, response format with no Bear interaction), it's almost always a misplaced unit test. System tests should verify behavior at the Bear-integration boundary — anything else is paying the spawn-Inspector / open-Bear cost for no integration risk.
+    - Exception: when an input composition step is exhaustively unit-tested AND one system test exercises the URL roundtrip, additional system tests covering other input shapes are redundant — Bear's URL boundary doesn't discriminate between composed strings.
 
 ## Code Style Guidelines
 - TypeScript: Strict type checking, ES modules, explicit return types
@@ -56,8 +60,8 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 │       ├── inspector.ts   # Test helpers: callTool, pollUntil, cleanup
 │       └── *.test.ts      # Per-tool system test suites
 ├── docs/
-│   ├── dev/               # Developer documentation (SPECIFICATION.md, BEAR_DATABASE_SCHEMA.md, SECURITY.md)
-│   └── user/              # User documentation published to npm (NPM.md)
+│   ├── dev/               # Developer documentation (also for you -- Claude Code)
+│   └── user/              # User documentation
 ├── evals/                 # LLM evaluation suite (promptfoo-based A/B testing)
 ├── scripts/               # Build and doc automation scripts
 ├── dist/                  # Compiled JavaScript (build output)
@@ -70,9 +74,10 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 
 ## Additional technical context
 
-1 - Project Specification - docs/dev/SPECIFICATION.md - read this before making architectural changes; covers system boundaries, design constraints, safety gates, and the rationale behind the hybrid read/write model
+Read this before making architectural changes; covers system boundaries, design constraints, safety gates, and the rationale behind the hybrid read/write model:
 
-2 - Bear database schema brief - docs/dev/BEAR_DATABASE_SCHEMA.md - use this when working with tasks related to database access as a starting point
+1 - Project Specification - docs/dev/SPECIFICATION.md
+2 - Security Posture - docs/dev/SECURITY.md
 
 ## Core Workflows
 

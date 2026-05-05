@@ -14,18 +14,22 @@ prompts:
     under each one. Notes without tags should be listed separately. Tell me
     the total number of notes you found.
 
-# Provider isolation:
+# Provider isolation (defense in depth):
 # - setting_sources: [] — blocks ~/.claude/settings.json and project settings
+# - env.CLAUDE_CONFIG_DIR — points the agent SDK at a clean temp dir, so
+#   skills/agents/hooks/memories under ~/.claude/projects/ are walled off
+#   even if a future SDK version honors a setting source we forgot to block
 # - custom_allowed_tools — strict REPLACEMENT allowlist (not additive);
 #   only our MCP server's tools are callable
 # - mcp.servers — passed via --mcp-config, independent of setting_sources
 # - persist_session: false — no session transcripts in ~/.claude/projects/
 #
-# Tracing deferred: promptfoo 0.121.5 drops the provider env: block (PR #8764
-# fix merged 2026-04-16, pending 0.121.6). Until then, JS assertions read
-# metadata.toolCalls/numTurns directly (populated by PR #7790, 0.120.26).
-# Once env: works, add CLAUDE_CONFIG_DIR to a temp dir for belt-and-suspenders
-# isolation, and consider switching to native trajectory:* assertions.
+# Note on assertions: we use a custom JS assertion in shared/default-test.yaml
+# rather than promptfoo's native trajectory:* assertions. Native trajectory
+# assertions are pass/fail only (they don't emit namedScores), and our report
+# generator reads namedScores.toolCalls to render per-provider metrics —
+# migrating would silently break the report. Revisit if/when we add richer
+# sequence/argument assertions where trajectory:* genuinely helps.
 providers:
   - id: anthropic:claude-agent-sdk
     label: v2.10.0
@@ -37,6 +41,8 @@ providers:
       # MCP servers from mcp.servers below bypass this — they're passed via
       # --mcp-config, not discovered from settings files.
       setting_sources: []
+      env:
+        CLAUDE_CONFIG_DIR: /tmp/bear-mcp-eval-claude-config
       # Strict allowlist — REPLACES defaults, not additive. Only our MCP
       # server's tools are callable; all built-in tools (Read, Bash, etc.)
       # are blocked because they're not on the list.
@@ -56,6 +62,8 @@ providers:
       working_dir: ..
       persist_session: false
       setting_sources: []
+      env:
+        CLAUDE_CONFIG_DIR: /tmp/bear-mcp-eval-claude-config
       custom_allowed_tools: ['mcp__release-candidate__*']
       # debug: true
       # debug_file: ./outputs/sdk-release-candidate.log
@@ -65,41 +73,9 @@ providers:
             command: node
             args: [dist/main.js]
 
-# Efficiency gate + metric emission. Reads metadata.toolCalls from the SDK
-# response (populated by promptfoo PR #7790, 0.120.26). We omit the `metric:`
-# field — it would duplicate each namedScore with a binary 0/1 pill.
-#
-# metadata.toolCalls includes SDK-internal tools (ToolSearch) alongside actual
-# MCP server calls. We filter by the `mcp__` prefix to count only calls to
-# bear-notes-mcp, which is the efficiency metric we care about.
-defaultTest:
-  assert:
-    # Efficiency gate: total bear-notes-mcp tool calls must stay under budget.
-    # Observed: release-candidate ~1 call (search only), v2.10.0 ~6-30 calls
-    # (multiple searches, list-tags, or open-note loops depending on the run).
-    - type: javascript
-      value: |
-        const calls = context.providerResponse?.metadata?.toolCalls ?? [];
-        const serverCalls = calls.filter(c => c.name?.startsWith('mcp__')).length;
-        const MAX = 5;
-        return {
-          pass: serverCalls <= MAX,
-          score: serverCalls <= MAX ? 1 : 0,
-          reason: `MCP server tool calls: ${serverCalls} (max ${MAX})`,
-          namedScores: { toolCalls: serverCalls },
-        };
-
-    # Informational: turns don't have a clean threshold (prompt-dependent), so
-    # this is pure metric emission — no gate.
-    - type: javascript
-      value: |
-        const turns = context.providerResponse?.metadata?.numTurns ?? 0;
-        return {
-          pass: true,
-          score: 1,
-          reason: `turns: ${turns}`,
-          namedScores: { turns },
-        };
+# Default toolCalls + turns metrics live in shared/default-test.yaml so the
+# SVA-28 FTS5 eval and any future eval reuse the same emission logic.
+defaultTest: file://shared/default-test.yaml
 
 tests:
   - description: Blog notes grouped by tags (~49 results, real Bear data)

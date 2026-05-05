@@ -1,5 +1,6 @@
 import type { BearNote, BearTag } from '../types.js';
 import { logAndThrow, logger } from '../logging.js';
+import { discoverBearSchema } from '../infra/bear-schema.js';
 import { closeBearDatabase, openBearDatabase } from '../infra/database.js';
 
 import { convertCoreDataTimestamp, decodeTagName } from './bear-encoding.js';
@@ -82,13 +83,19 @@ export function listTags(): { tags: BearTag[]; totalCount: number } {
   const db = openBearDatabase();
 
   try {
+    const {
+      table: tagsJoin,
+      noteCol: tagsNoteCol,
+      tagCol: tagsTagCol,
+    } = discoverBearSchema(db).noteToTagsJoin;
+
     const query = `
       SELECT t.ZTITLE as name,
              t.ZISROOT as isRoot,
              COUNT(note.Z_PK) as noteCount
       FROM ZSFNOTETAG t
-      LEFT JOIN Z_5TAGS nt ON nt.Z_13TAGS = t.Z_PK
-      LEFT JOIN ZSFNOTE note ON note.Z_PK = nt.Z_5NOTES
+      LEFT JOIN ${tagsJoin} nt ON nt.${tagsTagCol} = t.Z_PK
+      LEFT JOIN ZSFNOTE note ON note.Z_PK = nt.${tagsNoteCol}
         AND note.ZTRASHED = 0
         AND note.ZARCHIVED = 0
         AND note.ZENCRYPTED = 0
@@ -143,6 +150,8 @@ export function findUntaggedNotes(limit: number = 50): { notes: BearNote[]; tota
   const db = openBearDatabase();
 
   try {
+    const { table: tagsJoin, noteCol: tagsNoteCol } = discoverBearSchema(db).noteToTagsJoin;
+
     // COUNT(*) OVER() calculates total matching rows BEFORE LIMIT is applied
     const query = `
       SELECT ZTITLE as title,
@@ -152,7 +161,7 @@ export function findUntaggedNotes(limit: number = 50): { notes: BearNote[]; tota
              COUNT(*) OVER() as totalCount
       FROM ZSFNOTE
       WHERE ZARCHIVED = 0 AND ZTRASHED = 0 AND ZENCRYPTED = 0
-        AND Z_PK NOT IN (SELECT Z_5NOTES FROM Z_5TAGS)
+        AND Z_PK NOT IN (SELECT ${tagsNoteCol} FROM ${tagsJoin})
       ORDER BY ZMODIFICATIONDATE DESC
       LIMIT ?
     `;

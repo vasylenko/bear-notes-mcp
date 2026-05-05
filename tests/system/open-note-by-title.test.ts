@@ -24,51 +24,38 @@ describe('bear-open-note by title', () => {
   it('opens a note by exact title', () => {
     const noteTitle = title('Unique');
     const noteText = 'Content for open-by-title test';
-    let noteId: string | undefined;
 
-    try {
-      const createResult = callTool({
-        toolName: 'bear-create-note',
-        args: { title: noteTitle, text: noteText },
-      }).content[0].text;
-      noteId = tryExtractNoteId(createResult) ?? undefined;
-      expect(noteId).toBeDefined();
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title: noteTitle, text: noteText },
+    }).content[0].text;
+    expect(tryExtractNoteId(createResult)).toBeTruthy();
 
-      const openResult = callTool({
-        toolName: 'bear-open-note',
-        args: { title: noteTitle },
-      }).content[0].text;
+    const openResult = callTool({
+      toolName: 'bear-open-note',
+      args: { title: noteTitle },
+    }).content[0].text;
 
-      expect(openResult).toContain(noteTitle);
-      expect(extractNoteBody(openResult)).toContain(noteText);
-      // Response must include the note ID for follow-up operations
-      expect(tryExtractNoteId(openResult)).toBeTruthy();
-    } finally {
-      if (noteId) trashNote(noteId);
-    }
+    expect(openResult).toContain(noteTitle);
+    expect(extractNoteBody(openResult)).toContain(noteText);
+    // Response must include the note ID for follow-up operations
+    expect(tryExtractNoteId(openResult)).toBeTruthy();
   });
 
   it('title matching is case-insensitive', () => {
     const noteTitle = title('CaseTest');
-    let noteId: string | undefined;
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title: noteTitle, text: 'Case sensitivity test' },
+    }).content[0].text;
+    expect(tryExtractNoteId(createResult)).toBeTruthy();
 
-    try {
-      const createResult = callTool({
-        toolName: 'bear-create-note',
-        args: { title: noteTitle, text: 'Case sensitivity test' },
-      }).content[0].text;
-      noteId = tryExtractNoteId(createResult) ?? undefined;
-      expect(noteId).toBeDefined();
+    const openResult = callTool({
+      toolName: 'bear-open-note',
+      args: { title: noteTitle.toLowerCase() },
+    }).content[0].text;
 
-      const openResult = callTool({
-        toolName: 'bear-open-note',
-        args: { title: noteTitle.toLowerCase() },
-      }).content[0].text;
-
-      expect(openResult).toContain(noteTitle);
-    } finally {
-      if (noteId) trashNote(noteId);
-    }
+    expect(openResult).toContain(noteTitle);
   });
 
   it('returns not-found error for non-existent title', () => {
@@ -94,90 +81,55 @@ describe('bear-open-note by title', () => {
       });
     }
 
-    try {
-      const openResult = callTool({
-        toolName: 'bear-open-note',
-        args: { title: sharedTitle },
-      }).content[0].text;
-
-      expect(openResult).toContain('Multiple notes found');
-      expect(openResult).toContain(sharedTitle);
-      expect(openResult).toMatch(/modified:\s*\d{4}-\d{2}-\d{2}/);
-
-      // Extract IDs from the disambiguation list for cleanup and verification
-      const idMatches = [...openResult.matchAll(/ID:\s*([A-F0-9-]+)/gi)];
-      expect(idMatches.length).toBe(2);
-      expect(new Set(idMatches.map((m) => m[1])).size).toBe(2);
-    } finally {
-      // Search for all notes with this title and clean them up
-      const searchResult = callTool({
-        toolName: 'bear-search-notes',
-        args: { term: sharedTitle },
-      }).content[0].text;
-      const ids = [...searchResult.matchAll(/ID:\s*([A-F0-9-]+)/gi)].map((m) => m[1]);
-      for (const id of ids) {
-        trashNote(id);
-      }
-    }
-  });
-
-  it('returns error when neither id nor title is provided', () => {
-    const response = callTool({
+    const openResult = callTool({
       toolName: 'bear-open-note',
-      args: {},
-    });
+      args: { title: sharedTitle },
+    }).content[0].text;
 
-    expect(response.content[0].text).toContain('Either note ID or title is required');
-    expect(response.isError).toBe(true);
+    expect(openResult).toContain('Multiple notes found');
+    expect(openResult).toContain(sharedTitle);
+    expect(openResult).toMatch(/modified:\s*\d{4}-\d{2}-\d{2}/);
+
+    // Extract IDs from the disambiguation list for cleanup and verification
+    const idMatches = [...openResult.matchAll(/ID:\s*([A-F0-9-]+)/gi)];
+    expect(idMatches.length).toBe(2);
+    expect(new Set(idMatches.map((m) => m[1])).size).toBe(2);
   });
 
   it('excludes trashed notes from title lookup', () => {
     const noteTitle = title('Trashed');
-    let noteId: string | undefined;
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title: noteTitle, text: 'Will be trashed' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
 
-    try {
-      const createResult = callTool({
-        toolName: 'bear-create-note',
-        args: { title: noteTitle, text: 'Will be trashed' },
-      }).content[0].text;
-      noteId = tryExtractNoteId(createResult) ?? undefined;
-      expect(noteId).toBeDefined();
+    trashNote(noteId);
 
-      trashNote(noteId!);
+    const openResult = callTool({
+      toolName: 'bear-open-note',
+      args: { title: noteTitle },
+    }).content[0].text;
 
-      const openResult = callTool({
-        toolName: 'bear-open-note',
-        args: { title: noteTitle },
-      }).content[0].text;
-
-      expect(openResult).toContain('No note found with title');
-    } finally {
-      // trashNote already moved it out of active notes
-    }
+    expect(openResult).toContain('No note found with title');
   });
 
   it('opens a note by ID (regression)', () => {
     const noteTitle = title('ByID');
     const noteText = 'Regression test for ID-based lookup';
-    let noteId: string | undefined;
 
-    try {
-      const createResult = callTool({
-        toolName: 'bear-create-note',
-        args: { title: noteTitle, text: noteText },
-      }).content[0].text;
-      noteId = tryExtractNoteId(createResult) ?? undefined;
-      expect(noteId).toBeDefined();
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title: noteTitle, text: noteText },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
 
-      const openResult = callTool({
-        toolName: 'bear-open-note',
-        args: { id: noteId! },
-      }).content[0].text;
+    const openResult = callTool({
+      toolName: 'bear-open-note',
+      args: { id: noteId },
+    }).content[0].text;
 
-      expect(openResult).toContain(noteTitle);
-      expect(extractNoteBody(openResult)).toContain(noteText);
-    } finally {
-      if (noteId) trashNote(noteId);
-    }
+    expect(openResult).toContain(noteTitle);
+    expect(extractNoteBody(openResult)).toContain(noteText);
   });
 });

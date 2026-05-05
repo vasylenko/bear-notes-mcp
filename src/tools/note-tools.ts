@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
 import { logger } from '../logging.js';
 import { applyNoteConventions } from '../operations/note-conventions.js';
-import { cleanBase64 } from '../operations/bear-encoding.js';
 import {
   awaitNoteCreation,
   findNotesByTitle,
@@ -21,6 +20,43 @@ import { findUntaggedNotes } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
 import { createErrorResponse, createToolResponse } from './responses.js';
+
+// Cap bear-add-file attachment size. Well above realistic PDFs/images, well
+// below "exfiltrate the entire ~/Library." See docs/dev/SECURITY.md.
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+type ReadAttachmentResult = { ok: true; data: string } | { ok: false; error: string };
+
+// Narrow filesystem capability for bear-add-file: reject symlinks (block
+// follow-the-link exfiltration), reject non-files (devices, fifos, dirs),
+// and cap size before reading into memory. lstat keeps the symlink visible
+// rather than resolving past it. See docs/dev/SECURITY.md for the threat model.
+function readAttachmentFile(filePath: string): ReadAttachmentResult {
+  try {
+    const stat = lstatSync(filePath);
+    if (stat.isSymbolicLink())
+      return { ok: false, error: `Symbolic links are not supported: ${filePath}` };
+    if (!stat.isFile()) return { ok: false, error: `Not a regular file: ${filePath}` };
+    if (stat.size === 0) return { ok: false, error: `File is empty: ${filePath}` };
+    if (stat.size > MAX_ATTACHMENT_BYTES) {
+      return {
+        ok: false,
+        error: `File too large (${stat.size} bytes; limit ${MAX_ATTACHMENT_BYTES}): ${filePath}`,
+      };
+    }
+    return { ok: true, data: readFileSync(filePath).toString('base64') };
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === 'ENOENT') return { ok: false, error: `File not found: ${filePath}` };
+    if (code === 'EACCES') return { ok: false, error: `Permission denied: ${filePath}` };
+    return {
+      ok: false,
+      error: `Cannot read file: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+export const __testing__ = { readAttachmentFile, MAX_ATTACHMENT_BYTES };
 
 /**
  * Shared handler for note text operations (append, prepend, or replace).
@@ -308,13 +344,15 @@ The note has been added to your Bear Notes library.`);
     {
       title: 'Find Bear Notes',
       description:
-        'Find notes in your Bear library by searching text content, filtering by tags, or date ranges. Always searches within attached images and PDF files via OCR. Returns a list with titles, tags, and IDs - use "Open Bear Note" to read full content.',
+        "Search your Bear notes for words or phrases. The search looks across note titles, body content, and OCR text in attached images and PDFs, returning matching notes ranked by relevance with a snippet of the matching context — so you can see what matched without opening the note. For best results, search with a phrase or several words from what you're looking for; a single word also works. Also supports filtering by tag, by creation/modification date range, or by pinned status — combine these with a search term, or use them on their own to browse without searching. Trashed and archived notes are not included.",
       inputSchema: {
         term: z
           .string()
           .trim()
           .optional()
-          .describe('Text to search for in note titles and content'),
+          .describe(
+            'Words to search for. Results are ranked by relevance density — notes covering more terms surface first. Pass natural keywords for the typical case (e.g., "quarterly planning notes"). When the entire term is a single identifier with embedded punctuation (e.g., "bear-notes-mcp", "2026-04-15"), it is matched as a consecutive token sequence; in multi-word queries, those identifiers are still split into tokens and OR-ranked along with the rest.'
+          ),
         tag: z.string().trim().optional().describe('Tag to filter notes by (without # symbol)'),
         limit: z.number().optional().describe('Maximum number of results to return (default: 50)'),
         createdAfter: z
@@ -376,13 +414,7 @@ The note has been added to your Bear Notes library.`);
           ...(modifiedBefore && { modifiedBefore }),
         };
 
-        const { notes, totalCount } = searchNotes(
-          term,
-          tag,
-          limit,
-          Object.keys(dateFilter).length > 0 ? dateFilter : undefined,
-          pinned
-        );
+        const { notes, totalCount } = searchNotes(term, tag, limit, dateFilter, pinned);
 
         if (notes.length === 0) {
           const searchCriteria = [];
@@ -413,6 +445,12 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           const createdDate = new Date(note.creation_date).toLocaleDateString();
 
           resultLines.push(`${index + 1}. **${noteTitle}**`);
+          // Bear bodies often include internal newlines; collapse so each
+          // snippet renders as one line.
+          if (note.snippet) {
+            const flat = note.snippet.replace(/\s+/g, ' ').trim();
+            resultLines.push(`   ${flat}`);
+          }
           resultLines.push(`   Created: ${createdDate}`);
           resultLines.push(`   Modified: ${modifiedDate}`);
           if (note.tags && note.tags.length > 0) {
@@ -547,23 +585,14 @@ Remove the header parameter to replace the full note body, or change scope to "s
     {
       title: 'Add File to Note',
       description:
-        'Attach a file to an existing Bear note. Preferred: provide file_path for files on disk — the server reads and encodes them automatically. Alternative: provide base64_content with pre-encoded data. Use bear-search-notes first to get the note ID.',
+        'Attach a local file (image, PDF, document) to an existing Bear note. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Use bear-search-notes first to get the note ID.',
       inputSchema: {
         file_path: z
           .string()
           .trim()
           .min(1)
-          .optional()
           .describe(
-            'Path to a file on disk. Preferred over base64_content when the file already exists locally.'
-          ),
-        base64_content: z
-          .string()
-          .trim()
-          .min(1)
-          .optional()
-          .describe(
-            'Base64-encoded file content. Use file_path instead when the file exists on disk.'
+            'Absolute path to a local file (e.g., "/Users/me/Documents/report.pdf"). Tilde (~) is not expanded — pass an explicit absolute path.'
           ),
         filename: z
           .string()
@@ -571,7 +600,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
           .min(1)
           .optional()
           .describe(
-            'Filename with extension (e.g., budget.xlsx, report.pdf). Required when using base64_content. Auto-inferred from file_path when omitted.'
+            'Filename with extension (e.g., budget.xlsx, report.pdf). Auto-inferred from file_path when omitted.'
           ),
         id: z
           .string()
@@ -587,9 +616,9 @@ Remove the header parameter to replace the full note body, or change scope to "s
         openWorldHint: true,
       },
     },
-    async ({ file_path, base64_content, filename, id, title }): Promise<CallToolResult> => {
+    async ({ file_path, filename, id, title }): Promise<CallToolResult> => {
       logger.info(
-        `bear-add-file called with file_path: ${file_path || 'none'}, base64_content: ${base64_content ? 'provided' : 'none'}, filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
+        `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
       );
 
       if (!id && !title) {
@@ -598,46 +627,11 @@ Remove the header parameter to replace the full note body, or change scope to "s
         );
       }
 
-      if (file_path && base64_content) {
-        return createErrorResponse('Provide either file_path or base64_content, not both.');
-      }
-      if (!file_path && !base64_content) {
-        return createErrorResponse('Either file_path or base64_content is required.');
-      }
-      if (base64_content && !filename) {
-        return createErrorResponse('filename is required when using base64_content.');
-      }
-
       try {
-        let fileData: string;
-        let resolvedFilename: string;
-
-        if (file_path) {
-          // Read file from disk and encode — avoids the LLM producing thousands of base64 tokens
-          try {
-            const buffer = readFileSync(file_path);
-            if (buffer.length === 0) {
-              return createErrorResponse(`File is empty: ${file_path}`);
-            }
-            fileData = buffer.toString('base64');
-          } catch (err) {
-            const code = (err as { code?: string }).code;
-            if (code === 'ENOENT') {
-              return createErrorResponse(`File not found: ${file_path}`);
-            }
-            if (code === 'EACCES') {
-              return createErrorResponse(`Permission denied: ${file_path}`);
-            }
-            return createErrorResponse(
-              `Cannot read file: ${err instanceof Error ? err.message : String(err)}`
-            );
-          }
-          resolvedFilename = filename || basename(file_path);
-        } else {
-          // base64_content path — strip whitespace that base64 CLI adds
-          fileData = cleanBase64(base64_content!);
-          resolvedFilename = filename!;
-        }
+        const attachment = readAttachmentFile(file_path);
+        if (!attachment.ok) return createErrorResponse(attachment.error);
+        const fileData = attachment.data;
+        const resolvedFilename = filename || basename(file_path);
 
         // Fail fast with helpful message rather than cryptic Bear error
         let noteTitle: string | undefined;

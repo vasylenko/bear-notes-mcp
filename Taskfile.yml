@@ -46,41 +46,6 @@ tasks:
       - npm run test:system
 
 
-  # === Evals ===
-
-  eval:
-    desc: Run A/B eval and generate HTML report
-    interactive: true
-    preconditions:
-      - sh: test -n "$ANTHROPIC_API_KEY"
-        msg: "ANTHROPIC_API_KEY must be exported"
-      - sh: test -f dist/main.js
-        msg: "Run 'task build' first — release-candidate provider needs dist/main.js"
-      - sh: test -f evals/released/dist/main.js
-        msg: "Run 'task eval:setup' first — baseline provider needs evals/released/dist/main.js"
-    cmds:
-      - rm -f evals/outputs/sdk-*.log
-      - npx promptfoo eval --config evals/promptfooconfig.yaml --no-cache {{.CLI_ARGS}}
-      - node evals/generate-report.js
-      - open evals/outputs/report.html
-
-  eval:setup:
-    desc: "Download released baseline server (usage: task eval:setup VERSION=2.10.0)"
-    requires:
-      vars:
-        - VERSION
-    cmds:
-      - rm -rf evals/released && mkdir -p evals/released
-      - cd evals && npm pack bear-notes-mcp@{{.VERSION}}
-      - tar xzf evals/bear-notes-mcp-{{.VERSION}}.tgz -C evals/released --strip-components=1
-      - rm evals/bear-notes-mcp-{{.VERSION}}.tgz
-
-  eval:report:
-    desc: Regenerate HTML report from existing results
-    cmds:
-      - node evals/generate-report.js
-      - open evals/outputs/report.html
-
   # === Website ===
 
   website:dev:

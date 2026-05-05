@@ -2,6 +2,8 @@ import { spawnSync } from 'child_process';
 import { resolve } from 'path';
 
 import { setTimeout as sleep } from 'node:timers/promises';
+
+import { closeBearDatabase, openBearDatabase } from '../../src/infra/database.js';
 export { sleep };
 
 const SERVER_PATH = resolve(import.meta.dirname, '../../dist/main.js');
@@ -85,27 +87,6 @@ export function tryExtractNoteId(response: string): string | null {
   return match ? match[1] : null;
 }
 
-/**
- * Extracts the first note ID from bear-search-notes response text.
- * The response format includes `ID: <uuid>` for each result.
- */
-function extractNoteId(searchResponse: string): string {
-  const id = tryExtractNoteId(searchResponse);
-  if (!id) {
-    throw new Error(`No note ID found in search response: ${searchResponse}`);
-  }
-  return id;
-}
-
-/** Archive a note by ID, swallowing errors during cleanup. */
-export function archiveNote(id: string): void {
-  try {
-    callTool({ toolName: 'bear-archive-note', args: { id } });
-  } catch {
-    // Best-effort cleanup — don't fail the test
-  }
-}
-
 /** Trash a note by ID via Bear URL scheme (no MCP tool exists for trashing). */
 export function trashNote(id: string): void {
   try {
@@ -118,21 +99,45 @@ export function trashNote(id: string): void {
 }
 
 /**
- * Archives all notes matching a search prefix.
+ * Trashes all active notes whose title starts with the given prefix.
  * Intended for afterAll cleanup to remove stray test notes from interrupted runs.
+ *
+ * Queries Bear's SQLite DB directly rather than going through bear-search-notes:
+ * under FTS5 the search tool tokenizes the prefix and OR-joins the tokens
+ * (so `[Bear-MCP-stest]` becomes `Bear OR MCP OR stest`), which would over-
+ * match unrelated developer notes during local runs. Direct prefix LIKE
+ * keeps cleanup scoped to the test surface — and applies regardless of how
+ * the search tool's tokenizer evolves.
  */
 export function cleanupTestNotes(prefix: string): void {
+  if (!prefix) return;
+
+  let db: ReturnType<typeof openBearDatabase>;
   try {
-    const searchResult = callTool({
-      toolName: 'bear-search-notes',
-      args: { term: prefix },
-    }).content[0].text;
-    const idMatches = searchResult.matchAll(new RegExp(NOTE_ID_REGEX, 'g'));
-    for (const match of idMatches) {
-      trashNote(match[1]);
+    db = openBearDatabase();
+  } catch {
+    // Best-effort — DB unavailable means there's nothing reachable to clean
+    return;
+  }
+
+  try {
+    // Escape LIKE wildcards in the prefix itself so a TEST_PREFIX containing
+    // `%` or `_` (none currently, but cheap insurance) doesn't widen the match.
+    const escapedPrefix = prefix.replace(/[%_\\]/g, '\\$&');
+    const rows = db
+      .prepare(
+        'SELECT ZUNIQUEIDENTIFIER as uuid FROM ZSFNOTE ' +
+          "WHERE ZTITLE LIKE ? || '%' ESCAPE '\\' " +
+          'AND ZTRASHED = 0 AND ZARCHIVED = 0 AND ZENCRYPTED = 0'
+      )
+      .all(escapedPrefix) as Array<{ uuid: string }>;
+    for (const row of rows) {
+      trashNote(row.uuid);
     }
   } catch {
-    // Best-effort — test notes may already be archived
+    // Best-effort — partial cleanup is fine; the suite still ran assertions
+  } finally {
+    closeBearDatabase(db);
   }
 }
 
@@ -181,13 +186,4 @@ export async function waitForFileContent(
     (r) => r.content.length > 1 && r.content[1].text.includes(marker),
     { timeoutMs, label: `file content "${marker}" in note ${noteId}` }
   );
-}
-
-/** Search for a note by title and return its ID. */
-export function findNoteId(noteTitle: string): string {
-  const searchResult = callTool({
-    toolName: 'bear-search-notes',
-    args: { term: noteTitle },
-  }).content[0].text;
-  return extractNoteId(searchResult);
 }

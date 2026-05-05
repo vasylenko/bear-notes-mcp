@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Search ranks results by relevance** — `bear-search-notes` now ranks notes by how well they match your query across titles, body, and OCR-extracted text from attachments, so the most relevant notes surface first instead of the most recently edited. Multi-word natural-language queries like `quarterly planning offsite notes` work as expected: notes covering more of the query rank higher.
+- **Tag features keep working through Bear schema updates** — tag search and pinned-tag filters previously relied on hardcoded internal IDs that a future Bear release could silently break. They now resolve those IDs at runtime, so tag-aware search keeps working across Bear updates.
+
+### Added
+- **Search results include matching snippets** — each result carries a short excerpt around the matched terms so you can judge relevance without opening every note.
+- **Plain-language errors for unprocessable search queries** — when a query can't be parsed, the response says so in plain language and points at the offending input instead of leaking a raw SQLite error.
+
+### Removed
+- **`bear-add-file` no longer accepts `base64_content`** (breaking) — pass `file_path` instead. Sending base64 through tool input wasted thousands of LLM tokens per attachment for no benefit; the server has read files from disk natively since 2.9.0. Existing callers that built base64 blobs must write them to a file on disk and pass the path.
+- **Substring matching in `bear-search-notes`** (breaking) — search now tokenizes both notes and queries on word boundaries, so a query for `engin` no longer matches `engineering`. Use a prefix wildcard (`engin*`) for the substring use case, or include enough of the word for it to tokenize as the intended token. Existing search prompts that relied on partial-word matches may return different result sets under v3.0.0.
+
 ## [2.12.0] - 2026-04-21
 
 ### Removed
