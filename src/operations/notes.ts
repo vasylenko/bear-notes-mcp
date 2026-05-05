@@ -222,9 +222,14 @@ export function searchNotes(
 
   // Operations owns user-facing validation so infra (searchByQuery) stays
   // reusable for any well-formed spec without duplicating "at least one
-  // criterion" guards across layers.
-  const hasSearchTerm = !!searchTerm;
-  const hasTag = !!tag;
+  // criterion" guards across layers. Trimming up-front keeps the predicate
+  // and the spec assembly in agreement — a whitespace-only `searchTerm`
+  // would otherwise pass `!!searchTerm` and silently degrade to
+  // browse-all-recent-notes after the downstream `.trim()` emptied it.
+  const trimmedTerm = searchTerm?.trim();
+  const trimmedTag = tag?.trim();
+  const hasSearchTerm = !!trimmedTerm;
+  const hasTag = !!trimmedTag;
   const hasDateFilter = !!(dateFilter && Object.keys(dateFilter).length > 0);
   const hasPinnedFilter = pinned === true;
 
@@ -238,8 +243,8 @@ export function searchNotes(
   // Data timestamps. The infra layer takes pre-resolved numeric timestamps so it
   // doesn't need to know about Bear's relative-date conventions.
   const spec: SearchSpec = { limit: limit || DEFAULT_SEARCH_LIMIT };
-  if (hasSearchTerm) spec.term = searchTerm!.trim();
-  if (hasTag) spec.tag = tag!;
+  if (hasSearchTerm) spec.term = trimmedTerm!;
+  if (hasTag) spec.tag = trimmedTag!;
   if (hasPinnedFilter) spec.pinned = true;
   if (dateFilter) {
     if (dateFilter.createdAfter) {

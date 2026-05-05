@@ -509,10 +509,12 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
 
 // FTS5 surfaces user-query problems via several distinct SQLite error messages:
 // "fts5: ..." for FTS5-engine errors, "syntax error" / "unterminated string" /
-// "unrecognized token" for tokenizer/parser issues, and "no such column: X"
-// when an unquoted hyphen-NOT or colon-prefix turns part of the user's term
-// into an unintended column reference. All map to the same actionable hint:
-// the user's query is malformed; tell them how to fix it.
+// "unrecognized token" for tokenizer/parser issues, "no such column: X" when
+// an unquoted hyphen-NOT or colon-prefix turns part of the user's term into
+// an unintended column reference, and "unknown special query" when the input
+// reduces to bare wildcard tokens (e.g. `*`, `***`) that prepareFTS5Term
+// passes through verbatim. All map to the same actionable hint: the user's
+// query is malformed; tell them how to fix it.
 function isFTS5SyntaxError(err: unknown): boolean {
   const msg = (err as Error)?.message ?? '';
   return (
@@ -520,7 +522,8 @@ function isFTS5SyntaxError(err: unknown): boolean {
     msg.includes('syntax error') ||
     msg.includes('unterminated string') ||
     msg.includes('unrecognized token') ||
-    msg.includes('no such column')
+    msg.includes('no such column') ||
+    msg.includes('unknown special query')
   );
 }
 

@@ -351,7 +351,7 @@ The note has been added to your Bear Notes library.`);
           .trim()
           .optional()
           .describe(
-            'Words to search for. Results are ranked by relevance density — notes covering more terms surface first. Pass natural keywords for the typical case (e.g., "quarterly planning notes"). When the entire term is a single identifier with embedded punctuation (e.g., "bear-notes-mcp", "2026-04-15"), it is matched as a consecutive token sequence; in multi-word queries, those identifiers are still split into tokens and OR-ranked along with the rest.'
+            'Words to search for. Results are ranked by relevance — notes covering more of what you typed rank higher. Pass natural keywords for the typical case (e.g., "quarterly planning notes"). Hyphenated or punctuated identifiers like "bear-notes-mcp" or "2026-04-15" are matched as a phrase when used alone; in multi-word queries they are treated like any other word.'
           ),
         tag: z.string().trim().optional().describe('Tag to filter notes by (without # symbol)'),
         limit: z.number().optional().describe('Maximum number of results to return (default: 50)'),
@@ -607,7 +607,13 @@ Remove the header parameter to replace the full note body, or change scope to "s
           .trim()
           .optional()
           .describe('Exact note identifier (ID) obtained from bear-search-notes'),
-        title: z.string().trim().optional().describe('Note title if ID is not available'),
+        title: z
+          .string()
+          .trim()
+          .optional()
+          .describe(
+            'Note title if ID is not available (case-insensitive). If multiple notes share the same title, returns a list of matches with IDs so you can pick one and retry with `id`.'
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -633,21 +639,44 @@ Remove the header parameter to replace the full note body, or change scope to "s
         const fileData = attachment.data;
         const resolvedFilename = filename || basename(file_path);
 
-        // Fail fast with helpful message rather than cryptic Bear error
-        let noteTitle: string | undefined;
-        if (id) {
-          const existingNote = getNoteContent(id);
-          if (!existingNote) {
-            return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+        // Resolve title-only callers to an ID up-front (mirrors bear-open-note)
+        // so the success response can always carry note title + ID per the
+        // mutation-response rule. Resolving here also avoids attempting a Bear
+        // write against an ambiguous or non-existent title.
+        let resolvedId = id;
+        if (!resolvedId && title) {
+          const matches = findNotesByTitle(title);
+          if (matches.length === 0) {
+            return createErrorResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
 
-Use bear-search-notes to find the correct note identifier.`);
+Use bear-search-notes to find notes by partial text match.`);
           }
-          noteTitle = existingNote.title;
+          if (matches.length > 1) {
+            const matchList = matches
+              .map((m, i) => `${i + 1}. ID: ${m.identifier} (modified: ${m.modification_date})`)
+              .join('\n');
+            return createToolResponse(`Multiple notes found with title "${title}":
+
+${matchList}
+
+Use bear-add-file with a specific ID to attach to the desired note.`);
+          }
+          resolvedId = matches[0].identifier;
         }
 
+        // resolvedId is guaranteed defined here (the !id && !title guard above
+        // rejected the no-criterion case). Fail fast with a helpful message
+        // rather than letting a cryptic Bear error reach the caller.
+        const existingNote = getNoteContent(resolvedId!);
+        if (!existingNote) {
+          return createErrorResponse(`Note with ID '${resolvedId}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+
+Use bear-search-notes to find the correct note identifier.`);
+        }
+        const noteTitle = existingNote.title;
+
         const url = buildBearUrl('add-file', {
-          id,
-          title,
+          id: resolvedId,
           file: fileData,
           filename: resolvedFilename,
           mode: 'append',
@@ -656,12 +685,10 @@ Use bear-search-notes to find the correct note identifier.`);
         logger.debug(`Executing Bear add-file URL for: ${resolvedFilename}`);
         await executeBearXCallbackApi(url);
 
-        // Title-only path omits ID: no pre-flight DB lookup, so ID is unavailable
-        const noteIdentifier = id ? `Note: "${noteTitle}"\nID: ${id}` : `Note: "${title!}"`;
-
         return createToolResponse(`File "${resolvedFilename}" added successfully!
 
-${noteIdentifier}
+Note: "${noteTitle}"
+ID: ${resolvedId}
 
 The file has been attached to your Bear note.`);
       } catch (error) {

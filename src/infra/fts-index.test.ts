@@ -918,6 +918,7 @@ describe('executeQueryWithCount', () => {
     { name: 'unterminated string (unbalanced quote)', term: '"unbalanced' },
     { name: 'no such column (parenthesised colon-prefix)', term: '(fakecol:value)' },
     { name: 'fts5/syntax error (empty NEAR)', term: 'hello NEAR()' },
+    { name: 'unknown special query (bare wildcard)', term: '*' },
   ])('throws an operator-free structured error on malformed FTS5 query: $name', ({ term }) => {
     withFixture([{ pk: 1, title: 'A', text: 'hello' }], (memDb) => {
       let thrown: Error | undefined;

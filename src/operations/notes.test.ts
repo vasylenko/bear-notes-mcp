@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { noteHasHeader, parseDateString, stripLeadingHeader } from './notes.js';
+import { noteHasHeader, parseDateString, searchNotes, stripLeadingHeader } from './notes.js';
 
 describe('parseDateString', () => {
   beforeEach(() => {
@@ -120,5 +120,19 @@ describe('stripLeadingHeader', () => {
 
   it('returns text unchanged when header is empty string', () => {
     expect(stripLeadingHeader('## Details\nNew content', '')).toBe('## Details\nNew content');
+  });
+});
+
+describe('searchNotes validation', () => {
+  // The "at least one criterion" check must look at trimmed values; otherwise a
+  // whitespace-only term passes `!!searchTerm` then trims to empty and the
+  // search silently degrades to browse-all-recent-notes. The throw runs before
+  // any FTS5/database contact, so this is unit-test scope by design.
+  it.each([
+    { name: 'whitespace-only searchTerm', call: () => searchNotes('   ') },
+    { name: 'whitespace-only tag', call: () => searchNotes(undefined, '   ') },
+    { name: 'all parameters omitted', call: () => searchNotes() },
+  ])('throws when no real search criterion is provided: $name', ({ call }) => {
+    expect(call).toThrow(/Please provide a search term, tag, date filter, or pinned filter/);
   });
 });
