@@ -603,7 +603,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
           .trim()
           .min(1)
           .describe(
-            'Absolute path to a local file (e.g., "/Users/me/Documents/report.pdf"). Tilde (~) is not expanded — pass an explicit absolute path.'
+            'Absolute path to a local file (e.g., "/Users/me/Documents/report.pdf"). Tilde (~) is not expanded — pass an explicit absolute path. Must be a regular non-empty file (no symlinks); maximum 25 MB.'
           ),
         filename: z
           .string()
