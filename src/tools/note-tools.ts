@@ -353,7 +353,13 @@ The note has been added to your Bear Notes library.`);
           .describe(
             'Words to search for. Results are ranked by relevance — notes covering more of what you typed rank higher. Pass natural keywords for the typical case (e.g., "quarterly planning notes"). Hyphenated or punctuated identifiers like "bear-notes-mcp" or "2026-04-15" are matched as a phrase when used alone; in multi-word queries they are treated like any other word.'
           ),
-        tag: z.string().trim().optional().describe('Tag to filter notes by (without # symbol)'),
+        tag: z
+          .string()
+          .trim()
+          .transform((v) => v.replace(/^#/, ''))
+          .pipe(z.string().min(1))
+          .optional()
+          .describe('Tag to filter notes by (leading # is stripped if present)'),
         limit: z
           .number()
           .int()
@@ -776,9 +782,17 @@ The file has been attached to your Bear note.`);
           .min(1, 'Note ID is required')
           .describe('Note identifier (ID) from bear-search-notes or bear-find-untagged-notes'),
         tags: z
-          .array(z.string().trim().min(1, 'Tag name cannot be empty'))
+          .array(
+            z
+              .string()
+              .trim()
+              .transform((v) => v.replace(/^#/, ''))
+              .pipe(z.string().min(1, 'Tag name cannot be empty'))
+          )
           .min(1, 'At least one tag is required')
-          .describe('Tag names without # symbol (e.g., ["career", "career/meetings"])'),
+          .describe(
+            'Tag names (leading # is stripped if present), e.g., ["career", "career/meetings"]'
+          ),
       },
       annotations: {
         readOnlyHint: false,
