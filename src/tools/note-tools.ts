@@ -513,7 +513,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           .enum(['beginning', 'end'])
           .optional()
           .describe(
-            "Where to insert: 'end' (default) for appending, logs, updates; 'beginning' for prepending, summaries, top of mind, etc."
+            "Where to insert: 'end' (default) for appending, logs, updates; 'beginning' for prepending, summaries, top of mind, etc. When `header` is set, position applies within that section's content, not the whole note."
           ),
       },
       annotations: {
