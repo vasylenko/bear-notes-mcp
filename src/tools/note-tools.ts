@@ -163,7 +163,7 @@ export function registerNoteTools(server: McpServer): void {
           .trim()
           .optional()
           .describe(
-            'Note identifier (ID) from bear-search-notes. Either id or title must be provided.'
+            'Note identifier (ID) for an existing Bear note. Either id or title must be provided.'
           ),
         title: z
           .string()
@@ -496,7 +496,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes'),
+          .describe('Note identifier (ID) for an existing Bear note'),
         text: z
           .string()
           .trim()
@@ -540,7 +540,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes'),
+          .describe('Note identifier (ID) for an existing Bear note'),
         scope: z
           .enum(['section', 'full-note-body'])
           .describe(
@@ -613,11 +613,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
           .describe(
             'Filename with extension (e.g., budget.xlsx, report.pdf). Auto-inferred from file_path when omitted.'
           ),
-        id: z
-          .string()
-          .trim()
-          .optional()
-          .describe('Exact note identifier (ID) obtained from bear-search-notes'),
+        id: z.string().trim().optional().describe('Note identifier (ID) for an existing Bear note'),
         title: z
           .string()
           .trim()
@@ -780,7 +776,7 @@ The file has been attached to your Bear note.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes or bear-find-untagged-notes'),
+          .describe('Note identifier (ID) for an existing Bear note'),
         tags: z
           .array(
             z
@@ -852,7 +848,7 @@ The tags have been added to the beginning of the note.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes or bear-open-note'),
+          .describe('Note identifier (ID) for an existing Bear note'),
       },
       annotations: {
         readOnlyHint: false,
