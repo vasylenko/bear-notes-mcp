@@ -60,7 +60,7 @@
     "email": "serhii@vasylenko.info",
     "url": "https://devdosvid.blog"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vasylenko/bear-notes-mcp.git"

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Search ranks results by relevance** — `bear-search-notes` now ranks notes by how well they match your query across titles, body, and OCR-extracted text from attachments, so the most relevant notes surface first instead of the most recently edited. Multi-word natural-language queries like `quarterly planning offsite notes` work as expected: notes covering more of the query rank higher.
 - **Tag features keep working through Bear schema updates** — tag search and pinned-tag filters previously relied on hardcoded internal IDs that a future Bear release could silently break. They now resolve those IDs at runtime, so tag-aware search keeps working across Bear updates.
+- **License changed from MIT to Apache 2.0** — Apache 2.0 keeps the same broadly-permissive posture as MIT but adds an explicit patent grant and requires downstream redistributors to propagate the project's `NOTICE` attribution. End users and direct npm/MCPB consumers see no functional change. See `LICENSE.md` for the full license text and `NOTICE` for the attribution that derivative works must keep visible.
 
 ### Added
 - **Search results include matching snippets** — each result carries a short excerpt around the matched terms so you can judge relevance without opening every note.
