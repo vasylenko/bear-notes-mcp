@@ -2,8 +2,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 import type { BearNote } from '../types.js';
 import { logAndThrow, logger } from '../logging.js';
-import { convertCoreDataTimestamp, decodeTagName } from '../operations/bear-encoding.js';
 
+import { convertCoreDataTimestamp, decodeTagName } from './bear-encoding.js';
 import { type BearSchema, discoverBearSchema } from './bear-schema.js';
 import { closeBearDatabase, openBearDatabase } from './database.js';
 
@@ -84,6 +84,18 @@ export function searchByQuery(spec: SearchSpec): SearchResults {
   try {
     const fresh = ensureFreshIndex(bearDb);
     return executeQueryWithCount(fresh.memDb, spec);
+  } catch (error) {
+    // FTS5 syntax errors are already remapped by runWithFts5SyntaxRemap into a
+    // user-facing envelope — pass them through so the LLM can retry with
+    // simpler syntax. Wrap everything else in the project's standard
+    // "Database error:" prefix so all DB-level failures surface consistently
+    // across the operations and infra modules (matches database.ts, tags.ts,
+    // notes.ts).
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith("Search query couldn't be processed:")) {
+      throw error;
+    }
+    logAndThrow(`Database error: Failed to execute search: ${message}`);
   } finally {
     closeBearDatabase(bearDb);
   }
@@ -393,11 +405,11 @@ function prepareFTS5Term(term: string): string {
 // route the agent back to simpler natural input rather than nudging it into
 // capability mode (which the SVA-28 eval showed underperforms). Operator
 // details stay in docs/dev/SPECIFICATION.md and unit tests.
-function runWithFts5SyntaxRemap<T>(hasTerm: boolean, term: string | undefined, fn: () => T): T {
+function runWithFts5SyntaxRemap<T>(term: string | undefined, fn: () => T): T {
   try {
     return fn();
   } catch (err) {
-    if (hasTerm && isFTS5SyntaxError(err)) {
+    if (term?.trim() && isFTS5SyntaxError(err)) {
       // Underlying SQLite text contains operator names — keep it in server logs
       // for debugging, but never on the user/LLM-facing surface.
       logger.error(
@@ -413,8 +425,8 @@ function runWithFts5SyntaxRemap<T>(hasTerm: boolean, term: string | undefined, f
 }
 
 // countMatches and executeQueryWithCount share WHERE assembly + term param prep.
-// Returning hasTerm from the helper keeps it as the single source of truth (no
-// re-derivation at call sites) and feeds runWithFts5SyntaxRemap directly.
+// hasTerm is computed here once and threaded out so executeQueryWithCount can
+// pick the term-vs-filter-only projection and ORDER BY without re-deriving it.
 function buildSearchSqlAndParams(spec: SearchSpec): {
   hasTerm: boolean;
   whereClause: string;
@@ -437,8 +449,8 @@ function buildSearchSqlAndParams(spec: SearchSpec): {
 }
 
 function countMatches(memDb: DatabaseSync, spec: SearchSpec): number {
-  const { hasTerm, whereClause, baseParams } = buildSearchSqlAndParams(spec);
-  const row = runWithFts5SyntaxRemap(hasTerm, spec.term, () =>
+  const { whereClause, baseParams } = buildSearchSqlAndParams(spec);
+  const row = runWithFts5SyntaxRemap(spec.term, () =>
     memDb.prepare(`SELECT COUNT(*) AS c FROM notes n WHERE ${whereClause}`).get(...baseParams)
   ) as unknown as { c: number };
   return row.c;
@@ -459,7 +471,7 @@ function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchRes
      WHERE ${whereClause}
      ORDER BY ${orderBy}
      LIMIT ?`;
-  const rows = runWithFts5SyntaxRemap(hasTerm, spec.term, () =>
+  const rows = runWithFts5SyntaxRemap(spec.term, () =>
     memDb.prepare(query).all(...baseParams, spec.limit)
   ) as unknown as QueryRow[];
 
@@ -498,7 +510,7 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
   const placeholders = rowIds.map(() => '?').join(',');
   const tagRows = memDb
     .prepare(
-      `SELECT rowid, GROUP_CONCAT(tag, ',') AS tags
+      `SELECT rowid, GROUP_CONCAT(tag, ',' ORDER BY tag) AS tags
          FROM note_tags
         WHERE rowid IN (${placeholders})
         GROUP BY rowid`

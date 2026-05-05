@@ -108,7 +108,7 @@ There is no delete tool. Too destructive for AI-assisted workflows — a misiden
 
 Bear uses Core Data with SQLite. The schema is undocumented; the DB is small enough to inspect directly when needed. The database path is hardcoded to Bear's app group container at `~/Library/Group Containers/9K33E3U3T4.net.shinyfrog.bear/Application Data/database.sqlite` (overridable via `BEAR_DB_PATH` env var for tests). Key fragility points:
 
-- Tag name decoding goes through a single function — `decodeTagName` in `operations/bear-encoding.ts`. Both the in-memory index build (`infra/fts-index.ts`) and the query path call it, so index-side and query-side normalization can never drift. Doing this in JS rather than SQL is deliberate: SQLite's built-in `LOWER()` is ASCII-only, while JS `toLowerCase()` folds Unicode — required for non-ASCII tag matching.
+- Tag name decoding goes through a single function — `decodeTagName` in `infra/bear-encoding.ts`. Both the in-memory index build (`infra/fts-index.ts`) and the query path call it, so index-side and query-side normalization can never drift. Doing this in JS rather than SQL is deliberate: SQLite's built-in `LOWER()` is ASCII-only, while JS `toLowerCase()` folds Unicode — required for non-ASCII tag matching.
 - Tag hierarchy is not stored relationally — it's reconstructed at query time by splitting slash-delimited paths.
 - All queries exclude trashed, archived, and encrypted notes to match what Bear's UI shows.
 

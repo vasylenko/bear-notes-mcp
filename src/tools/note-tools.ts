@@ -354,7 +354,12 @@ The note has been added to your Bear Notes library.`);
             'Words to search for. Results are ranked by relevance — notes covering more of what you typed rank higher. Pass natural keywords for the typical case (e.g., "quarterly planning notes"). Hyphenated or punctuated identifiers like "bear-notes-mcp" or "2026-04-15" are matched as a phrase when used alone; in multi-word queries they are treated like any other word.'
           ),
         tag: z.string().trim().optional().describe('Tag to filter notes by (without # symbol)'),
-        limit: z.number().optional().describe('Maximum number of results to return (default: 50)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe('Maximum number of results to return (default: 50, min: 1)'),
         createdAfter: z
           .string()
           .optional()
@@ -585,7 +590,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
     {
       title: 'Add File to Note',
       description:
-        'Attach a local file (image, PDF, document) to an existing Bear note. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Use bear-search-notes first to get the note ID.',
+        'Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first.',
       inputSchema: {
         file_path: z
           .string()
@@ -705,7 +710,12 @@ The file has been attached to your Bear note.`);
       description:
         'Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes.',
       inputSchema: {
-        limit: z.number().optional().describe('Maximum number of results (default: 50)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe('Maximum number of results (default: 50, min: 1)'),
       },
       annotations: {
         readOnlyHint: true,

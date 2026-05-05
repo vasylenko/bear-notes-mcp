@@ -41,11 +41,11 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 │   ├── logging.ts         # Logging setup
 │   ├── types.ts           # Type definitions
 │   ├── infra/             # Infrastructure layer
+│   │   ├── bear-encoding.ts # Bear encoding/decoding utilities
 │   │   ├── bear-urls.ts   # Bear app URL scheme handlers
 │   │   ├── database.ts    # SQLite database connection
 │   │   └── *.test.ts      # Unit tests (co-located with source files)
 │   ├── operations/        # Business logic layer
-│   │   ├── bear-encoding.ts # Bear encoding/decoding utilities
 │   │   ├── notes.ts       # Note operations (search, content)
 │   │   ├── note-conventions.ts # Tag placement conventions for new notes
 │   │   ├── tags.ts        # Tag operations (list, hierarchy)

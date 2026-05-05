@@ -5,8 +5,10 @@ import { DEFAULT_SEARCH_LIMIT } from '../config.js';
 import { closeBearDatabase, openBearDatabase } from '../infra/database.js';
 import { type SearchResults, type SearchSpec, searchByQuery } from '../infra/fts-index.js';
 import { logAndThrow, logger } from '../logging.js';
-
-import { convertCoreDataTimestamp, convertDateToCoreDataTimestamp } from './bear-encoding.js';
+import {
+  convertCoreDataTimestamp,
+  convertDateToCoreDataTimestamp,
+} from '../infra/bear-encoding.js';
 
 const POLL_INTERVAL_MS = 25;
 const POLL_TIMEOUT_MS = 2_000;
@@ -247,26 +249,24 @@ export function searchNotes(
   if (hasTag) spec.tag = trimmedTag!;
   if (hasPinnedFilter) spec.pinned = true;
   if (dateFilter) {
-    if (dateFilter.createdAfter) {
-      const d = parseDateString(dateFilter.createdAfter);
-      d.setHours(0, 0, 0, 0);
-      spec.createdAfterTimestamp = convertDateToCoreDataTimestamp(d);
-    }
-    if (dateFilter.createdBefore) {
-      const d = parseDateString(dateFilter.createdBefore);
-      d.setHours(23, 59, 59, 999);
-      spec.createdBeforeTimestamp = convertDateToCoreDataTimestamp(d);
-    }
-    if (dateFilter.modifiedAfter) {
-      const d = parseDateString(dateFilter.modifiedAfter);
-      d.setHours(0, 0, 0, 0);
-      spec.modifiedAfterTimestamp = convertDateToCoreDataTimestamp(d);
-    }
-    if (dateFilter.modifiedBefore) {
-      const d = parseDateString(dateFilter.modifiedBefore);
-      d.setHours(23, 59, 59, 999);
-      spec.modifiedBeforeTimestamp = convertDateToCoreDataTimestamp(d);
-    }
+    // Snaps the user's date to either start-of-day (inclusive lower bound) or
+    // end-of-day (inclusive upper bound) before converting to Core Data's
+    // timestamp epoch — keeps the four filter branches in lockstep so any
+    // future change to the parse/snap/convert pipeline lands in one place.
+    const toCoreDataTimestamp = (value: string, edge: 'start' | 'end'): number => {
+      const d = parseDateString(value);
+      if (edge === 'start') d.setHours(0, 0, 0, 0);
+      else d.setHours(23, 59, 59, 999);
+      return convertDateToCoreDataTimestamp(d);
+    };
+    if (dateFilter.createdAfter)
+      spec.createdAfterTimestamp = toCoreDataTimestamp(dateFilter.createdAfter, 'start');
+    if (dateFilter.createdBefore)
+      spec.createdBeforeTimestamp = toCoreDataTimestamp(dateFilter.createdBefore, 'end');
+    if (dateFilter.modifiedAfter)
+      spec.modifiedAfterTimestamp = toCoreDataTimestamp(dateFilter.modifiedAfter, 'start');
+    if (dateFilter.modifiedBefore)
+      spec.modifiedBeforeTimestamp = toCoreDataTimestamp(dateFilter.modifiedBefore, 'end');
   }
 
   const result = searchByQuery(spec);
