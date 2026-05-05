@@ -22,21 +22,6 @@ Two evals live here:
 3. **`evals/released/` populated** — drop a baseline npm release into it (see Quick Start)
 4. **`ANTHROPIC_API_KEY` exported** in your shell
 
-## Quick Start
-
-```bash
-# One-time: place a baseline build in evals/released/ (FTS5 eval expects 2.11.0)
-mkdir -p evals/released && (cd evals && npm pack bear-notes-mcp@2.11.0 \
-  && tar xzf bear-notes-mcp-2.11.0.tgz -C released --strip-components=1 \
-  && rm bear-notes-mcp-2.11.0.tgz)
-
-task build  # build current HEAD
-npx promptfoo eval --config evals/fts5-promptfooconfig.yaml --no-cache
-npx promptfoo view evals/outputs/results.json
-```
-
-Higher-level automation (orchestration, fresh isolation dir per run) is being rewritten — until it lands, the raw promptfoo commands above work.
-
 ## Provider Isolation
 
 Each eval run is isolated from host Claude Code settings:
