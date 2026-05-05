@@ -6,20 +6,20 @@ A/B eval harness comparing MCP server versions on efficiency metrics (tool calls
 
 Two versions of the MCP server run against the same prompt. The eval measures how efficiently each version completes the task:
 
-- **Tool calls** (gate ≤5): how many times the agent calls the MCP server
+- **Tool calls** (emitted as a named score, not gated): how many times the agent calls the MCP server
 - **Turns**: conversation turns between the agent and MCP server
 - **Cost**: USD per run
 
 Two evals live here:
 
-- **`promptfooconfig.yaml`** — tags-in-search efficiency (PR #100): search results include tags so the agent skips follow-up reads
-- **`fts5-promptfooconfig.yaml`** — SVA-28 FTS5 BM25 ranking: relevance vs the prior LIKE+mod-date ordering
+- **`fts5-vs-like.yaml`** — SVA-28 FTS5 BM25 ranking: relevance vs the prior LIKE+mod-date ordering
+- **`native-vs-fts5.yaml`** — v3.0.0 FTS5 vs Bear's own MCP server (`bearcli mcp-server`)
 
 ## Prerequisites
 
 1. **Bear app running** — the MCP server reads Bear's SQLite DB
 2. **`dist/main.js` built** — run `task build` from project root
-3. **`evals/released/` populated** — drop a baseline npm release into it (see Quick Start)
+3. **`evals/released/` populated** — drop a baseline npm release into it
 4. **`ANTHROPIC_API_KEY` exported** in your shell
 
 ## Provider Isolation

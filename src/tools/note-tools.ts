@@ -22,7 +22,7 @@ import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 import { createErrorResponse, createToolResponse } from './responses.js';
 
 // Cap bear-add-file attachment size. Well above realistic PDFs/images, well
-// below "exfiltrate the entire ~/Library." See docs/dev/SECURITY.md.
+// below "exfiltrate the entire ~/Library."
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 type ReadAttachmentResult = { ok: true; data: string } | { ok: false; error: string };
@@ -30,7 +30,7 @@ type ReadAttachmentResult = { ok: true; data: string } | { ok: false; error: str
 // Narrow filesystem capability for bear-add-file: reject symlinks (block
 // follow-the-link exfiltration), reject non-files (devices, fifos, dirs),
 // and cap size before reading into memory. lstat keeps the symlink visible
-// rather than resolving past it. See docs/dev/SECURITY.md for the threat model.
+// rather than resolving past it.
 function readAttachmentFile(filePath: string): ReadAttachmentResult {
   try {
     const stat = lstatSync(filePath);
@@ -356,7 +356,7 @@ The note has been added to your Bear Notes library.`);
         tag: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#/, ''))
+          .transform((v) => v.replace(/^#+/, ''))
           .pipe(z.string().min(1))
           .optional()
           .describe('Tag to filter notes by (leading # is stripped if present)'),
@@ -782,7 +782,7 @@ The file has been attached to your Bear note.`);
             z
               .string()
               .trim()
-              .transform((v) => v.replace(/^#/, ''))
+              .transform((v) => v.replace(/^#+/, ''))
               .pipe(z.string().min(1, 'Tag name cannot be empty'))
           )
           .min(1, 'At least one tag is required')

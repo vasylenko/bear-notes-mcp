@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
 description: 'bear-notes-mcp A/B — SVA-28 in-memory FTS5 search'
-# Shared results path with evals/promptfooconfig.yaml — only one eval runs at a time.
+# Distinct outputPath from evals/native-vs-fts5.yaml so the two evals can run
+# sequentially without clobbering each other's results.
 outputPath: outputs/results.json
 
 # 15 repeats per (prompt × provider) — surfaces variance from non-deterministic
@@ -17,13 +18,13 @@ evaluateOptions:
 prompts:
   - '{{prompt}}'
 
-# Provider isolation matches evals/promptfooconfig.yaml — see that file for
-# the full rationale on setting_sources / custom_allowed_tools / persist_session.
+# Provider isolation: setting_sources / custom_allowed_tools / persist_session
+# block ambient Claude Code config and tighten the tool surface to this eval's
+# MCP servers only.
 #
 # IMPORTANT: evals/released/ is a single-baseline directory. Running this
 # eval requires v2.11.0 on disk (the cleanest pre-FTS5 release). Verify with:
 #   grep version evals/released/package.json   # expect 2.11.0
-# See evals/README.md for the manual setup steps.
 providers:
   - id: anthropic:claude-agent-sdk
     label: v2.11.0
@@ -61,7 +62,7 @@ providers:
             command: node
             args: [dist/main.js]
 
-# Default toolCalls + turns metrics shared with evals/promptfooconfig.yaml.
+# Default toolCalls + turns metrics from shared/default-test.yaml.
 defaultTest: file://shared/default-test.yaml
 
 # Promptfoo merges per-test assertions with the shared default-test. The

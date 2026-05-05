@@ -96,13 +96,13 @@ export function registerTagTools(server: McpServer): void {
         name: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#/, ''))
+          .transform((v) => v.replace(/^#+/, ''))
           .pipe(z.string().min(1, 'Tag name is required'))
           .describe('Current tag name to rename (without # symbol)'),
         new_name: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#/, ''))
+          .transform((v) => v.replace(/^#+/, ''))
           .pipe(z.string().min(1, 'New tag name is required'))
           .describe(
             'New tag name (without # symbol). Use slashes for hierarchy, e.g., "archive/old-project"'
@@ -152,7 +152,7 @@ The tag has been renamed across all notes in your Bear library.`);
         name: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#/, ''))
+          .transform((v) => v.replace(/^#+/, ''))
           .pipe(z.string().min(1, 'Tag name is required'))
           .describe('Tag name to delete (without # symbol)'),
       },

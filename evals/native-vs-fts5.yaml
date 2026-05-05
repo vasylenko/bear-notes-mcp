@@ -1,11 +1,10 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
 description: 'bear-notes-mcp A/B — v3.0.0 FTS5 vs Bear native MCP'
-# Distinct outputPath from evals/fts5-promptfooconfig.yaml and
-# evals/promptfooconfig.yaml so the three eval suites can run sequentially
-# without clobbering each other's results.
+# Distinct outputPath from evals/fts5-vs-like.yaml so the two evals can run
+# sequentially without clobbering each other's results.
 outputPath: outputs/results-native.json
 
-# 15 repeats matches fts5-promptfooconfig.yaml — n=15 is the threshold where
+# 15 repeats matches fts5-vs-like.yaml — n=15 is the threshold where
 # every prompt's tool-call delta crosses statistical significance. 4 prompts
 # × 15 repeats × 2 providers = 120 agent runs (~$13, ~15 min wall clock at
 # default 4-way concurrency).
@@ -17,7 +16,7 @@ evaluateOptions:
 prompts:
   - '{{prompt}}'
 
-# Provider isolation matches fts5-promptfooconfig.yaml — see that file for
+# Provider isolation matches fts5-vs-like.yaml — see that file for
 # the full rationale on setting_sources / custom_allowed_tools / persist_session.
 #
 # What this comparison measures:
@@ -76,10 +75,10 @@ providers:
             command: node
             args: [dist/main.js]
 
-# Default toolCalls + turns metrics shared with evals/promptfooconfig.yaml.
+# Default toolCalls + turns metrics from shared/default-test.yaml.
 defaultTest: file://shared/default-test.yaml
 
-# Same four prompts as fts5-promptfooconfig.yaml so cross-eval comparison stays
+# Same four prompts as fts5-vs-like.yaml so cross-eval comparison stays
 # apples-to-apples — Quality scores from this run can be placed alongside the
 # v3.0.0 column from the FTS5-vs-LIKE eval to triangulate where each backend
 # wins or loses on the same probe.
