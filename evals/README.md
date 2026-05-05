@@ -37,15 +37,6 @@ npx promptfoo view evals/outputs/results.json
 
 Higher-level automation (orchestration, fresh isolation dir per run) is being rewritten — until it lands, the raw promptfoo commands above work.
 
-## Files
-
-| File | Purpose |
-|------|---------|
-| `promptfooconfig.yaml` / `fts5-promptfooconfig.yaml` | Eval configs — providers, assertions, prompts |
-| `shared/default-test.yaml` | Shared assertion (reads `namedScores.toolCalls` for per-provider metrics) |
-| `outputs/` | Results, report, SDK debug logs (gitignored) |
-| `released/` | Baseline server from npm (gitignored) |
-
 ## Provider Isolation
 
 Each eval run is isolated from host Claude Code settings:

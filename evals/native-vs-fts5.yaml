@@ -1,14 +1,14 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-description: 'bear-notes-mcp A/B — SVA-28 in-memory FTS5 search'
-# Shared results path with evals/promptfooconfig.yaml — only one eval runs at a time.
-outputPath: evals/outputs/results.json
+description: 'bear-notes-mcp A/B — v3.0.0 FTS5 vs Bear native MCP'
+# Distinct outputPath from evals/fts5-promptfooconfig.yaml and
+# evals/promptfooconfig.yaml so the three eval suites can run sequentially
+# without clobbering each other's results.
+outputPath: outputs/results-native.json
 
-# 15 repeats per (prompt × provider) — surfaces variance from non-deterministic
-# agent behavior (model temp, ranking tie-breaks). 4 prompts × 15 repeats × 2
-# providers = 120 agent runs (~$13, ~15 min wall clock at default 4-way
-# concurrency). n=15 is the threshold where every prompt's tool-call delta
-# crosses statistical significance — at n=5 the BM25 prompt's small win
-# (gap 0.4, sd 0.55) sits inside the 95% CI; at n=15 the CI excludes zero.
+# 15 repeats matches fts5-promptfooconfig.yaml — n=15 is the threshold where
+# every prompt's tool-call delta crosses statistical significance. 4 prompts
+# × 15 repeats × 2 providers = 120 agent runs (~$13, ~15 min wall clock at
+# default 4-way concurrency).
 evaluateOptions:
   repeat: 15
 
@@ -17,16 +17,31 @@ evaluateOptions:
 prompts:
   - '{{prompt}}'
 
-# Provider isolation matches evals/promptfooconfig.yaml — see that file for
+# Provider isolation matches fts5-promptfooconfig.yaml — see that file for
 # the full rationale on setting_sources / custom_allowed_tools / persist_session.
 #
-# IMPORTANT: evals/released/ is a single-baseline directory. Running this
-# eval requires v2.11.0 on disk (the cleanest pre-FTS5 release). Verify with:
-#   grep version evals/released/package.json   # expect 2.11.0
-# See evals/README.md for the manual setup steps.
+# What this comparison measures:
+#   - "v3.0.0"    — our FTS5/BM25 backend with a natural-language-only tool
+#                   surface, whole-word tokenization, snippet brackets per
+#                   result, OCR-by-default. Structured params for tag, pinned,
+#                   date filters; no operator vocabulary on user-facing surfaces.
+#   - "bear-native" — Bear's own MCP server (`bearcli mcp-server`) exposing
+#                     Bear's search syntax: substring matching, recency-flavor
+#                     ordering (pinned,modified by default), rich operators
+#                     (#tag, !#tag, #*/sub, @title, @ocr, @todo, @done,
+#                     @date(...), @today, "exact phrase", -negation, OR).
+#                     See `bearcli help search` for the full vocabulary.
+#
+# Both providers read the same Bear database in place — only the search shape
+# differs. bearcli ships with Bear.app; the absolute path below assumes the
+# default /Applications install (no custom override needed for the typical setup).
+#
+# Native MCP requires Bear.app to be installed (the bearcli binary lives inside
+# the .app bundle) but does NOT require Bear to be running — it reads the
+# SQLite database directly, same as our server.
 providers:
   - id: anthropic:claude-agent-sdk
-    label: v2.11.0
+    label: bear-native
     config:
       model: claude-sonnet-4-6
       working_dir: ..
@@ -34,14 +49,14 @@ providers:
       setting_sources: []
       env:
         CLAUDE_CONFIG_DIR: /tmp/bear-mcp-eval-claude-config
-      custom_allowed_tools: ['mcp__v2-11-0__*']
+      custom_allowed_tools: ['mcp__bear-native__*']
       debug: true
-      debug_file: ./outputs/sdk-v2-11-0.log
+      debug_file: ./outputs/sdk-bear-native.log
       mcp:
         servers:
-          - name: v2-11-0
-            command: node
-            args: [evals/released/dist/main.js]
+          - name: bear-native
+            command: /Applications/Bear.app/Contents/MacOS/bearcli
+            args: [mcp-server]
 
   - id: anthropic:claude-agent-sdk
     label: v3.0.0
@@ -64,22 +79,16 @@ providers:
 # Default toolCalls + turns metrics shared with evals/promptfooconfig.yaml.
 defaultTest: file://shared/default-test.yaml
 
-# Promptfoo merges per-test assertions with the shared default-test. The
-# shared file emits toolCalls and turns as named metrics with pass: true —
-# promptfoo aggregates them as per-provider averages in the report so the
-# A/B gap is surfaced as signal, not enforced as a binary pass/fail gate
-# (different providers legitimately use different tool-call counts for the
-# same task).
+# Same four prompts as fts5-promptfooconfig.yaml so cross-eval comparison stays
+# apples-to-apples — Quality scores from this run can be placed alongside the
+# v3.0.0 column from the FTS5-vs-LIKE eval to triangulate where each backend
+# wins or loses on the same probe.
 #
-# Ground-truth assertions are content-focused, not source-name focused —
-# synthesis answers often don't echo source titles, so requiring the title
-# would mark correct answers as failing.
-#
-# When adding new prompts, two design rules (validated the hard way):
-#   1. The prompt must explicitly direct search ("Search my Bear notes…",
-#      "Looking at my Bear notes…"). Natural-question framing triggers the
-#      Agent SDK's memory-first orientation and the agent never calls the
-#      MCP tools — measuring agent routing, not search engine quality.
+# Two design rules carry over (validated the hard way during the FTS5 eval):
+#   1. The prompt must explicitly direct search ("Search my Bear notes…").
+#      Natural-question framing triggers the Agent SDK's memory-first
+#      orientation and the agent never calls the MCP tools — measuring
+#      agent routing, not search engine quality.
 #   2. Probe queries a real user would naturally ask. Synthetic capability
 #      tests (boolean operators, exact-phrase quoting, prefix wildcards)
 #      belong in src/infra/fts-index.test.ts, not in paid LLM evals.
