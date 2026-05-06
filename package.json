@@ -1,6 +1,6 @@
 {
   "name": "bear-notes-mcp",
-  "version": "2.12.0",
+  "version": "3.0.0",
   "description": "Bear Notes MCP server with TypeScript and native SQLite",
   "type": "module",
   "main": "dist/main.js",
@@ -36,7 +36,7 @@
     "eslint": "^9.39.3",
     "eslint-plugin-import": "^2.32.0",
     "prettier": "^3.8.1",
-    "promptfoo": "^0.121.5",
+    "promptfoo": "^0.121.9",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
@@ -60,7 +60,7 @@
     "email": "serhii@vasylenko.info",
     "url": "https://devdosvid.blog"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vasylenko/bear-notes-mcp.git"

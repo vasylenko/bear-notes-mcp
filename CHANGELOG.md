@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Search ranks results by relevance** — `bear-search-notes` now ranks notes by how well they match your query across titles, body, and OCR-extracted text from attachments, so the most relevant notes surface first instead of the most recently edited. Multi-word natural-language queries like `quarterly planning offsite notes` work as expected: notes covering more of the query rank higher.
+- **Tag features keep working through Bear schema updates** — tag search and pinned-tag filters previously relied on hardcoded internal IDs that a future Bear release could silently break. They now resolve those IDs at runtime, so tag-aware search keeps working across Bear updates.
+- **`bear-add-file` enforces a stricter input policy** (breaking) — rejects symbolic links, non-regular files (directories, devices, FIFOs), empty files, and any file larger than 25 MB. Inputs that previously succeeded under one of these conditions now return an error. Most callers will not notice; agents passing iCloud/Drafts paths that resolve through a symlink will need to resolve to the real path first.
+- **License changed from MIT to Apache 2.0** — Apache 2.0 keeps the same broadly-permissive posture as MIT but adds an explicit patent grant and requires downstream redistributors to propagate the project's `NOTICE` attribution. End users and direct npm/MCPB consumers see no functional change. See `LICENSE.md` for the full license text and `NOTICE` for the attribution that derivative works must keep visible.
+
+### Added
+- **Search results include matching snippets** — each result carries a short excerpt around the matched terms so you can judge relevance without opening every note.
+- **Plain-language errors for unprocessable search queries** — when a query can't be parsed, the response says so in plain language and points at the offending input instead of leaking a raw SQLite error.
+
+### Removed
+- **`bear-add-file` no longer accepts `base64_content`** (breaking) — pass `file_path` instead. Sending base64 through tool input wasted thousands of LLM tokens per attachment for no benefit; the server has read files from disk natively since 2.9.0. Existing callers that built base64 blobs must write them to a file on disk and pass the path.
+- **Substring matching in `bear-search-notes`** (breaking) — search now matches whole words rather than partial fragments, so a query for `engin` no longer matches `engineering`. Use the full word (`engineering`) instead, or pick a more specific keyword from the same note. Existing search prompts that relied on partial-word matches may return different result sets under v3.0.0.
+
 ## [2.12.0] - 2026-04-21
 
 ### Removed

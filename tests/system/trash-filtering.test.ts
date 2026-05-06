@@ -3,7 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   callTool,
   cleanupTestNotes,
-  findNoteId,
   trashNote,
   tryExtractNoteId,
   uniqueTitle,
@@ -23,8 +22,11 @@ const TITLE = title('TrashTag');
 let noteId: string;
 
 beforeAll(() => {
-  callTool({ toolName: 'bear-create-note', args: { title: TITLE, tags: TAG } });
-  noteId = findNoteId(TITLE);
+  const createResult = callTool({
+    toolName: 'bear-create-note',
+    args: { title: TITLE, tags: TAG },
+  }).content[0].text;
+  noteId = tryExtractNoteId(createResult)!;
 });
 
 afterAll(() => {
@@ -47,8 +49,12 @@ describe('trash filtering in tag listing', () => {
   });
 
   it('trashed note is excluded from bear-search-notes', () => {
+    // Assert the trashed note's specific ID isn't returned, not "zero results
+    // overall". Under FTS5 OR-rank, the title's tokens (Bear, MCP, etc.) can
+    // match unrelated notes in the user's library — the test would flake on
+    // any non-empty library if we required no IDs at all.
     const result = callTool({ toolName: 'bear-search-notes', args: { term: TITLE } }).content[0]
       .text;
-    expect(tryExtractNoteId(result)).toBeNull();
+    expect(result).not.toContain(noteId);
   });
 });

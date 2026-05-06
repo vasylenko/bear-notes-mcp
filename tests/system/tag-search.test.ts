@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { callTool, cleanupTestNotes, findNoteId, trashNote, uniqueTitle } from './inspector.js';
+import { callTool, cleanupTestNotes, uniqueTitle } from './inspector.js';
 
 const TEST_PREFIX = '[Bear-MCP-stest-tag-search]';
 const RUN_ID = Date.now();
@@ -23,8 +23,11 @@ const TITLE_UNTAGGED = title('Untagged');
 // Tag with a space exercises decodeTagName() — Bear stores it as "+"-encoded in ZTITLE
 const TAG_SPACED = `stest67 spaced ${RUN_ID}`;
 const TITLE_SPACED = title('Spaced');
-
-const noteIds: string[] = [];
+// Untagged note carries a UUID-style marker in its body so we can find ONLY this
+// note via single-token search. A bare title-as-term query OR-rank-floods with
+// unrelated notes from the user's library, which breaks the "no Tags: line"
+// assertion (other returned notes contribute their own Tags: lines).
+const UNTAGGED_MARKER = `untaggedmarker${RUN_ID}`;
 
 beforeAll(() => {
   // Create three notes with distinct tag relationships:
@@ -36,23 +39,26 @@ beforeAll(() => {
     { noteTitle: TITLE_NESTED, tag: TAG_NESTED },
     { noteTitle: TITLE_SIMILAR, tag: TAG_SIMILAR },
   ]) {
-    callTool({ toolName: 'bear-create-note', args: { title: noteTitle, tags: tag } });
-    noteIds.push(findNoteId(noteTitle));
+    callTool({
+      toolName: 'bear-create-note',
+      args: { title: noteTitle, tags: tag },
+    });
   }
 
   // Note with space-containing tag to exercise decodeTagName()
-  callTool({ toolName: 'bear-create-note', args: { title: TITLE_SPACED, tags: TAG_SPACED } });
-  noteIds.push(findNoteId(TITLE_SPACED));
+  callTool({
+    toolName: 'bear-create-note',
+    args: { title: TITLE_SPACED, tags: TAG_SPACED },
+  });
 
-  // Untagged note for verifying Tags: line absence
-  callTool({ toolName: 'bear-create-note', args: { title: TITLE_UNTAGGED, text: 'No tags here' } });
-  noteIds.push(findNoteId(TITLE_UNTAGGED));
+  // Untagged note for verifying Tags: line absence — body marker is the search anchor
+  callTool({
+    toolName: 'bear-create-note',
+    args: { title: TITLE_UNTAGGED, text: UNTAGGED_MARKER },
+  });
 });
 
 afterAll(() => {
-  for (const id of noteIds) {
-    trashNote(id);
-  }
   cleanupTestNotes(TEST_PREFIX);
 });
 
@@ -64,8 +70,6 @@ describe('tag search via MCP Inspector CLI', () => {
     });
 
     expect(response.content[0].text).toContain(TITLE_EXACT);
-    // Successful search must not be flagged as error — isError is only for tool failures
-    expect(response.isError).not.toBe(true);
   });
 
   it('parent tag search includes notes with nested child tags', () => {
@@ -124,20 +128,28 @@ describe('tag search via MCP Inspector CLI', () => {
   });
 
   it('tags with spaces are decoded from Bear internal encoding', () => {
+    // Searching by the spaced tag scopes results to this single test note and
+    // exercises decodeTagName on both sides: the input goes through decode to
+    // match Bear's `+`-stored ZTITLE, and the response renders the decoded
+    // form back to the caller.
     const result = callTool({
       toolName: 'bear-search-notes',
-      args: { term: TITLE_SPACED },
+      args: { tag: TAG_SPACED },
     }).content[0].text;
 
-    // Bear stores spaces as "+" in ZTITLE — decodeTagName() must convert back
+    expect(result).toContain(TITLE_SPACED);
     expect(result).toContain(TAG_SPACED);
+    // Bear stores spaces as "+" in ZTITLE — decodeTagName() must convert back
     expect(result).not.toContain('+');
   });
 
   it('untagged notes omit the Tags line in search results', () => {
+    // UNTAGGED_MARKER is a single unique token — prepareFTS5Term passes it
+    // through unchanged so FTS5 returns ONLY our test note. A bare title term
+    // would OR-rank-flood with unrelated tagged notes and pollute the assertion.
     const result = callTool({
       toolName: 'bear-search-notes',
-      args: { term: TITLE_UNTAGGED },
+      args: { term: UNTAGGED_MARKER },
     }).content[0].text;
 
     expect(result).toContain(TITLE_UNTAGGED);

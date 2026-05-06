@@ -42,6 +42,52 @@ All write operations go through the URL path. This is intentionally one-way:
 
 All write operations execute in the background without disrupting the user's Bear UI. The principle: the user is working in their MCP client, not Bear — writes should never steal focus, open windows, or switch the active note.
 
+### Search: In-Memory FTS5 Index
+
+`bear-search-notes` is backed by a separate in-memory SQLite full-text search index, rebuilt on demand from Bear's read-only DB:
+
+```
+  bear-search-notes call
+        │
+        ▼
+  searchByQuery (src/infra/fts-index.ts)
+        │
+        ├──▶ Drift check: MAX(ZMODIFICATIONDATE) + COUNT(*) of active notes
+        │     vs. cached values. Sub-millisecond. Mismatch → rebuild.
+        │
+        ├──▶ (Re)build: read non-trashed/non-archived/non-encrypted notes
+        │     from ZSFNOTE, concat OCR text from ZSFNOTEFILE, capture per-tag
+        │     pinned status from the discovered Z_<n>TAGS / Z_<n>PINNEDINTAGS
+        │     join tables. Bulk-insert into a :memory: FTS5 virtual table
+        │     (unicode61 tokenizer, remove_diacritics=2) plus a side
+        │     note_tags table.
+        │
+        └──▶ Run: FTS5 MATCH + bm25() ranking with snippet() output (matched
+              terms wrapped in `[...]`) for term queries; mod-date DESC with
+              a 200-character body-prefix snippet for filter-only queries.
+              Filters (tag, pinned, date) compose with AND.
+```
+
+**Why in-memory, not persistent.** Bear syncs notes across the user's machines via iCloud. Any persistent derived state (a side-car DB, a shadow FTS5 file) would diverge from Bear's authoritative state without coordination. In-memory rebuild satisfies cross-Mac consistency by construction. Build cost (~70 ms / 229 notes empirically) is small enough to absorb on first search per server process.
+
+**Why MAX + COUNT, not MAX alone.** A bulk import of pre-dated notes (ZMODIFICATIONDATE < the previous max) would not move the maximum. COUNT closes that gap. Both aggregates fit a single SELECT.
+
+**Concurrency.** `node:sqlite` is synchronous. JSON-RPC handlers run on Node's single event loop, so a search call that triggers a rebuild completes the rebuild atomically before the next call starts. No mutex needed; do not refactor the entry point to async/await without re-establishing this invariant.
+
+The atomicity guarantee is in-process only — Bear.app writes the source SQLite file as an independent macOS process, and `journal_mode=DELETE` provides no snapshot isolation across processes. Bear writes that land between rebuilds are detected by the next `MAX + COUNT` drift check and force a fresh rebuild. Bear writes that land *during* a rebuild — between `insertNotes`/`insertNoteTags` and `readDriftKey` — are reflected in the post-build drift key but not the index, leaving the new note invisible until another Bear write moves the key again. Bounded by Bear's typical write cadence; not addressed here because the build window is sub-100 ms for typical libraries.
+
+**FTS5 query handling.** User-supplied terms are inspected by `prepareFTS5Term`:
+
+- **Quoted or grouped expressions pass through verbatim** — `"exact phrase"` and `(grouped expr)` are caller opt-ins to FTS5's own phrase / grouping syntax.
+- **Uppercase boolean keywords are not honored as operators.** `AND` / `OR` / `NOT` / `NEAR` written in uppercase are quoted as literal tokens in the OR-join path. Search is positioned as natural-language only across tool descriptions, errors, and user docs — the SVA-28 A/B eval showed agents underperform when nudged into capability mode, and a pasted `apple NOT banana` more likely means "notes about both" than boolean exclusion. Quoting also serves an FTS5-syntax purpose: an unquoted bare `NOT` would otherwise reach the parser as an operator with no operands and surface as a SQL syntax error. FTS5's keyword recognition is case-sensitive, so lowercase `not`/`and` already pass through as content tokens without quoting.
+- **Everything else is tokenized via `[\p{L}\p{N}_]+\*?` and routed by shape.** Unicode-aware on purpose: ASCII `\w` would silently zero-hit any non-ASCII script (Cyrillic, accented Latin, Greek, etc.) because `unicode61` indexes those scripts as ordinary letter tokens. A single bareword (with optional `*` suffix) passes through unchanged so FTS5's prefix rule applies. Single-identifier punctuated input — no whitespace in the trimmed term, no wildcard tokens, e.g. `bear-notes-mcp` or `2026-04-15` — is tokenized and wrapped as an FTS5 phrase so the consecutive token sequence matches, restoring the substring-style precision v2.x's LIKE gave for slugs and identifiers; the no-wildcard guard exists because FTS5 only allows `*` on the last phrase token, so phrase-quoting a wildcard input would silently strip the prefix-match. Multi-word input with whitespace — bare or punctuation-laden — reduces to OR-rank-by-density. Incidental punctuation (brackets, hyphens, colons) within tokens is dropped because unicode61 tokenized the indexed corpus the same way, so query-side punctuation removal mirrors what FTS5 did on the body side. Input with no word characters at all falls through verbatim and surfaces an FTS5 syntax error (caught and reframed by `runWithFts5SyntaxRemap`).
+
+The OR-rank fallthrough is deliberate. FTS5's bareword default is implicit-AND, which silently filters out notes missing any single token — including notes that paraphrase or use a different word for one of the user's referents. The SVA-28 A/B eval found 73% of search calls containing a hyphen or colon returning zero hits under an earlier phrase-quote branch, which turned natural-language input into rigid token-order phrase matches. OR-rank with BM25 lets density-rich notes still surface, matching the user/agent expectation that ranked search returns relevance-ordered results rather than a strict filter.
+
+**Schema discovery.** Bear's tag-join table names embed Core Data entity IDs (`Z_5TAGS`, `Z_13TAGS`, etc.) that can shift across Bear schema migrations. `src/infra/bear-schema.ts:discoverBearSchema` resolves the actual names at runtime via `Z_PRIMARYKEY` (Core Data's entity registry). Both the FTS5 build path and `src/operations/tags.ts` consume this utility — no hardcoded entity IDs remain in the codebase.
+
+**Load-bearing assumption.** `node:sqlite`'s bundled SQLite must include FTS5. Verified at planning time on Node 24.14.1 / SQLite 3.51.2; locked into CI by `src/infra/bear-schema.test.ts` so any future Node version that disables FTS5 fails before the rest of the search subsystem panics.
+
 ---
 
 ## Safety Gates
@@ -60,9 +106,9 @@ There is no delete tool. Too destructive for AI-assisted workflows — a misiden
 
 ### Bear's Database
 
-Bear uses Core Data with SQLite. The schema is undocumented — our understanding comes from reverse-engineering (see `BEAR_DATABASE_SCHEMA.md`). The database path is hardcoded to Bear's app group container at `~/Library/Group Containers/9K33E3U3T4.net.shinyfrog.bear/Application Data/database.sqlite` (overridable via `BEAR_DB_PATH` env var for tests). Key fragility points:
+Bear uses Core Data with SQLite. The schema is undocumented; the DB is small enough to inspect directly when needed. The database path is hardcoded to Bear's app group container at `~/Library/Group Containers/9K33E3U3T4.net.shinyfrog.bear/Application Data/database.sqlite` (overridable via `BEAR_DB_PATH` env var for tests). Key fragility points:
 
-- Tag name decoding logic exists in two places (SQL expression in `notes.ts` and TypeScript function in `bear-encoding.ts`) — these must produce identical results. Bidirectional comments link them.
+- Tag name decoding goes through a single function — `decodeTagName` in `infra/bear-encoding.ts`. Both the in-memory index build (`infra/fts-index.ts`) and the query path call it, so index-side and query-side normalization can never drift. Doing this in JS rather than SQL is deliberate: SQLite's built-in `LOWER()` is ASCII-only, while JS `toLowerCase()` folds Unicode — required for non-ASCII tag matching.
 - Tag hierarchy is not stored relationally — it's reconstructed at query time by splitting slash-delimited paths.
 - All queries exclude trashed, archived, and encrypted notes to match what Bear's UI shows.
 
@@ -121,4 +167,3 @@ Note-level write tools do pre-flight DB validation to turn silent Bear failures 
 
 ### Bear Notes API
 - [Bear x-callback-url API](https://bear.app/faq/X-callback-url%20Scheme%20documentation/)
-- Bear Database Schema: see `docs/dev/BEAR_DATABASE_SCHEMA.md`

@@ -11,11 +11,10 @@ export const logger = {
 if (process.env.UI_DEBUG_TOGGLE === 'true') {
   process.env.DEBUG = 'bear-notes-mcp:*';
   logger.debug.enabled = true;
+  logger.info.enabled = true;
 }
 
-// Always enable error and info logs
 logger.error.enabled = true;
-logger.info.enabled = true;
 
 /**
  * Logs an error message and throws an Error to halt execution.

@@ -1,0 +1,155 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 'bear-notes-mcp A/B — SVA-28 in-memory FTS5 search'
+# Distinct outputPath from evals/native-vs-fts5.yaml so the two evals can run
+# sequentially without clobbering each other's results.
+outputPath: outputs/results.json
+
+evaluateOptions:
+  repeat: 15
+
+# Single templated prompt — each test fills `prompt` via vars, so per-test
+# assertions can target prompt-specific ground truth.
+prompts:
+  - '{{prompt}}'
+
+# Provider isolation: setting_sources / custom_allowed_tools / persist_session
+# block ambient Claude Code config and tighten the tool surface to this eval's
+# MCP servers only.
+#
+# IMPORTANT: evals/released/ is a single-baseline directory. Running this
+# eval requires v2.11.0 on disk (the cleanest pre-FTS5 release). Verify with:
+#   grep version evals/released/package.json   # expect 2.11.0
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: v2.11.0
+    config:
+      model: claude-sonnet-4-6
+      working_dir: ..
+      persist_session: false
+      setting_sources: []
+      env:
+        CLAUDE_CONFIG_DIR: /tmp/bear-mcp-eval-claude-config
+      custom_allowed_tools: ['mcp__v2-11-0__*']
+      debug: true
+      debug_file: ./outputs/sdk-v2-11-0.log
+      mcp:
+        servers:
+          - name: v2-11-0
+            command: node
+            args: [evals/released/dist/main.js]
+
+  - id: anthropic:claude-agent-sdk
+    label: v3.0.0
+    config:
+      model: claude-sonnet-4-6
+      working_dir: ..
+      persist_session: false
+      setting_sources: []
+      env:
+        CLAUDE_CONFIG_DIR: /tmp/bear-mcp-eval-claude-config
+      custom_allowed_tools: ['mcp__v3-0-0__*']
+      debug: true
+      debug_file: ./outputs/sdk-v3-0-0.log
+      mcp:
+        servers:
+          - name: v3-0-0
+            command: node
+            args: [dist/main.js]
+
+# Default toolCalls + turns metrics from shared/default-test.yaml.
+defaultTest: file://shared/default-test.yaml
+
+# Promptfoo merges per-test assertions with the shared default-test. The
+# shared file emits toolCalls and turns as named metrics with pass: true —
+# promptfoo aggregates them as per-provider averages in the report so the
+# A/B gap is surfaced as signal, not enforced as a binary pass/fail gate
+# (different providers legitimately use different tool-call counts for the
+# same task).
+#
+# Ground-truth assertions are content-focused, not source-name focused —
+# synthesis answers often don't echo source titles, so requiring the title
+# would mark correct answers as failing.
+#
+# When adding new prompts, two design rules (validated the hard way):
+#   1. The prompt must explicitly direct search ("Search my Bear notes…",
+#      "Looking at my Bear notes…"). Natural-question framing triggers the
+#      Agent SDK's memory-first orientation and the agent never calls the
+#      MCP tools — measuring agent routing, not search engine quality.
+#   2. Probe queries a real user would naturally ask. Synthetic capability
+#      tests (boolean operators, exact-phrase quoting, prefix wildcards)
+#      belong in src/infra/fts-index.test.ts, not in paid LLM evals.
+tests:
+  - description: 'Verbatim quote from a known recent note'
+    vars:
+      prompt: |
+        Search my Bear notes — got a 1:1 coming up with a senior eng
+        who keeps overengineering. I saved something on how to coach
+        that. What were the tips?
+    assert:
+      - type: icontains-any
+        value:
+          - 'highly scalable app'
+          - 'look for complexity when there is none'
+          - 'decision records'
+          - 'artificial constraints'
+          - 'customer value'
+        metric: Quality
+
+  - description: 'Specific saved prompt discoverable among many similar'
+    vars:
+      prompt: |
+        Search my Bear notes — I made a prompt for catching bloated,
+        padded writing in blog drafts. Find it and tell me what it
+        actually flags.
+    assert:
+      - type: icontains-any
+        value:
+          - 'graphomania'
+          - 'verbose introductions'
+          - 'redundant conclusions'
+          - 'filler transitions'
+          - 'unnecessary context padding'
+        metric: Quality
+
+  - description: 'Find a lesson when query words differ from note words'
+    vars:
+      prompt: |
+        Search my Bear notes — I saved a piece on how eng leadership
+        changes once you go from running execution to setting
+        direction. It had a list of what that role actually does.
+        What's the framework and who wrote it?
+    assert:
+      - type: icontains-any
+        value:
+          - 'core loop'
+          - 'leadership-heavy'
+          - 'four steps'
+          - 'orchestration-heavy'
+          - 'lethain'
+        metric: Quality
+
+  - description: 'Synthesis across multiple related notes'
+    vars:
+      prompt: |
+        Search my Bear notes — what blog drafts do I have on using AI
+        in actual eng work? Give me the rough list and the angle each
+        takes. Trying to figure out which to write next.
+    assert:
+      - type: javascript
+        value: |
+          const out = (output || '').toLowerCase();
+          const categories = [
+            { name: 'incident/failure narrative', phrases: ['external secrets', 'helm chart', 'qa cluster', 'broke production', 'security patch'] },
+            { name: 'structured workflow / migration methodology', phrases: ['same action, different context', 'parallel ai sessions', 'clauderne', 'workflow decomposition', 'mutation boundaries'] },
+            { name: 'daily Claude coding practice', phrases: ['atomic steps', 'incremental atomic', 'high-level objective', 'decomposed', 'course-correct'] },
+            { name: 'plugin/skills design lessons', phrases: ['arc plugin', 'gsd', 'plannotator', 'exitplanmode', 'simple skills'] },
+          ];
+          const hit = categories.filter(c => c.phrases.some(p => out.includes(p)));
+          const MIN = 2;
+          return {
+            pass: hit.length >= MIN,
+            score: hit.length >= MIN ? 1 : 0,
+            reason: `Matched ${hit.length} of ${categories.length} content categories (need >= ${MIN}): [${hit.map(c => c.name).join(', ')}]`,
+            namedScores: { Quality: hit.length >= MIN ? 1 : 0 },
+          };
+        metric: Quality

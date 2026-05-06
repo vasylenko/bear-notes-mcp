@@ -1,0 +1,143 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 'bear-notes-mcp A/B — v3.0.0 FTS5 vs Bear native MCP'
+# Distinct outputPath from evals/fts5-vs-like.yaml so the two evals can run
+# sequentially without clobbering each other's results.
+outputPath: outputs/results-native.json
+
+# 15 repeats matches fts5-vs-like.yaml — n=15 is the threshold where
+# every prompt's tool-call delta crosses statistical significance. 4 prompts
+# × 15 repeats × 2 providers = 120 agent runs (~$13, ~15 min wall clock at
+# default 4-way concurrency).
+evaluateOptions:
+  repeat: 15
+
+# Single templated prompt — each test fills `prompt` via vars, so per-test
+# assertions can target prompt-specific ground truth.
+prompts:
+  - '{{prompt}}'
+
+# What this comparison measures:
+#   - "v3.0.0"    — our FTS5/BM25 backend with a natural-language-only tool
+#                   surface.
+#   - "bear-native" — Bear's own MCP server (`bearcli mcp-server`) exposing
+#                     Bear's search syntax.
+#                     See `bearcli help search` for the full vocabulary.
+#
+# Both providers read the same Bear database in place — only the search shape
+# differs. bearcli ships with Bear.app; the absolute path below assumes the
+# default /Applications install (no custom override needed for the typical setup).
+providers:
+  - id: anthropic:claude-agent-sdk
+    label: bear-native
+    config:
+      model: claude-sonnet-4-6
+      working_dir: ..
+      persist_session: false
+      setting_sources: []
+      env:
+        CLAUDE_CONFIG_DIR: /tmp/bear-mcp-eval-claude-config
+      custom_allowed_tools: ['mcp__bear-native__*']
+      debug: true
+      debug_file: ./outputs/sdk-bear-native.log
+      mcp:
+        servers:
+          - name: bear-native
+            command: /Applications/Bear.app/Contents/MacOS/bearcli
+            args: [mcp-server]
+
+  - id: anthropic:claude-agent-sdk
+    label: v3.0.0
+    config:
+      model: claude-sonnet-4-6
+      working_dir: ..
+      persist_session: false
+      setting_sources: []
+      env:
+        CLAUDE_CONFIG_DIR: /tmp/bear-mcp-eval-claude-config
+      custom_allowed_tools: ['mcp__v3-0-0__*']
+      debug: true
+      debug_file: ./outputs/sdk-v3-0-0.log
+      mcp:
+        servers:
+          - name: v3-0-0
+            command: node
+            args: [dist/main.js]
+
+# Default toolCalls + turns metrics from shared/default-test.yaml.
+defaultTest: file://shared/default-test.yaml
+
+tests:
+  - description: 'Verbatim quote from a known recent note'
+    vars:
+      prompt: |
+        Search my Bear notes — got a 1:1 coming up with a senior eng
+        who keeps overengineering. I saved something on how to coach
+        that. What were the tips?
+    assert:
+      - type: icontains-any
+        value:
+          - 'highly scalable app'
+          - 'look for complexity when there is none'
+          - 'decision records'
+          - 'artificial constraints'
+          - 'customer value'
+        metric: Quality
+
+  - description: 'Specific saved prompt discoverable among many similar'
+    vars:
+      prompt: |
+        Search my Bear notes — I made a prompt for catching bloated,
+        padded writing in blog drafts. Find it and tell me what it
+        actually flags.
+    assert:
+      - type: icontains-any
+        value:
+          - 'graphomania'
+          - 'verbose introductions'
+          - 'redundant conclusions'
+          - 'filler transitions'
+          - 'unnecessary context padding'
+        metric: Quality
+
+  - description: 'Find a lesson when query words differ from note words'
+    vars:
+      prompt: |
+        Search my Bear notes — I saved a piece on how eng leadership
+        changes once you go from running execution to setting
+        direction. It had a list of what that role actually does.
+        What's the framework and who wrote it?
+    assert:
+      - type: icontains-any
+        value:
+          - 'core loop'
+          - 'leadership-heavy'
+          - 'four steps'
+          - 'orchestration-heavy'
+          - 'lethain'
+        metric: Quality
+
+  - description: 'Synthesis across multiple related notes'
+    vars:
+      prompt: |
+        Search my Bear notes — what blog drafts do I have on using AI
+        in actual eng work? Give me the rough list and the angle each
+        takes. Trying to figure out which to write next.
+    assert:
+      - type: javascript
+        value: |
+          const out = (output || '').toLowerCase();
+          const categories = [
+            { name: 'incident/failure narrative', phrases: ['external secrets', 'helm chart', 'qa cluster', 'broke production', 'security patch'] },
+            { name: 'structured workflow / migration methodology', phrases: ['same action, different context', 'parallel ai sessions', 'clauderne', 'workflow decomposition', 'mutation boundaries'] },
+            { name: 'daily Claude coding practice', phrases: ['atomic steps', 'incremental atomic', 'high-level objective', 'decomposed', 'course-correct'] },
+            { name: 'plugin/skills design lessons', phrases: ['arc plugin', 'gsd', 'plannotator', 'exitplanmode', 'simple skills'] },
+          ];
+          const hit = categories.filter(c => c.phrases.some(p => out.includes(p)));
+          const MIN = 2;
+          return {
+            pass: hit.length >= MIN,
+            score: hit.length >= MIN ? 1 : 0,
+            reason: `Matched ${hit.length} of ${categories.length} content categories (need >= ${MIN}): [${hit.map(c => c.name).join(', ')}]`,
+            namedScores: { Quality: hit.length >= MIN ? 1 : 0 },
+          };
+        metric: Quality

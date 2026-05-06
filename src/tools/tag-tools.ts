@@ -3,7 +3,7 @@ import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import { logger } from '../logging.js';
-import { listTags } from '../operations/tags.js';
+import { listTags, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 import type { BearTag } from '../types.js';
 
@@ -49,7 +49,7 @@ export function registerTagTools(server: McpServer): void {
     {
       title: 'List Bear Tags',
       description:
-        'List all tags in your Bear library as a hierarchical tree. Shows tag names with note counts. Useful for understanding your tag structure and finding tags to apply to untagged notes.',
+        'List all tags in your Bear library as a hierarchical tree. Shows tag names with note counts. Useful for understanding your tag structure and finding tags to apply to untagged notes. Counts include only active notes (trashed and archived are excluded). Tags with zero active notes are not shown.',
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -96,13 +96,13 @@ export function registerTagTools(server: McpServer): void {
         name: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#/, ''))
+          .transform(stripTagPrefix)
           .pipe(z.string().min(1, 'Tag name is required'))
           .describe('Current tag name to rename (without # symbol)'),
         new_name: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#/, ''))
+          .transform(stripTagPrefix)
           .pipe(z.string().min(1, 'New tag name is required'))
           .describe(
             'New tag name (without # symbol). Use slashes for hierarchy, e.g., "archive/old-project"'
@@ -152,7 +152,7 @@ The tag has been renamed across all notes in your Bear library.`);
         name: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#/, ''))
+          .transform(stripTagPrefix)
           .pipe(z.string().min(1, 'Tag name is required'))
           .describe('Tag name to delete (without # symbol)'),
       },

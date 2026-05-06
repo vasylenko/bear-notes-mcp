@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
 import { logger } from '../logging.js';
 import { applyNoteConventions } from '../operations/note-conventions.js';
-import { cleanBase64 } from '../operations/bear-encoding.js';
 import {
   awaitNoteCreation,
   findNotesByTitle,
@@ -17,10 +16,47 @@ import {
   searchNotes,
   stripLeadingHeader,
 } from '../operations/notes.js';
-import { findUntaggedNotes } from '../operations/tags.js';
+import { findUntaggedNotes, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
 import { createErrorResponse, createToolResponse } from './responses.js';
+
+// Cap bear-add-file attachment size. Well above realistic PDFs/images, well
+// below "exfiltrate the entire ~/Library."
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+type ReadAttachmentResult = { ok: true; data: string } | { ok: false; error: string };
+
+// Narrow filesystem capability for bear-add-file: reject symlinks (block
+// follow-the-link exfiltration), reject non-files (devices, fifos, dirs),
+// and cap size before reading into memory. lstat keeps the symlink visible
+// rather than resolving past it.
+function readAttachmentFile(filePath: string): ReadAttachmentResult {
+  try {
+    const stat = lstatSync(filePath);
+    if (stat.isSymbolicLink())
+      return { ok: false, error: `Symbolic links are not supported: ${filePath}` };
+    if (!stat.isFile()) return { ok: false, error: `Not a regular file: ${filePath}` };
+    if (stat.size === 0) return { ok: false, error: `File is empty: ${filePath}` };
+    if (stat.size > MAX_ATTACHMENT_BYTES) {
+      return {
+        ok: false,
+        error: `File too large (${stat.size} bytes; limit ${MAX_ATTACHMENT_BYTES}): ${filePath}`,
+      };
+    }
+    return { ok: true, data: readFileSync(filePath).toString('base64') };
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === 'ENOENT') return { ok: false, error: `File not found: ${filePath}` };
+    if (code === 'EACCES') return { ok: false, error: `Permission denied: ${filePath}` };
+    return {
+      ok: false,
+      error: `Cannot read file: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+export const __testing__ = { readAttachmentFile, MAX_ATTACHMENT_BYTES };
 
 /**
  * Shared handler for note text operations (append, prepend, or replace).
@@ -127,7 +163,7 @@ export function registerNoteTools(server: McpServer): void {
           .trim()
           .optional()
           .describe(
-            'Note identifier (ID) from bear-search-notes. Either id or title must be provided.'
+            'Note identifier (ID) for an existing Bear note. Either id or title must be provided.'
           ),
         title: z
           .string()
@@ -288,6 +324,10 @@ Use bear-search-notes to find the correct note identifier.`);
 
         if (createdNoteId) {
           responseLines.push(`Note ID: ${createdNoteId}`);
+        } else if (title) {
+          responseLines.push(
+            'Note ID: unknown — the create request was sent, but the new note could not be confirmed. Check in Bear to verify.'
+          );
         }
 
         const hasContent = title || text || tags;
@@ -308,15 +348,28 @@ The note has been added to your Bear Notes library.`);
     {
       title: 'Find Bear Notes',
       description:
-        'Find notes in your Bear library by searching text content, filtering by tags, or date ranges. Always searches within attached images and PDF files via OCR. Returns a list with titles, tags, and IDs - use "Open Bear Note" to read full content.',
+        "Search your Bear notes for words or phrases. The search looks across note titles, body content, and OCR text in attached images and PDFs, returning matching notes ranked by relevance with a snippet of the matching context — so you can see what matched without opening the note. For best results, search with a phrase or several words from what you're looking for; a single word also works. Also supports filtering by tag, by creation/modification date range, or by pinned status — combine these with a search term, or use them on their own to browse without searching. Trashed and archived notes are not included.",
       inputSchema: {
         term: z
           .string()
           .trim()
           .optional()
-          .describe('Text to search for in note titles and content'),
-        tag: z.string().trim().optional().describe('Tag to filter notes by (without # symbol)'),
-        limit: z.number().optional().describe('Maximum number of results to return (default: 50)'),
+          .describe(
+            'Words to search for. Results are ranked by relevance — notes covering more of what you typed rank higher. Pass natural keywords for the typical case (e.g., "quarterly planning notes"). Hyphenated or punctuated identifiers like "bear-notes-mcp" or "2026-04-15" are matched as a phrase when used alone; in multi-word queries they are treated like any other word.'
+          ),
+        tag: z
+          .string()
+          .trim()
+          .transform(stripTagPrefix)
+          .pipe(z.string().min(1))
+          .optional()
+          .describe('Tag to filter notes by (leading # is stripped if present)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe('Maximum number of results to return (default: 50, min: 1)'),
         createdAfter: z
           .string()
           .optional()
@@ -376,13 +429,7 @@ The note has been added to your Bear Notes library.`);
           ...(modifiedBefore && { modifiedBefore }),
         };
 
-        const { notes, totalCount } = searchNotes(
-          term,
-          tag,
-          limit,
-          Object.keys(dateFilter).length > 0 ? dateFilter : undefined,
-          pinned
-        );
+        const { notes, totalCount } = searchNotes(term, tag, limit, dateFilter, pinned);
 
         if (notes.length === 0) {
           const searchCriteria = [];
@@ -413,6 +460,12 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           const createdDate = new Date(note.creation_date).toLocaleDateString();
 
           resultLines.push(`${index + 1}. **${noteTitle}**`);
+          // Bear bodies often include internal newlines; collapse so each
+          // snippet renders as one line.
+          if (note.snippet) {
+            const flat = note.snippet.replaceAll(/\s+/g, ' ').trim();
+            resultLines.push(`   ${flat}`);
+          }
           resultLines.push(`   Created: ${createdDate}`);
           resultLines.push(`   Modified: ${modifiedDate}`);
           if (note.tags && note.tags.length > 0) {
@@ -447,7 +500,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes'),
+          .describe('Note identifier (ID) for an existing Bear note'),
         text: z
           .string()
           .trim()
@@ -464,7 +517,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           .enum(['beginning', 'end'])
           .optional()
           .describe(
-            "Where to insert: 'end' (default) for appending, logs, updates; 'beginning' for prepending, summaries, top of mind, etc."
+            "Where to insert: 'end' (default) for appending, logs, updates; 'beginning' for prepending, summaries, top of mind, etc. When `header` is set, position applies within that section's content, not the whole note."
           ),
       },
       annotations: {
@@ -491,7 +544,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes'),
+          .describe('Note identifier (ID) for an existing Bear note'),
         scope: z
           .enum(['section', 'full-note-body'])
           .describe(
@@ -547,23 +600,14 @@ Remove the header parameter to replace the full note body, or change scope to "s
     {
       title: 'Add File to Note',
       description:
-        'Attach a file to an existing Bear note. Preferred: provide file_path for files on disk — the server reads and encodes them automatically. Alternative: provide base64_content with pre-encoded data. Use bear-search-notes first to get the note ID.',
+        'Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first.',
       inputSchema: {
         file_path: z
           .string()
           .trim()
           .min(1)
-          .optional()
           .describe(
-            'Path to a file on disk. Preferred over base64_content when the file already exists locally.'
-          ),
-        base64_content: z
-          .string()
-          .trim()
-          .min(1)
-          .optional()
-          .describe(
-            'Base64-encoded file content. Use file_path instead when the file exists on disk.'
+            'Absolute path to a local file (e.g., "/Users/me/Documents/report.pdf"). Tilde (~) is not expanded — pass an explicit absolute path. Must be a regular non-empty file (no symlinks); maximum 25 MB.'
           ),
         filename: z
           .string()
@@ -571,89 +615,82 @@ Remove the header parameter to replace the full note body, or change scope to "s
           .min(1)
           .optional()
           .describe(
-            'Filename with extension (e.g., budget.xlsx, report.pdf). Required when using base64_content. Auto-inferred from file_path when omitted.'
+            'Filename with extension (e.g., budget.xlsx, report.pdf). Auto-inferred from file_path when omitted.'
           ),
-        id: z
+        id: z.string().trim().optional().describe('Note identifier (ID) for an existing Bear note'),
+        title: z
           .string()
           .trim()
           .optional()
-          .describe('Exact note identifier (ID) obtained from bear-search-notes'),
-        title: z.string().trim().optional().describe('Note title if ID is not available'),
+          .describe(
+            'Note title if ID is not available (case-insensitive). If multiple notes share the same title, returns a list of matches with IDs so you can pick one and retry with `id`.'
+          ),
       },
       annotations: {
         readOnlyHint: false,
-        destructiveHint: true,
+        destructiveHint: false,
         idempotentHint: false,
         openWorldHint: true,
       },
     },
-    async ({ file_path, base64_content, filename, id, title }): Promise<CallToolResult> => {
-      logger.info(
-        `bear-add-file called with file_path: ${file_path || 'none'}, base64_content: ${base64_content ? 'provided' : 'none'}, filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
-      );
-
+    async ({ file_path, filename, id, title }): Promise<CallToolResult> => {
       if (!id && !title) {
         return createErrorResponse(
           'Either note ID or title is required. Use bear-search-notes to find the note ID.'
         );
       }
-
-      if (file_path && base64_content) {
-        return createErrorResponse('Provide either file_path or base64_content, not both.');
-      }
-      if (!file_path && !base64_content) {
-        return createErrorResponse('Either file_path or base64_content is required.');
-      }
-      if (base64_content && !filename) {
-        return createErrorResponse('filename is required when using base64_content.');
-      }
-
+      logger.info(
+        `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
+      );
       try {
-        let fileData: string;
-        let resolvedFilename: string;
+        const attachment = readAttachmentFile(file_path);
+        if (!attachment.ok) return createErrorResponse(attachment.error);
+        const fileData = attachment.data;
+        const resolvedFilename = filename || basename(file_path);
 
-        if (file_path) {
-          // Read file from disk and encode — avoids the LLM producing thousands of base64 tokens
-          try {
-            const buffer = readFileSync(file_path);
-            if (buffer.length === 0) {
-              return createErrorResponse(`File is empty: ${file_path}`);
-            }
-            fileData = buffer.toString('base64');
-          } catch (err) {
-            const code = (err as { code?: string }).code;
-            if (code === 'ENOENT') {
-              return createErrorResponse(`File not found: ${file_path}`);
-            }
-            if (code === 'EACCES') {
-              return createErrorResponse(`Permission denied: ${file_path}`);
-            }
-            return createErrorResponse(
-              `Cannot read file: ${err instanceof Error ? err.message : String(err)}`
-            );
+        // Resolve title-only callers to an ID up-front (mirrors bear-open-note)
+        // so the success response can always carry note title + ID per the
+        // mutation-response rule. Resolving here also avoids attempting a Bear
+        // write against an ambiguous or non-existent title.
+        // Folding the no-criterion guard into the same if/else chain lets TS
+        // infer resolvedId as `string` without a non-null assertion.
+        let resolvedId: string;
+        if (id) {
+          resolvedId = id;
+        } else if (title) {
+          const matches = findNotesByTitle(title);
+          if (matches.length === 0) {
+            return createErrorResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
+
+Use bear-search-notes to find notes by partial text match.`);
           }
-          resolvedFilename = filename || basename(file_path);
+          if (matches.length > 1) {
+            const matchList = matches
+              .map((m, i) => `${i + 1}. ID: ${m.identifier} (modified: ${m.modification_date})`)
+              .join('\n');
+            return createToolResponse(`Multiple notes found with title "${title}":
+
+${matchList}
+
+Use bear-add-file with a specific ID to attach to the desired note.`);
+          }
+          resolvedId = matches[0].identifier;
         } else {
-          // base64_content path — strip whitespace that base64 CLI adds
-          fileData = cleanBase64(base64_content!);
-          resolvedFilename = filename!;
+          return createErrorResponse(
+            'Either note ID or title is required. Use bear-search-notes to find the note ID.'
+          );
         }
 
-        // Fail fast with helpful message rather than cryptic Bear error
-        let noteTitle: string | undefined;
-        if (id) {
-          const existingNote = getNoteContent(id);
-          if (!existingNote) {
-            return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+        const existingNote = getNoteContent(resolvedId);
+        if (!existingNote) {
+          return createErrorResponse(`Note with ID '${resolvedId}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
-          }
-          noteTitle = existingNote.title;
         }
+        const noteTitle = existingNote.title;
 
         const url = buildBearUrl('add-file', {
-          id,
-          title,
+          id: resolvedId,
           file: fileData,
           filename: resolvedFilename,
           mode: 'append',
@@ -662,12 +699,10 @@ Use bear-search-notes to find the correct note identifier.`);
         logger.debug(`Executing Bear add-file URL for: ${resolvedFilename}`);
         await executeBearXCallbackApi(url);
 
-        // Title-only path omits ID: no pre-flight DB lookup, so ID is unavailable
-        const noteIdentifier = id ? `Note: "${noteTitle}"\nID: ${id}` : `Note: "${title!}"`;
-
         return createToolResponse(`File "${resolvedFilename}" added successfully!
 
-${noteIdentifier}
+Note: "${noteTitle}"
+ID: ${resolvedId}
 
 The file has been attached to your Bear note.`);
       } catch (error) {
@@ -682,9 +717,14 @@ The file has been attached to your Bear note.`);
     {
       title: 'Find Untagged Notes',
       description:
-        'Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes.',
+        'Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes. Trashed and archived notes are not included.',
       inputSchema: {
-        limit: z.number().optional().describe('Maximum number of results (default: 50)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe('Maximum number of results (default: 50, min: 1)'),
       },
       annotations: {
         readOnlyHint: true,
@@ -743,11 +783,19 @@ The file has been attached to your Bear note.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes or bear-find-untagged-notes'),
+          .describe('Note identifier (ID) for an existing Bear note'),
         tags: z
-          .array(z.string().trim().min(1, 'Tag name cannot be empty'))
+          .array(
+            z
+              .string()
+              .trim()
+              .transform(stripTagPrefix)
+              .pipe(z.string().min(1, 'Tag name cannot be empty'))
+          )
           .min(1, 'At least one tag is required')
-          .describe('Tag names without # symbol (e.g., ["career", "career/meetings"])'),
+          .describe(
+            'Tag names (leading # is stripped if present), e.g., ["career", "career/meetings"]'
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -807,7 +855,7 @@ The tags have been added to the beginning of the note.`);
           .string()
           .trim()
           .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) from bear-search-notes or bear-open-note'),
+          .describe('Note identifier (ID) for an existing Bear note'),
       },
       annotations: {
         readOnlyHint: false,

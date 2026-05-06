@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "bear-notes",
   "display_name": "Bear Notes",
-  "version": "2.12.0",
+  "version": "3.0.0",
   "icon": "icon.png",
   "screenshots": ["screenshots/search-demo.png"],
   "description": "Bear Notes MCP server with TypeScript and native SQLite. Provides comprehensive Bear Notes integration for creating, searching, reading, and modifying notes.",
@@ -68,7 +68,7 @@
     },
     {
       "name": "bear-search-notes",
-      "description": "Find notes by searching text content, filtering by tags, or date ranges. Includes OCR search in attachments"
+      "description": "Find notes by relevance across titles, body, and OCR-extracted text from attached images and PDFs. Use a phrase or a few keywords describing what you're looking for; results are ranked by relevance and each includes a context snippet. Also supports tag, date-range, and pinned-only filters — combine with a search term or use them on their own to browse."
     },
     {
       "name": "bear-add-text",
@@ -80,7 +80,7 @@
     },
     {
       "name": "bear-add-file",
-      "description": "Attach a file to an existing Bear note. Provide a local file path (preferred) or base64-encoded content."
+      "description": "Attach a local file (image, PDF, document) to an existing Bear note. Bear extracts text from images and PDFs via OCR, making attachment content searchable."
     },
     {
       "name": "bear-list-tags",
@@ -116,7 +116,7 @@
     "typescript",
     "mcp"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "compatibility": {
     "platforms": ["darwin"],
     "runtimes": {

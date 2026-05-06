@@ -1,26 +1,16 @@
 import { CORE_DATA_EPOCH_OFFSET } from '../config.js';
 
 /**
- * Decodes and normalizes Bear tag names.
- * - Replaces '+' with spaces (Bear's URL encoding)
- * - Converts to lowercase (matches Bear UI behavior)
- * - Trims whitespace
- * Keep in sync with DECODED_TAG_TITLE in notes.ts — both MUST apply the same transformations.
+ * Decodes and normalizes Bear tag names. Single source of truth for tag
+ * normalization — `src/infra/fts-index.ts` (insertNoteTags) and the search
+ * query path (`buildFilterClauses`) both call this so the index side and
+ * the query side use identical Unicode-aware case folding. Doing this in
+ * JS rather than SQL is deliberate: SQLite's built-in `LOWER()` is ASCII-
+ * only, while JS `toLowerCase()` folds Unicode (e.g. `CAFÉ` → `café`),
+ * which is required for non-ASCII tag matching to work.
  */
 export function decodeTagName(encodedName: string): string {
   return encodedName.replaceAll('+', ' ').trim().toLowerCase();
-}
-
-/**
- * Cleans base64 string by removing whitespace/newlines added by base64 command.
- * URLSearchParams in buildBearUrl will handle URL encoding of special characters.
- *
- * @param base64String - Raw base64 string (may contain whitespace/newlines)
- * @returns Cleaned base64 string without whitespace
- */
-export function cleanBase64(base64String: string): string {
-  // Remove all whitespace/newlines from base64 (base64 command adds line breaks)
-  return base64String.trim().replace(/\s+/g, '');
 }
 
 /**

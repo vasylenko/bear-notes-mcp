@@ -18,6 +18,7 @@ const server = new McpServer(
       'Each note has a unique ID, a title, a body, and optional tags.',
       'Notes use markdown headings (##, ###, etc.) to define sections.',
       'Use bear-search-notes to find note IDs before reading or modifying notes, or provide an exact title to bear-open-note for direct lookup.',
+      'Whenever a tool surfaces a specific note in its response (search results, opened note, etc), the note ID is included. Pass that ID unchanged to any mutation tool that accepts `id`.',
       'To modify note content: bear-add-text inserts text without touching existing content; bear-replace-text overwrites content.',
       'When targeting a section by header, operations apply only to the direct content under that header — not nested sub-sections.',
       'To modify sub-sections, make separate calls targeting each sub-header.',
