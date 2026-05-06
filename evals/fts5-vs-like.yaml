@@ -4,12 +4,6 @@ description: 'bear-notes-mcp A/B — SVA-28 in-memory FTS5 search'
 # sequentially without clobbering each other's results.
 outputPath: outputs/results.json
 
-# 15 repeats per (prompt × provider) — surfaces variance from non-deterministic
-# agent behavior (model temp, ranking tie-breaks). 4 prompts × 15 repeats × 2
-# providers = 120 agent runs (~$13, ~15 min wall clock at default 4-way
-# concurrency). n=15 is the threshold where every prompt's tool-call delta
-# crosses statistical significance — at n=5 the BM25 prompt's small win
-# (gap 0.4, sd 0.55) sits inside the 95% CI; at n=15 the CI excludes zero.
 evaluateOptions:
   repeat: 15
 

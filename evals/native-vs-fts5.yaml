@@ -16,28 +16,16 @@ evaluateOptions:
 prompts:
   - '{{prompt}}'
 
-# Provider isolation matches fts5-vs-like.yaml — see that file for
-# the full rationale on setting_sources / custom_allowed_tools / persist_session.
-#
 # What this comparison measures:
 #   - "v3.0.0"    — our FTS5/BM25 backend with a natural-language-only tool
-#                   surface, whole-word tokenization, snippet brackets per
-#                   result, OCR-by-default. Structured params for tag, pinned,
-#                   date filters; no operator vocabulary on user-facing surfaces.
+#                   surface.
 #   - "bear-native" — Bear's own MCP server (`bearcli mcp-server`) exposing
-#                     Bear's search syntax: substring matching, recency-flavor
-#                     ordering (pinned,modified by default), rich operators
-#                     (#tag, !#tag, #*/sub, @title, @ocr, @todo, @done,
-#                     @date(...), @today, "exact phrase", -negation, OR).
+#                     Bear's search syntax.
 #                     See `bearcli help search` for the full vocabulary.
 #
 # Both providers read the same Bear database in place — only the search shape
 # differs. bearcli ships with Bear.app; the absolute path below assumes the
 # default /Applications install (no custom override needed for the typical setup).
-#
-# Native MCP requires Bear.app to be installed (the bearcli binary lives inside
-# the .app bundle) but does NOT require Bear to be running — it reads the
-# SQLite database directly, same as our server.
 providers:
   - id: anthropic:claude-agent-sdk
     label: bear-native
@@ -78,19 +66,6 @@ providers:
 # Default toolCalls + turns metrics from shared/default-test.yaml.
 defaultTest: file://shared/default-test.yaml
 
-# Same four prompts as fts5-vs-like.yaml so cross-eval comparison stays
-# apples-to-apples — Quality scores from this run can be placed alongside the
-# v3.0.0 column from the FTS5-vs-LIKE eval to triangulate where each backend
-# wins or loses on the same probe.
-#
-# Two design rules carry over (validated the hard way during the FTS5 eval):
-#   1. The prompt must explicitly direct search ("Search my Bear notes…").
-#      Natural-question framing triggers the Agent SDK's memory-first
-#      orientation and the agent never calls the MCP tools — measuring
-#      agent routing, not search engine quality.
-#   2. Probe queries a real user would naturally ask. Synthetic capability
-#      tests (boolean operators, exact-phrase quoting, prefix wildcards)
-#      belong in src/infra/fts-index.test.ts, not in paid LLM evals.
 tests:
   - description: 'Verbatim quote from a known recent note'
     vars:
