@@ -5,6 +5,16 @@ import { closeBearDatabase, openBearDatabase } from '../infra/database.js';
 import { convertCoreDataTimestamp, decodeTagName } from '../infra/bear-encoding.js';
 
 /**
+ * Strips one or more leading '#' characters from a tag-name input.
+ * Centralized so the regex can't drift across the multiple Zod schemas
+ * that normalize tag-name fields — losing the ^ anchor at one site
+ * would silently corrupt tag values containing '#' mid-string.
+ */
+export function stripTagPrefix(name: string): string {
+  return name.replace(/^#+/, '');
+}
+
+/**
  * Extracts the display name (leaf) from a full tag path.
  * For "career/content/blog" returns "blog", for "career" returns "career".
  */

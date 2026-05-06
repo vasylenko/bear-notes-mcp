@@ -16,7 +16,7 @@ import {
   searchNotes,
   stripLeadingHeader,
 } from '../operations/notes.js';
-import { findUntaggedNotes } from '../operations/tags.js';
+import { findUntaggedNotes, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
 import { createErrorResponse, createToolResponse } from './responses.js';
@@ -360,7 +360,7 @@ The note has been added to your Bear Notes library.`);
         tag: z
           .string()
           .trim()
-          .transform((v) => v.replace(/^#+/, ''))
+          .transform(stripTagPrefix)
           .pipe(z.string().min(1))
           .optional()
           .describe('Tag to filter notes by (leading # is stripped if present)'),
@@ -789,7 +789,7 @@ The file has been attached to your Bear note.`);
             z
               .string()
               .trim()
-              .transform((v) => v.replace(/^#+/, ''))
+              .transform(stripTagPrefix)
               .pipe(z.string().min(1, 'Tag name cannot be empty'))
           )
           .min(1, 'At least one tag is required')
