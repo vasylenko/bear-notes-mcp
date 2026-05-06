@@ -4,13 +4,13 @@ import InstallTabs from './InstallTabs.astro';
 ---
 
 <section class="pt-12 pb-16 sm:pt-16 sm:pb-24 xl:pb-6">
-  <div class="text-center max-w-4xl mx-auto xl:max-w-5xl xl:grid xl:grid-cols-[220px_1fr] xl:gap-12 xl:text-left xl:items-start">
-    <!-- Bear mascot -->
-    <img src="/bear-mcp-server.webp" alt="bear-notes-mcp mascot" width="160" height="277" class="mx-auto mb-6 xl:mb-0 xl:w-full xl:h-auto animate-on-scroll" />
+  <div class="text-center max-w-3xl mx-auto relative">
+    <!-- Bear mascot: in-flow above content on small screens; absolute decoration on the left at xl -->
+    <img src="/bear-mcp-server.webp" alt="bear-notes-mcp mascot" width="160" height="277" class="mx-auto mb-6 xl:mb-0 xl:absolute xl:right-full xl:top-0 xl:mr-6 xl:w-40 xl:h-auto animate-on-scroll" />
 
     <div>
       <!-- Trust signals — populated client-side via shields.io JSON API -->
-      <div id="trust-signals" class="hidden flex items-center justify-center xl:justify-start gap-3 mb-8 animate-on-scroll">
+      <div id="trust-signals" class="hidden flex items-center justify-center gap-3 mb-8 animate-on-scroll">
         <a href={`${site.links.github}/stargazers`} class="trust-pill" target="_blank" rel="noopener noreferrer">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-accent" fill="currentColor" viewBox="0 0 24 24" stroke="none" aria-hidden="true">
             <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
@@ -27,22 +27,26 @@ import InstallTabs from './InstallTabs.astro';
       <div id="trust-signals-spacer" class="mb-5"></div>
 
       <!-- Headline -->
-      <h1 class="text-5xl sm:text-6xl lg:text-7xl xl:text-5xl font-extrabold tracking-tight leading-[1.08] xl:leading-snug text-text-primary animate-on-scroll" style="animation-delay: 100ms;">
-        Bear Notes MCP Server<br />
+      <h1 class="text-4xl sm:text-5xl lg:text-5xl xl:text-5xl font-extrabold tracking-tight leading-[1.1] text-text-primary animate-on-scroll" style="animation-delay: 100ms;">
+        Opinionated<br />Bear Notes MCP Server<br />
         <span class="text-highlight">for every AI assistant</span>
       </h1>
 
-      <p class="mt-8 text-lg sm:text-xl text-text-secondary max-w-lg xl:max-w-2xl mx-auto xl:mx-0 leading-relaxed animate-on-scroll" style="animation-delay: 200ms;">
-        An MCP server that gives your AI assistant full access to your
-        <a href={site.links.bearApp} class="text-text-primary font-semibold hover:text-accent transition-colors" target="_blank" rel="noopener noreferrer">Bear</a>
-        notes. Search with OCR, create, edit, and organize.
+      <p class="mt-8 text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto leading-relaxed animate-on-scroll" style="animation-delay: 200ms;">
+        Sharper search — ranked, hierarchical, with snippets. Reads run direct against your database. Offline-first and private.
       </p>
 
       <!-- Install tabs -->
-      <div class="mt-10 max-w-2xl mx-auto xl:mx-0 animate-on-scroll" style="animation-delay: 300ms;">
+      <div class="mt-10 max-w-2xl mx-auto animate-on-scroll" style="animation-delay: 300ms;">
         <InstallTabs group="hero" />
-        <p class="mt-4 text-center xl:text-left text-xs text-text-muted">
-          <a href="#optional-settings" class="hover:text-text-secondary transition-colors underline decoration-text-muted/30 underline-offset-2">Optional settings</a>
+        <p class="mt-5 text-center">
+          <a href="#mcp-settings" class="inline-flex items-center gap-1.5 text-sm font-semibold text-text-secondary hover:text-accent transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+            MCP settings
+          </a>
         </p>
       </div>
     </div>

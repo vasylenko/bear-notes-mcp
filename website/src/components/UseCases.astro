@@ -2,23 +2,23 @@
 const useCases = [
   {
     title: 'Knowledge search',
-    description: 'You wrote it down somewhere, months ago. Ask your AI to find it — across titles, content, and text Bear has indexed from attached images and PDFs.',
-    prompt: 'Search my Bear notes for meeting decisions about the redesign from last month',
+    description: 'You wrote it down somewhere — months ago, maybe under a tag you don’t quite remember. Search ranks by relevance, and rolls hierarchical tags up automatically.',
+    prompt: 'Find the spec I wrote about export pipelines, somewhere under #engineering/',
   },
   {
     title: 'Meeting notes',
-    description: 'Capture what was discussed, who agreed to what, and create follow-up tasks — all directly in Bear, organized with tags.',
-    prompt: 'Create a Bear note from our meeting summary and tag it #work/meetings',
+    description: 'Append decisions to a running ops doc, not a fresh note every time. Section-targeted writes mean today’s notes land under today’s heading without rewriting yesterday’s.',
+    prompt: 'Append today\'s decisions to the \'Decisions\' section of my Weekly Ops note',
   },
   {
     title: 'Research & writing',
-    description: 'Pull together scattered notes into an outline. Restructure a draft. Let your AI read what you\'ve already written and help shape it.',
-    prompt: 'Help me restructure the outline in my \'Product Launch\' note',
+    description: 'Pull every note under a tag subtree into a synthesis. Restructure a long draft section by section — leaving the rest of the note untouched.',
+    prompt: 'Pull every note under #research/llm-evals and outline a survey',
   },
   {
     title: 'Content creation',
-    description: 'Turn your notes into blog posts, newsletters, or documentation. Your AI reads your source material and drafts from what you\'ve already captured.',
-    prompt: 'Find my research notes on MCP servers and draft a blog post outline',
+    description: 'Draft from what you already wrote. The AI reads your sources, then creates new notes — or extends existing ones at a precise heading — without trampling anything.',
+    prompt: 'Find my notes tagged #blog/drafts and draft this week\'s post outline',
   },
 ];
 ---
@@ -29,7 +29,7 @@ const useCases = [
       What you can do
     </h2>
     <p class="mt-4 text-text-secondary leading-relaxed">
-      Real things people do when their notes are one prompt away.
+      Real things people do with a deep library one prompt away.
     </p>
   </div>
 
