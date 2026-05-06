@@ -324,6 +324,10 @@ Use bear-search-notes to find the correct note identifier.`);
 
         if (createdNoteId) {
           responseLines.push(`Note ID: ${createdNoteId}`);
+        } else if (title) {
+          responseLines.push(
+            'Note ID: unknown — the create request was sent, but the new note could not be confirmed. Check in Bear to verify.'
+          );
         }
 
         const hasContent = title || text || tags;
@@ -630,10 +634,14 @@ Remove the header parameter to replace the full note body, or change scope to "s
       },
     },
     async ({ file_path, filename, id, title }): Promise<CallToolResult> => {
+      if (!id && !title) {
+        return createErrorResponse(
+          'Either note ID or title is required. Use bear-search-notes to find the note ID.'
+        );
+      }
       logger.info(
         `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
       );
-
       try {
         const attachment = readAttachmentFile(file_path);
         if (!attachment.ok) return createErrorResponse(attachment.error);
