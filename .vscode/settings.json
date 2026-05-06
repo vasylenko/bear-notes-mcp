@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "vasylenko",
+        "projectKey": "vasylenko_bear-notes-mcp"
+    }
+}

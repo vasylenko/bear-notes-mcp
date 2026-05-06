@@ -321,19 +321,19 @@ function buildFilterClauses(spec: SearchSpec): FilterBuild {
     // would drop the `+` → space step and silently miss tags whose stored
     // form encodes spaces as `+` (Bear's storage convention).
     const normalizedTag = decodeTagName(spec.tag);
-    const escapedTag = normalizedTag.replace(/[%_\\]/g, '\\$&');
+    const escapedTag = normalizedTag.replaceAll(/[%_\\]/g, String.raw`\$&`);
     // Both branches apply hierarchical match (`tag = X OR tag LIKE 'X/%'`) so
     // a parent-tag query catches notes filed under children. The pinned branch
     // adds `pinned_in_tag = 1` so it picks up only the per-tag pinning relation,
     // not globally-pinned notes that happen to also carry the tag.
     if (spec.pinned === true) {
       clauses.push(
-        "n.rowid IN (SELECT rowid FROM note_tags WHERE pinned_in_tag = 1 AND (tag = ? OR tag LIKE ? || '/%' ESCAPE '\\'))"
+        String.raw`n.rowid IN (SELECT rowid FROM note_tags WHERE pinned_in_tag = 1 AND (tag = ? OR tag LIKE ? || '/%' ESCAPE '\'))`
       );
       params.push(normalizedTag, escapedTag);
     } else {
       clauses.push(
-        "n.rowid IN (SELECT rowid FROM note_tags WHERE tag = ? OR tag LIKE ? || '/%' ESCAPE '\\')"
+        String.raw`n.rowid IN (SELECT rowid FROM note_tags WHERE tag = ? OR tag LIKE ? || '/%' ESCAPE '\')`
       );
       params.push(normalizedTag, escapedTag);
     }

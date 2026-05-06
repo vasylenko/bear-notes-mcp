@@ -123,11 +123,11 @@ export function cleanupTestNotes(prefix: string): void {
   try {
     // Escape LIKE wildcards in the prefix itself so a TEST_PREFIX containing
     // `%` or `_` (none currently, but cheap insurance) doesn't widen the match.
-    const escapedPrefix = prefix.replace(/[%_\\]/g, '\\$&');
+    const escapedPrefix = prefix.replaceAll(/[%_\\]/g, String.raw`\$&`);
     const rows = db
       .prepare(
         'SELECT ZUNIQUEIDENTIFIER as uuid FROM ZSFNOTE ' +
-          "WHERE ZTITLE LIKE ? || '%' ESCAPE '\\' " +
+          String.raw`WHERE ZTITLE LIKE ? || '%' ESCAPE '\' ` +
           'AND ZTRASHED = 0 AND ZARCHIVED = 0 AND ZENCRYPTED = 0'
       )
       .all(escapedPrefix) as Array<{ uuid: string }>;

@@ -151,95 +151,104 @@ function spec(overrides: Partial<SearchSpec> = {}): SearchSpec {
   return { limit: 5, ...overrides };
 }
 
+// Owns the synthetic bear DB lifecycle without forcing buildIndex. Drift and
+// ensureFreshIndex tests need bearDb available across build → mutate → check
+// sequences, so the index lifecycle belongs inside the test body, not around it.
+function withBearDb<T>(notes: SyntheticNote[], fn: (bearDb: DatabaseSync) => T): T {
+  const bearDb = buildSyntheticBearDb(notes);
+  try {
+    return fn(bearDb);
+  } finally {
+    bearDb.close();
+  }
+}
+
+// Build-and-inspect wrapper for tests that only assert on the freshly built
+// index. Composes withBearDb so both DB and memDb close even if assertions throw.
+function withFixture<T>(notes: SyntheticNote[], fn: (memDb: DatabaseSync) => T): T {
+  return withBearDb(notes, (bearDb) => {
+    const state = buildIndex(bearDb);
+    try {
+      return fn(state.memDb);
+    } finally {
+      state.memDb.close();
+    }
+  });
+}
+
 describe('buildIndex', () => {
   afterEach(() => reset());
 
   it('builds an FTS5 index from non-trashed/non-archived/non-encrypted notes', () => {
-    const bearDb = buildSyntheticBearDb([
-      { pk: 1, title: 'Active note one', text: 'hello world' },
-      { pk: 2, title: 'Active note two', text: 'goodbye world' },
-      { pk: 3, title: 'Trashed note', text: 'should be excluded', trashed: true },
-      { pk: 4, title: 'Archived note', text: 'should be excluded', archived: true },
-      { pk: 5, title: 'Encrypted note', text: 'should be excluded', encrypted: true },
-    ]);
-    try {
-      const state = buildIndex(bearDb);
-      try {
+    withFixture(
+      [
+        { pk: 1, title: 'Active note one', text: 'hello world' },
+        { pk: 2, title: 'Active note two', text: 'goodbye world' },
+        { pk: 3, title: 'Trashed note', text: 'should be excluded', trashed: true },
+        { pk: 4, title: 'Archived note', text: 'should be excluded', archived: true },
+        { pk: 5, title: 'Encrypted note', text: 'should be excluded', encrypted: true },
+      ],
+      (memDb) => {
         const count = (
-          state.memDb.prepare('SELECT COUNT(*) AS c FROM notes').get() as unknown as { c: number }
+          memDb.prepare('SELECT COUNT(*) AS c FROM notes').get() as unknown as { c: number }
         ).c;
         expect(count).toBe(2);
-      } finally {
-        state.memDb.close();
       }
-    } finally {
-      bearDb.close();
-    }
+    );
   });
 
   it('captures OCR text from attached files into the ocr column', () => {
-    const bearDb = buildSyntheticBearDb([
-      {
-        pk: 1,
-        title: 'Note with image',
-        text: 'short body',
-        ocrTexts: ['extracted text from photo', 'second attachment ocr'],
-      },
-    ]);
-    try {
-      const state = buildIndex(bearDb);
-      try {
-        const row = state.memDb
+    withFixture(
+      [
+        {
+          pk: 1,
+          title: 'Note with image',
+          text: 'short body',
+          ocrTexts: ['extracted text from photo', 'second attachment ocr'],
+        },
+      ],
+      (memDb) => {
+        const row = memDb
           .prepare("SELECT ocr FROM notes WHERE bear_id = 'uuid-1'")
           .get() as unknown as { ocr: string };
         expect(row.ocr).toContain('extracted text from photo');
         expect(row.ocr).toContain('second attachment ocr');
-      } finally {
-        state.memDb.close();
       }
-    } finally {
-      bearDb.close();
-    }
+    );
   });
 
   it('populates note_tags with decoded tag names and pinned-in-tag flags', () => {
-    const bearDb = buildSyntheticBearDb([
-      {
-        pk: 1,
-        title: 'Career note',
-        // Bear stores tags URL-encoded with + for spaces; decoding maps to lowercase trimmed.
-        tags: ['Career', 'Career/My+Meetings'],
-        pinnedInTags: ['Career/My+Meetings'],
-      },
-    ]);
-    try {
-      const state = buildIndex(bearDb);
-      try {
-        const tagRows = state.memDb
+    withFixture(
+      [
+        {
+          pk: 1,
+          title: 'Career note',
+          // Bear stores tags URL-encoded with + for spaces; decoding maps to lowercase trimmed.
+          tags: ['Career', 'Career/My+Meetings'],
+          pinnedInTags: ['Career/My+Meetings'],
+        },
+      ],
+      (memDb) => {
+        const tagRows = memDb
           .prepare('SELECT tag, pinned_in_tag FROM note_tags WHERE rowid = 1 ORDER BY tag')
           .all() as unknown as Array<{ tag: string; pinned_in_tag: number }>;
         expect(tagRows).toEqual([
           { tag: 'career', pinned_in_tag: 0 },
           { tag: 'career/my meetings', pinned_in_tag: 1 },
         ]);
-      } finally {
-        state.memDb.close();
       }
-    } finally {
-      bearDb.close();
-    }
+    );
   });
 
   it('marks pinned-globally-OR-in-any-tag in the notes.pinned column', () => {
-    const bearDb = buildSyntheticBearDb([
-      { pk: 1, title: 'Globally pinned', pinned: true },
-      { pk: 2, title: 'Pinned in tag', tags: ['x'], pinnedInTags: ['x'] },
-      { pk: 3, title: 'Not pinned', tags: ['x'] },
-    ]);
-    try {
-      const state = buildIndex(bearDb);
-      try {
-        const rows = state.memDb
+    withFixture(
+      [
+        { pk: 1, title: 'Globally pinned', pinned: true },
+        { pk: 2, title: 'Pinned in tag', tags: ['x'], pinnedInTags: ['x'] },
+        { pk: 3, title: 'Not pinned', tags: ['x'] },
+      ],
+      (memDb) => {
+        const rows = memDb
           .prepare('SELECT rowid, pinned FROM notes ORDER BY rowid')
           .all() as unknown as Array<{ rowid: number; pinned: number }>;
         expect(rows).toEqual([
@@ -247,12 +256,8 @@ describe('buildIndex', () => {
           { rowid: 2, pinned: 1 },
           { rowid: 3, pinned: 0 },
         ]);
-      } finally {
-        state.memDb.close();
       }
-    } finally {
-      bearDb.close();
-    }
+    );
   });
 });
 
@@ -260,11 +265,8 @@ describe('ensureFreshIndex', () => {
   afterEach(() => reset());
 
   it('leaves state = null when buildIndex throws after closing the previous index', () => {
-    // Step 1: populate state with a valid build.
-    const bearDb = buildSyntheticBearDb([
-      { pk: 1, title: 'note', text: 'content', modified: 700_000_000 },
-    ]);
-    try {
+    withBearDb([{ pk: 1, title: 'note', text: 'content', modified: 700_000_000 }], (bearDb) => {
+      // Step 1: populate state with a valid build.
       ensureFreshIndex(bearDb);
       expect(getState()).not.toBeNull();
 
@@ -276,7 +278,7 @@ describe('ensureFreshIndex', () => {
       bearDb
         .prepare(
           `INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZTEXT, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZMODIFICATIONDATE)
-           VALUES (?, ?, ?, ?, ?, ?)`
+             VALUES (?, ?, ?, ?, ?, ?)`
         )
         .run(2, 'second', 'more content', 'uuid-2', 700_000_001, 700_000_001);
 
@@ -286,44 +288,40 @@ describe('ensureFreshIndex', () => {
       // condition.
       expect(() => ensureFreshIndex(bearDb)).toThrow();
       expect(getState()).toBeNull();
-    } finally {
-      bearDb.close();
-    }
+    });
   });
 
   it('rebuilds successfully on the next call after a previous rebuild failure', () => {
     // Verifies the recovery half of the invariant: once state is null,
     // a subsequent ensureFreshIndex against a healthy DB rebuilds cleanly.
-    const brokenDb = buildSyntheticBearDb([
-      { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
-    ]);
-    const healthyDb = buildSyntheticBearDb([
-      { pk: 1, title: 'recovered', text: 'works again', modified: 700_000_001 },
-    ]);
-    try {
-      ensureFreshIndex(brokenDb);
-      brokenDb.exec('DROP TABLE Z_PRIMARYKEY');
-      brokenDb
-        .prepare(
-          `INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZTEXT, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZMODIFICATIONDATE)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(2, 'b', 'y', 'uuid-2', 700_000_001, 700_000_001);
-      expect(() => ensureFreshIndex(brokenDb)).toThrow();
-      expect(getState()).toBeNull();
+    withBearDb([{ pk: 1, title: 'a', text: 'x', modified: 700_000_000 }], (brokenDb) => {
+      withBearDb(
+        [{ pk: 1, title: 'recovered', text: 'works again', modified: 700_000_001 }],
+        (healthyDb) => {
+          ensureFreshIndex(brokenDb);
+          brokenDb.exec('DROP TABLE Z_PRIMARYKEY');
+          brokenDb
+            .prepare(
+              `INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZTEXT, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZMODIFICATIONDATE)
+               VALUES (?, ?, ?, ?, ?, ?)`
+            )
+            .run(2, 'b', 'y', 'uuid-2', 700_000_001, 700_000_001);
+          expect(() => ensureFreshIndex(brokenDb)).toThrow();
+          expect(getState()).toBeNull();
 
-      // Recovery: rebuilding against a healthy DB succeeds without a process restart.
-      ensureFreshIndex(healthyDb);
-      const state = getState();
-      expect(state).not.toBeNull();
-      const count = (
-        state!.memDb.prepare('SELECT COUNT(*) AS c FROM notes').get() as unknown as { c: number }
-      ).c;
-      expect(count).toBe(1);
-    } finally {
-      brokenDb.close();
-      healthyDb.close();
-    }
+          // Recovery: rebuilding against a healthy DB succeeds without a process restart.
+          ensureFreshIndex(healthyDb);
+          const state = getState();
+          expect(state).not.toBeNull();
+          const count = (
+            state!.memDb.prepare('SELECT COUNT(*) AS c FROM notes').get() as unknown as {
+              c: number;
+            }
+          ).c;
+          expect(count).toBe(1);
+        }
+      );
+    });
   });
 });
 
@@ -331,22 +329,21 @@ describe('checkDrift', () => {
   afterEach(() => reset());
 
   it('returns false when neither MAX(modified) nor COUNT changed', () => {
-    const bearDb = buildSyntheticBearDb([
-      { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
-      { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
-    ]);
-    try {
-      const state = buildIndex(bearDb);
-      state.memDb.close();
-      expect(checkDrift(bearDb, state.driftKey)).toBe(false);
-    } finally {
-      bearDb.close();
-    }
+    withBearDb(
+      [
+        { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
+        { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
+      ],
+      (bearDb) => {
+        const state = buildIndex(bearDb);
+        state.memDb.close();
+        expect(checkDrift(bearDb, state.driftKey)).toBe(false);
+      }
+    );
   });
 
   it('returns true when a note is added (count changes)', () => {
-    const bearDb = buildSyntheticBearDb([{ pk: 1, title: 'a', text: 'x', modified: 700_000_000 }]);
-    try {
+    withBearDb([{ pk: 1, title: 'a', text: 'x', modified: 700_000_000 }], (bearDb) => {
       const state = buildIndex(bearDb);
       state.memDb.close();
       bearDb
@@ -356,58 +353,44 @@ describe('checkDrift', () => {
         )
         .run(2, 'b', 'y', 'uuid-2', 700_000_000, 700_000_000);
       expect(checkDrift(bearDb, state.driftKey)).toBe(true);
-    } finally {
-      bearDb.close();
-    }
+    });
   });
 
   it('returns true when a note is modified (max changes)', () => {
-    const bearDb = buildSyntheticBearDb([
-      { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
-      { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
-    ]);
-    try {
-      const state = buildIndex(bearDb);
-      state.memDb.close();
-      bearDb.prepare('UPDATE ZSFNOTE SET ZMODIFICATIONDATE = ? WHERE Z_PK = ?').run(700_000_500, 2);
-      expect(checkDrift(bearDb, state.driftKey)).toBe(true);
-    } finally {
-      bearDb.close();
-    }
+    withBearDb(
+      [
+        { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
+        { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
+      ],
+      (bearDb) => {
+        const state = buildIndex(bearDb);
+        state.memDb.close();
+        bearDb
+          .prepare('UPDATE ZSFNOTE SET ZMODIFICATIONDATE = ? WHERE Z_PK = ?')
+          .run(700_000_500, 2);
+        expect(checkDrift(bearDb, state.driftKey)).toBe(true);
+      }
+    );
   });
 
   it('returns true when a note is deleted (count changes)', () => {
-    const bearDb = buildSyntheticBearDb([
-      { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
-      { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
-    ]);
-    try {
-      const state = buildIndex(bearDb);
-      state.memDb.close();
-      bearDb.prepare('UPDATE ZSFNOTE SET ZTRASHED = 1 WHERE Z_PK = ?').run(2);
-      expect(checkDrift(bearDb, state.driftKey)).toBe(true);
-    } finally {
-      bearDb.close();
-    }
+    withBearDb(
+      [
+        { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
+        { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
+      ],
+      (bearDb) => {
+        const state = buildIndex(bearDb);
+        state.memDb.close();
+        bearDb.prepare('UPDATE ZSFNOTE SET ZTRASHED = 1 WHERE Z_PK = ?').run(2);
+        expect(checkDrift(bearDb, state.driftKey)).toBe(true);
+      }
+    );
   });
 });
 
 describe('executeQueryWithCount', () => {
   afterEach(() => reset());
-
-  function withFixture<T>(notes: SyntheticNote[], fn: (memDb: DatabaseSync) => T): T {
-    const bearDb = buildSyntheticBearDb(notes);
-    try {
-      const state = buildIndex(bearDb);
-      try {
-        return fn(state.memDb);
-      } finally {
-        state.memDb.close();
-      }
-    } finally {
-      bearDb.close();
-    }
-  }
 
   it('multi-word query density-ranks via BM25 (not mod-date)', () => {
     // Both notes contain all three query tokens. Dense is older but has many

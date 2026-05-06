@@ -459,7 +459,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           // Bear bodies often include internal newlines; collapse so each
           // snippet renders as one line.
           if (note.snippet) {
-            const flat = note.snippet.replace(/\s+/g, ' ').trim();
+            const flat = note.snippet.replaceAll(/\s+/g, ' ').trim();
             resultLines.push(`   ${flat}`);
           }
           resultLines.push(`   Created: ${createdDate}`);
@@ -624,7 +624,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
       },
       annotations: {
         readOnlyHint: false,
-        destructiveHint: true,
+        destructiveHint: false,
         idempotentHint: false,
         openWorldHint: true,
       },
@@ -633,12 +633,6 @@ Remove the header parameter to replace the full note body, or change scope to "s
       logger.info(
         `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
       );
-
-      if (!id && !title) {
-        return createErrorResponse(
-          'Either note ID or title is required. Use bear-search-notes to find the note ID.'
-        );
-      }
 
       try {
         const attachment = readAttachmentFile(file_path);
@@ -650,8 +644,12 @@ Remove the header parameter to replace the full note body, or change scope to "s
         // so the success response can always carry note title + ID per the
         // mutation-response rule. Resolving here also avoids attempting a Bear
         // write against an ambiguous or non-existent title.
-        let resolvedId = id;
-        if (!resolvedId && title) {
+        // Folding the no-criterion guard into the same if/else chain lets TS
+        // infer resolvedId as `string` without a non-null assertion.
+        let resolvedId: string;
+        if (id) {
+          resolvedId = id;
+        } else if (title) {
           const matches = findNotesByTitle(title);
           if (matches.length === 0) {
             return createErrorResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
@@ -669,12 +667,13 @@ ${matchList}
 Use bear-add-file with a specific ID to attach to the desired note.`);
           }
           resolvedId = matches[0].identifier;
+        } else {
+          return createErrorResponse(
+            'Either note ID or title is required. Use bear-search-notes to find the note ID.'
+          );
         }
 
-        // resolvedId is guaranteed defined here (the !id && !title guard above
-        // rejected the no-criterion case). Fail fast with a helpful message
-        // rather than letting a cryptic Bear error reach the caller.
-        const existingNote = getNoteContent(resolvedId!);
+        const existingNote = getNoteContent(resolvedId);
         if (!existingNote) {
           return createErrorResponse(`Note with ID '${resolvedId}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
