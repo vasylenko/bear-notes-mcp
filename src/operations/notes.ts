@@ -336,6 +336,10 @@ export async function awaitNoteCreation(title: string): Promise<string | null> {
  * Parses a date string and returns a JavaScript Date object.
  * Supports relative dates ("today", "yesterday", "last week", "last month") and ISO date strings.
  *
+ * ISO date-only inputs (YYYY-MM-DD) are interpreted in the local timezone so
+ * downstream local-time bound snapping (setHours) doesn't cross day boundaries
+ * for non-UTC users. Datetime inputs with explicit TZ keep their TZ semantics.
+ *
  * @param dateString - Date string to parse (e.g., "today", "2024-01-15", "last week")
  * @returns Parsed Date object
  * @throws Error if the date string is invalid
@@ -379,7 +383,35 @@ export function parseDateString(dateString: string): Date {
       return endOfLastMonth;
     }
     default: {
-      // Try parsing as ISO date or other standard formats as fallback for user-provided explicit dates
+      // ECMA-262 §21.4.3.2 parses date-only ISO forms (YYYY-MM-DD) as UTC
+      // midnight, but callers snap bounds with local-time setHours — the
+      // mismatch produces previous-day bounds for negative-UTC users
+      // (PDT user typing 2026-04-15 lands on 2026-04-14 07:00 UTC). Match
+      // the relative-date branches above by constructing in local time so
+      // parse and snap agree. Datetime forms with explicit TZ
+      // ("2026-04-15T10:00:00Z") fall through and keep TZ semantics.
+      const dateOnly = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(dateString.trim());
+      if (dateOnly) {
+        const y = Number(dateOnly[1]);
+        const m = Number(dateOnly[2]);
+        const d = Number(dateOnly[3]);
+        const localDate = new Date(y, m - 1, d);
+        // Date(y, m, d) silently rolls over invalid components (Feb 30 → Mar 2);
+        // verify parts round-trip to keep the pre-fix rejection contract.
+        if (
+          localDate.getFullYear() !== y ||
+          localDate.getMonth() !== m - 1 ||
+          localDate.getDate() !== d
+        ) {
+          logAndThrow(
+            `Invalid date format: "${dateString}". Use ISO format (YYYY-MM-DD) or relative dates (today, yesterday, last week, last month, start of last month, end of last month).`
+          );
+        }
+        return localDate;
+      }
+
+      // Fallback for user-provided explicit datetime strings (RFC 2822, full
+      // ISO with timezone offset, etc.) — these carry their own TZ semantics.
       const parsed = new Date(dateString);
       if (isNaN(parsed.getTime())) {
         logAndThrow(
