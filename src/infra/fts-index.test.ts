@@ -176,6 +176,18 @@ function withFixture<T>(notes: SyntheticNote[], fn: (memDb: DatabaseSync) => T):
   });
 }
 
+// Common shape for "given fixture + term, expect this exact ranked id list."
+// Most query-behavior tests follow this pattern; collapsing it into a helper
+// keeps each `it` focused on the input/output contract rather than wiring.
+// Tests with non-`toEqual` assertions (e.g. partial-overlap matches) keep
+// their own body since they encode different semantics.
+function expectQueryMatches(notes: SyntheticNote[], term: string, expectedIds: string[]): void {
+  withFixture(notes, (memDb) => {
+    const ids = executeQueryWithCount(memDb, spec({ term })).notes.map((r) => r.identifier);
+    expect(ids).toEqual(expectedIds);
+  });
+}
+
 describe('buildIndex', () => {
   afterEach(() => reset());
 
@@ -802,7 +814,7 @@ describe('executeQueryWithCount', () => {
     // Without the no-whitespace heuristic, OR-rank fallthrough would flood
     // results with notes containing any single token (the note containing
     // just "bear" would match `bear-notes-mcp`, etc.).
-    withFixture(
+    expectQueryMatches(
       [
         { pk: 1, title: 'Project notes', text: 'working on bear-notes-mcp this week' },
         // Notes that would over-match under the OR-rank fallthrough — must NOT
@@ -810,12 +822,8 @@ describe('executeQueryWithCount', () => {
         { pk: 2, title: 'Bear sightings', text: 'I saw a bear in the woods' },
         { pk: 3, title: 'Other', text: 'notes about an unrelated mcp library' },
       ],
-      (memDb) => {
-        const ids = executeQueryWithCount(memDb, spec({ term: 'bear-notes-mcp' })).notes.map(
-          (r) => r.identifier
-        );
-        expect(ids).toEqual(['uuid-1']);
-      }
+      'bear-notes-mcp',
+      ['uuid-1']
     );
   });
 
@@ -823,19 +831,15 @@ describe('executeQueryWithCount', () => {
     // Same heuristic, exercised on a date-style identifier (digits + hyphens).
     // unicode61 tokenizes both "2026-04-15" and "2026 04 15" identically, so
     // the phrase-quote matches both forms in the indexed corpus.
-    withFixture(
+    expectQueryMatches(
       [
         { pk: 1, title: 'Daily log', text: 'meeting on 2026-04-15 covered Q2 goals' },
         // Year-only mention must not match — would have flooded under OR-rank
         // (`2026 OR 04 OR 15`).
         { pk: 2, title: 'Year recap', text: 'looking back at 2026 highlights' },
       ],
-      (memDb) => {
-        const ids = executeQueryWithCount(memDb, spec({ term: '2026-04-15' })).notes.map(
-          (r) => r.identifier
-        );
-        expect(ids).toEqual(['uuid-1']);
-      }
+      '2026-04-15',
+      ['uuid-1']
     );
   });
 
@@ -846,19 +850,15 @@ describe('executeQueryWithCount', () => {
     // Without the guard, prepareFTS5Term would produce invalid `"profess
     // engineer*"` shaped phrases on inputs like `profess-engineer*` (token
     // count > 1) and surface as a syntax error to the caller.
-    withFixture(
+    // Tokenizes to [profess, engineer*] then OR-joins; note 1 matches via
+    // "profess" and "engineering" (prefix match), note 2 doesn't.
+    expectQueryMatches(
       [
         { pk: 1, title: 'A', text: 'profess and engineering' },
         { pk: 2, title: 'B', text: 'unrelated content' },
       ],
-      (memDb) => {
-        // Tokenizes to [profess, engineer*] then OR-joins; note 1 matches
-        // via "profess" and "engineering" (prefix match), note 2 doesn't.
-        const ids = executeQueryWithCount(memDb, spec({ term: 'profess-engineer*' })).notes.map(
-          (r) => r.identifier
-        );
-        expect(ids).toEqual(['uuid-1']);
-      }
+      'profess-engineer*',
+      ['uuid-1']
     );
   });
 
