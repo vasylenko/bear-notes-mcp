@@ -7,15 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Search ranks results by relevance** — `bear-search-notes` now ranks notes by how well they match your query across titles, body, and OCR-extracted text from attachments, so the most relevant notes surface first instead of the most recently edited. Multi-word natural-language queries like `quarterly planning offsite notes` work as expected: notes covering more of the query rank higher.
-- **Tag features keep working through Bear schema updates** — tag search and pinned-tag filters previously relied on hardcoded internal IDs that a future Bear release could silently break. They now resolve those IDs at runtime, so tag-aware search keeps working across Bear updates.
-- **`bear-add-file` enforces a stricter input policy** (breaking) — rejects symbolic links, non-regular files (directories, devices, FIFOs), empty files, and any file larger than 25 MB. Inputs that previously succeeded under one of these conditions now return an error. Most callers will not notice; agents passing iCloud/Drafts paths that resolve through a symlink will need to resolve to the real path first.
-- **License changed from MIT to Apache 2.0** — Apache 2.0 keeps the same broadly-permissive posture as MIT but adds an explicit patent grant and requires downstream redistributors to propagate the project's `NOTICE` attribution. End users and direct npm/MCPB consumers see no functional change. See `LICENSE.md` for the full license text and `NOTICE` for the attribution that derivative works must keep visible.
-
 ### Added
 - **Search results include matching snippets** — each result carries a short excerpt around the matched terms so you can judge relevance without opening every note.
 - **Plain-language errors for unprocessable search queries** — when a query can't be parsed, the response says so in plain language and points at the offending input instead of leaking a raw SQLite error.
+
+### Changed
+- **Search ranks results by relevance** — `bear-search-notes` now ranks notes by how well they match your query across titles, body, and OCR-extracted text from attachments. The most relevant notes surface first instead of the most recently edited; multi-word queries like `quarterly planning offsite notes` rank notes covering more of the query terms higher.
+- **Tag features keep working through Bear schema updates** — tag search and pinned-tag filters now resolve Bear's internal join-table IDs at runtime instead of relying on hardcoded names, so a future Bear schema renumber won't silently break them.
+- **`bear-add-file` enforces a stricter input policy** (breaking) — rejects symbolic links, non-regular files (directories, devices, FIFOs), empty files, and any file larger than 25 MB. Inputs that previously succeeded under one of these conditions now return an error. Most callers will not notice; agents passing iCloud/Drafts paths that resolve through a symlink will need to resolve to the real path first.
+- **License changed from MIT to Apache 2.0** — same broadly-permissive posture, plus an explicit patent grant. End users see no functional change; redistributors of derivative works must keep the new `NOTICE` attribution. See `LICENSE.md`.
 
 ### Removed
 - **`bear-add-file` no longer accepts `base64_content`** (breaking) — pass `file_path` instead. Sending base64 through tool input wasted thousands of LLM tokens per attachment for no benefit; the server has read files from disk natively since 2.9.0. Existing callers that built base64 blobs must write them to a file on disk and pass the path.
