@@ -82,11 +82,9 @@ tests:
   - description: 'Verbatim quote from a known recent note'
     vars:
       prompt: |
-        Search my Bear notes — I'm prepping for a 1:1 with a senior engineer
-        who keeps over-engineering everything, looking for complexity even
-        when there isn't any. I read something a while back with concrete
-        coaching tactics for that exact situation. What were the suggested
-        moves?
+        Search my Bear notes — got a 1:1 coming up with a senior eng
+        who keeps overengineering. I saved something on how to coach
+        that. What were the tips?
     assert:
       - type: icontains-any
         value:
@@ -100,11 +98,9 @@ tests:
   - description: 'Specific saved prompt discoverable among many similar'
     vars:
       prompt: |
-        Search my Bear notes — I'm doing a final editing pass on a blog
-        draft and I want to use the prompt I built specifically for
-        catching verbose, padded writing — sentences that drag, repeated
-        explanations, that kind of bloat. Can you find that prompt and
-        tell me what patterns it actually checks for?
+        Search my Bear notes — I made a prompt for catching bloated,
+        padded writing in blog drafts. Find it and tell me what it
+        actually flags.
     assert:
       - type: icontains-any
         value:
@@ -118,11 +114,10 @@ tests:
   - description: 'Find a lesson when query words differ from note words'
     vars:
       prompt: |
-        Search my Bear notes — there's an article I bookmarked about how
-        engineering leadership work changes when you move past mostly
-        coordinating execution and start steering direction yourself. The
-        author laid out a short list of activities that define that kind
-        of role. What was the framework, and what was the source?
+        Search my Bear notes — I saved a piece on how eng leadership
+        changes once you go from running execution to setting
+        direction. It had a list of what that role actually does.
+        What's the framework and who wrote it?
     assert:
       - type: icontains-any
         value:
@@ -136,10 +131,9 @@ tests:
   - description: 'Synthesis across multiple related notes'
     vars:
       prompt: |
-        Search my Bear notes — what blog drafts have I sketched around
-        using AI in real engineering work? I want to see the rough list
-        and the angle each one is taking — I'm trying to figure out which
-        to develop next.
+        Search my Bear notes — what blog drafts do I have on using AI
+        in actual eng work? Give me the rough list and the angle each
+        takes. Trying to figure out which to write next.
     assert:
       - type: javascript
         value: |
