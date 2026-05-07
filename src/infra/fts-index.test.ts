@@ -404,48 +404,13 @@ describe('checkDrift', () => {
 describe('executeQueryWithCount', () => {
   afterEach(() => reset());
 
-  it('multi-word query density-ranks via BM25 (not mod-date)', () => {
-    // Both notes contain all three query tokens. Dense is older but has many
-    // occurrences; Sparse is newer but has one occurrence of each token. A
-    // mod-date ordering would put Sparse first; BM25 puts Dense first because
-    // of the much higher term density. Since both notes contain all three
-    // tokens, this isolates the BM25-vs-mod-date axis from the OR-rank /
-    // partial-overlap axis (covered by the next test).
-    withFixture(
-      [
-        {
-          pk: 1,
-          title: 'Dense',
-          text: 'professional posture interview professional interview professional posture',
-          modified: 700_000_000, // older
-        },
-        {
-          pk: 2,
-          title: 'Sparse',
-          text: 'professional standalone. somewhere later, posture appears. and finally, interview.',
-          modified: 700_999_999, // newer
-        },
-      ],
-      (memDb) => {
-        const results = executeQueryWithCount(
-          memDb,
-          spec({ term: 'professional posture interview' })
-        ).notes;
-        // Both must match; Dense must come first. If ORDER BY bm25(notes) is
-        // removed and ordering reverts to mod-date DESC, Sparse would land
-        // first and this assertion would fail — that's the regression guard.
-        expect(results.map((r) => r.identifier)).toEqual(['uuid-1', 'uuid-2']);
-      }
-    );
-  });
-
-  it('multi-word natural query OR-ranks: notes missing one term still match', () => {
+  it('multi-word natural query: notes missing one term still match (OR-join, not implicit AND)', () => {
     // Regression guard for the FTS5 implicit-AND trap: under the bare-AND
     // default, a note missing any single query token would be filtered out
-    // before BM25 ever runs, even if it densely matches the other tokens.
-    // prepareFTS5Term tokenizes bare multi-word input and OR-joins it so
-    // BM25 ranks by overlap density — the full-overlap note ranks first,
-    // the partial-overlap note still appears, the no-overlap note doesn't.
+    // even if it densely matches the other tokens. prepareFTS5Term tokenizes
+    // bare multi-word input and OR-joins it so partial-overlap notes still
+    // surface; relevance ranking is covered by the eval suite, not asserted
+    // here.
     withFixture(
       [
         { pk: 1, title: 'Full', text: 'alphafruit betafruit gammafruit' },
@@ -461,8 +426,6 @@ describe('executeQueryWithCount', () => {
         expect(ids).toContain('uuid-1');
         expect(ids).toContain('uuid-2'); // would be missing under implicit-AND
         expect(ids).not.toContain('uuid-3');
-        // Density rank: Full (3 of 3) before Partial (2 of 3).
-        expect(ids.indexOf('uuid-1')).toBeLessThan(ids.indexOf('uuid-2'));
       }
     );
   });
