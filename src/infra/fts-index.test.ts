@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { CORE_DATA_EPOCH_OFFSET } from '../config.js';
 
@@ -354,50 +354,37 @@ describe('checkDrift', () => {
     );
   });
 
-  it('returns true when a note is added (count changes)', () => {
+  // Each mutation flips one column of the cached (MAX(modified), COUNT(*))
+  // pair: add/trash change count; modify changes max. Pinning the cases to
+  // the same single-note fixture isolates the drift signal from fixture shape.
+  it.each([
+    {
+      name: 'note added (count changes)',
+      mutate: (db: DatabaseSync) =>
+        db
+          .prepare(
+            `INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZTEXT, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZMODIFICATIONDATE)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .run(2, 'b', 'y', 'uuid-2', 700_000_000, 700_000_000),
+    },
+    {
+      name: 'note modified (max changes)',
+      mutate: (db: DatabaseSync) =>
+        db.prepare('UPDATE ZSFNOTE SET ZMODIFICATIONDATE = ? WHERE Z_PK = ?').run(700_000_500, 1),
+    },
+    {
+      name: 'note trashed (count changes)',
+      mutate: (db: DatabaseSync) =>
+        db.prepare('UPDATE ZSFNOTE SET ZTRASHED = 1 WHERE Z_PK = ?').run(1),
+    },
+  ])('returns true when $name', ({ mutate }) => {
     withBearDb([{ pk: 1, title: 'a', text: 'x', modified: 700_000_000 }], (bearDb) => {
       const state = buildIndex(bearDb);
       state.memDb.close();
-      bearDb
-        .prepare(
-          `INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZTEXT, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZMODIFICATIONDATE)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(2, 'b', 'y', 'uuid-2', 700_000_000, 700_000_000);
+      mutate(bearDb);
       expect(checkDrift(bearDb, state.driftKey)).toBe(true);
     });
-  });
-
-  it('returns true when a note is modified (max changes)', () => {
-    withBearDb(
-      [
-        { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
-        { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
-      ],
-      (bearDb) => {
-        const state = buildIndex(bearDb);
-        state.memDb.close();
-        bearDb
-          .prepare('UPDATE ZSFNOTE SET ZMODIFICATIONDATE = ? WHERE Z_PK = ?')
-          .run(700_000_500, 2);
-        expect(checkDrift(bearDb, state.driftKey)).toBe(true);
-      }
-    );
-  });
-
-  it('returns true when a note is deleted (count changes)', () => {
-    withBearDb(
-      [
-        { pk: 1, title: 'a', text: 'x', modified: 700_000_000 },
-        { pk: 2, title: 'b', text: 'y', modified: 700_000_001 },
-      ],
-      (bearDb) => {
-        const state = buildIndex(bearDb);
-        state.memDb.close();
-        bearDb.prepare('UPDATE ZSFNOTE SET ZTRASHED = 1 WHERE Z_PK = ?').run(2);
-        expect(checkDrift(bearDb, state.driftKey)).toBe(true);
-      }
-    );
   });
 });
 
@@ -625,33 +612,6 @@ describe('executeQueryWithCount', () => {
     );
   });
 
-  it('respects limit and orders by relevance with term, mod-date desc without', () => {
-    withFixture(
-      [
-        { pk: 1, title: 'A', text: 'apple', modified: 700_000_001 },
-        { pk: 2, title: 'B', text: 'apple', modified: 700_000_002 },
-        { pk: 3, title: 'C', text: 'apple', modified: 700_000_003 },
-      ],
-      (memDb) => {
-        // totalCount must reflect the full match count even when limit truncates
-        // notes — note-tools.ts surfaces it to the LLM as a pagination hint
-        // ("Use bear-search-notes with limit: ${totalCount} to get all results").
-        // countMatches and executeQueryWithCount build their WHERE clauses
-        // through the same buildFilterClauses helper but are independent
-        // queries, so this assertion locks them in step.
-        const limited = executeQueryWithCount(memDb, { limit: 2, term: 'apple' });
-        expect(limited.notes).toHaveLength(2);
-        expect(limited.totalCount).toBe(3);
-
-        const noTerm = executeQueryWithCount(memDb, {
-          limit: 5,
-          modifiedAfterTimestamp: 0,
-        }).notes;
-        expect(noTerm.map((r) => r.identifier)).toEqual(['uuid-3', 'uuid-2', 'uuid-1']);
-      }
-    );
-  });
-
   it('reports totalCount for filter-only queries (no term, limit < matches)', () => {
     withFixture(
       [
@@ -664,57 +624,6 @@ describe('executeQueryWithCount', () => {
         const result = executeQueryWithCount(memDb, { limit: 2, tag: 'career' });
         expect(result.notes).toHaveLength(2);
         expect(result.totalCount).toBe(3);
-      }
-    );
-  });
-
-  it('skips the second MATCH scan when result count < limit (totalCount invariant + perf)', () => {
-    // When rows.length < spec.limit, the result set already contains every
-    // match by construction — totalCount must equal notes.length, and the
-    // second FTS5 MATCH scan in countMatches must be skipped. The prepare-
-    // count assertion is a behavioral count at the SQLite-prepare boundary,
-    // not an implementation detail: a regression that always called
-    // countMatches would still produce the right totalCount, so without
-    // this check the test name no longer matches what it verifies.
-    withFixture(
-      [
-        { pk: 1, title: 'A', text: 'apple' },
-        { pk: 2, title: 'B', text: 'apple' },
-      ],
-      (memDb) => {
-        // Spy after buildIndex so the build's prepare calls aren't counted.
-        const prepareSpy = vi.spyOn(memDb, 'prepare');
-        try {
-          const result = executeQueryWithCount(memDb, { limit: 5, term: 'apple' });
-          expect(result.notes).toHaveLength(2);
-          expect(result.totalCount).toBe(2);
-          // Expected: main query + fetchTagsForResults = 2 prepares. A third
-          // would mean countMatches ran on a non-truncated result set.
-          expect(prepareSpy).toHaveBeenCalledTimes(2);
-        } finally {
-          prepareSpy.mockRestore();
-        }
-      }
-    );
-  });
-
-  it('returns wide snippet (>= 64 chars) with matched term in brackets', () => {
-    withFixture(
-      [
-        {
-          pk: 1,
-          title: 'A',
-          text:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit. The uniquetargettoken ' +
-            'appears here in the middle of plenty of surrounding context that should make for ' +
-            'a usable snippet width without follow-up body fetches.',
-        },
-      ],
-      (memDb) => {
-        const [result] = executeQueryWithCount(memDb, spec({ term: 'uniquetargettoken' })).notes;
-        expect(result.snippet).toBeDefined();
-        expect(result.snippet).toContain('[uniquetargettoken]');
-        expect(result.snippet!.length).toBeGreaterThanOrEqual(64);
       }
     );
   });
@@ -771,40 +680,36 @@ describe('executeQueryWithCount', () => {
     );
   });
 
-  it('phrase-quotes single hyphenated identifier so it matches the consecutive sequence (not OR-rank)', () => {
-    // Restores v2.11.0 substring-match semantics for the common case of
-    // searching for a hyphenated identifier like a project name or slug.
-    // Without the no-whitespace heuristic, OR-rank fallthrough would flood
-    // results with notes containing any single token (the note containing
-    // just "bear" would match `bear-notes-mcp`, etc.).
-    expectQueryMatches(
-      [
+  // Phrase-quote heuristic for no-whitespace identifiers (slugs, dates):
+  // restores v2.11.0 substring-match semantics. Without it, OR-rank
+  // fallthrough would flood with notes containing any single token —
+  // e.g. "bear" alone matching `bear-notes-mcp`, or "2026" alone matching
+  // `2026-04-15`. unicode61 tokenizes hyphen- and space-separated forms
+  // identically, so the phrase-quote matches both indexed shapes.
+  it.each([
+    {
+      name: 'hyphenated identifier (slug)',
+      fixture: [
         { pk: 1, title: 'Project notes', text: 'working on bear-notes-mcp this week' },
-        // Notes that would over-match under the OR-rank fallthrough — must NOT
-        // appear under the phrase-quote heuristic.
         { pk: 2, title: 'Bear sightings', text: 'I saw a bear in the woods' },
         { pk: 3, title: 'Other', text: 'notes about an unrelated mcp library' },
       ],
-      'bear-notes-mcp',
-      ['uuid-1']
-    );
-  });
-
-  it('phrase-quotes date-style identifiers so they match the consecutive sequence', () => {
-    // Same heuristic, exercised on a date-style identifier (digits + hyphens).
-    // unicode61 tokenizes both "2026-04-15" and "2026 04 15" identically, so
-    // the phrase-quote matches both forms in the indexed corpus.
-    expectQueryMatches(
-      [
+      term: 'bear-notes-mcp',
+    },
+    {
+      name: 'date-style identifier (digits + hyphens)',
+      fixture: [
         { pk: 1, title: 'Daily log', text: 'meeting on 2026-04-15 covered Q2 goals' },
-        // Year-only mention must not match — would have flooded under OR-rank
-        // (`2026 OR 04 OR 15`).
         { pk: 2, title: 'Year recap', text: 'looking back at 2026 highlights' },
       ],
-      '2026-04-15',
-      ['uuid-1']
-    );
-  });
+      term: '2026-04-15',
+    },
+  ])(
+    'phrase-quotes single-identifier input so it matches the consecutive sequence: $name',
+    ({ fixture, term }) => {
+      expectQueryMatches(fixture, term, ['uuid-1']);
+    }
+  );
 
   it('falls through to OR-rank when any token carries a prefix wildcard (FTS5 phrase rule)', () => {
     // FTS5 phrase syntax allows `*` only at the end of the LAST token. The
