@@ -1,7 +1,7 @@
 {
   "name": "bear-notes-mcp",
   "version": "3.0.0",
-  "description": "Bear Notes MCP server with TypeScript and native SQLite",
+  "description": "Opinionated MCP for Bear Notes. Relevance-ranked search across titles, bodies, hierarchical tags. Offline-first.",
   "type": "module",
   "main": "dist/main.js",
   "scripts": {

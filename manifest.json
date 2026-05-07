@@ -5,8 +5,8 @@
   "version": "3.0.0",
   "icon": "icon.png",
   "screenshots": ["screenshots/search-demo.png"],
-  "description": "Bear Notes MCP server with TypeScript and native SQLite. Provides comprehensive Bear Notes integration for creating, searching, reading, and modifying notes.",
-  "long_description": "This extension provides comprehensive Bear Notes integration through a TypeScript MCP server using native Node.js SQLite. It enables creating, searching, reading, and modifying Bear notes directly from Claude Desktop with full type safety and modern JavaScript features.",
+  "description": "Opinionated MCP for Bear Notes. Relevance-ranked search across titles, bodies, hierarchical tags. Offline-first.",
+  "long_description": "Unofficial, opinionated MCP for Bear Notes — built around relevance-ranked search instead of substring matching. Results come ranked across titles, bodies, and hierarchical tags, with snippets and combinable filters (tag, date, pinned). Reads run direct against Bear's SQLite database, no Bear app required for queries. Offline-first, network-free, works with any MCP client.",
   "author": {
     "name": "Serhii Vasylenko",
     "email": "serhii@vasylenko.info",

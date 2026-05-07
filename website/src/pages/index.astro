@@ -2,9 +2,9 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
 import Demo from '../components/Demo.astro';
-import WhySection from '../components/WhySection.astro';
 import FeatureGrid from '../components/FeatureGrid.astro';
 import UseCases from '../components/UseCases.astro';
+import WhoIsThisFor from '../components/WhoIsThisFor.astro';
 import InstallGuide from '../components/InstallGuide.astro';
 import FAQ from '../components/FAQ.astro';
 
@@ -17,6 +17,10 @@ const cx = 'mx-auto max-w-5xl px-4 sm:px-6 lg:px-8';
     <Demo />
   </div>
 
+  <div class={cx}>
+    <WhoIsThisFor />
+  </div>
+
   <div class="section-elevated">
     <div class={cx}>
       <UseCases />
@@ -25,12 +29,6 @@ const cx = 'mx-auto max-w-5xl px-4 sm:px-6 lg:px-8';
 
   <div class={cx}>
     <FeatureGrid />
-  </div>
-
-  <div class="section-elevated">
-    <div class={cx}>
-      <WhySection />
-    </div>
   </div>
 
   <div class={cx}>

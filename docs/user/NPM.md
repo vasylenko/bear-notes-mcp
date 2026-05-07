@@ -1,17 +1,20 @@
 # Bear Notes MCP Server
 
-Search, read, create, and update your Bear Notes from any AI assistant.
+An unofficial, opinionated MCP for Bear Notes — built around relevance-ranked search across titles, bodies, and hierarchical tags. Reads run direct against Bear's SQLite database. Offline-first, network-free.
 
 **Full documentation and source code: [bear-notes-mcp](https://github.com/vasylenko/bear-notes-mcp)**
 
 ## Key Features
 
 - **12 MCP tools** for full Bear Notes integration
-- **OCR search** across images and PDFs attached to notes
+- **Relevance-ranked search** across titles, bodies, and hierarchical tags — finds the right note, not just literal-match ones
+- **Library-wide tag operations** — rename or delete a tag everywhere, atomically
+- **Sectioned writes** — append at a specific heading or replace a fenced block
 - **Date-based search** with relative dates ("yesterday", "last week", etc.)
-- **Configurable new note convention** for tag placement (opt-in)
 - **Content replacement** for replacing note body or specific sections (opt-in)
-- **Local-only** — no network calls, all data stays on your Mac
+- **Configurable new note convention** for tag placement (opt-in)
+- **Local-first** — direct read-only SQLite, no network, no telemetry, no Bear app needed to query
+- **Supply-chain clean** — native node:sqlite, no unsigned third-party binaries
 
 ## Tools
 
