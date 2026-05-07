@@ -46,6 +46,27 @@ tasks:
       - npm run test:system
 
 
+  # === Dependencies ===
+
+  deps:dev:
+    desc: Update all dev dependencies to latest and pin to exact versions
+    cmds:
+      - |
+        DEPS=$(node -e "console.log(Object.keys(require('./package.json').devDependencies).map(k => k + '@latest').join(' '))")
+        npm install --save-dev --save-exact $DEPS
+      - npm test
+      - echo "Dev deps updated and pinned. Review package.json + package-lock.json diff before committing."
+
+  deps:prod:
+    desc: Update all prod dependencies to latest and pin to exact versions
+    cmds:
+      - |
+        DEPS=$(node -e "console.log(Object.keys(require('./package.json').dependencies).map(k => k + '@latest').join(' '))")
+        npm install --save-exact $DEPS
+      - npm test
+      - echo "Prod deps updated and pinned. Review package.json + package-lock.json diff before committing."
+
+
   # === Website ===
 
   website:dev:
