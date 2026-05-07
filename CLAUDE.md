@@ -42,8 +42,10 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 │   ├── types.ts           # Type definitions
 │   ├── infra/             # Infrastructure layer
 │   │   ├── bear-encoding.ts # Bear encoding/decoding utilities
+│   │   ├── bear-schema.ts # Bear Core Data schema discovery (runtime entity ID resolution)
 │   │   ├── bear-urls.ts   # Bear app URL scheme handlers
 │   │   ├── database.ts    # SQLite database connection
+│   │   ├── fts-index.ts   # In-memory FTS5 search index (build, drift detection, query)
 │   │   └── *.test.ts      # Unit tests (co-located with source files)
 │   ├── operations/        # Business logic layer
 │   │   ├── notes.ts       # Note operations (search, content)
