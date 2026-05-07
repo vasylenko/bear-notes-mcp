@@ -157,8 +157,10 @@ function buildIndex(bearDb: DatabaseSync): IndexState {
       tokenize='unicode61 remove_diacritics 2'
     );
     -- Per-column BM25 weights: title/body equal (both hold primary authored
-    -- content); OCR at 1/4 so OCR-only matches still surface but never outrank
-    -- authored hits at equivalent term frequency. Re-installed on every rebuild
+    -- content); OCR at 1/4 to bias ranking toward authored content. The bias
+    -- is statistical, not strict — BM25 also applies aggregate-doclen length
+    -- normalization on top of the weighted TF, so a very short OCR-only note
+    -- can still outrank a very long body match. Re-installed on every rebuild
     -- because rank config is per-connection state and the :memory: DB is
     -- destroyed when drift triggers a fresh buildIndex. The (notes, rank) form
     -- is FTS5's documented config-channel — without the table-name column the
