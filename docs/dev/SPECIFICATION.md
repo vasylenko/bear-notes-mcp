@@ -62,9 +62,10 @@ All write operations execute in the background without disrupting the user's Bea
         │     (unicode61 tokenizer, remove_diacritics=2) plus a side
         │     note_tags table.
         │
-        └──▶ Run: FTS5 MATCH + bm25() ranking with snippet() output (matched
-              terms wrapped in `[...]`) for term queries; mod-date DESC with
-              a 200-character body-prefix snippet for filter-only queries.
+        └──▶ Run: FTS5 MATCH + ORDER BY rank (per-column BM25 weights:
+              title/body=2.0, ocr=0.5) with snippet() output (matched terms
+              wrapped in `[...]`) for term queries; mod-date DESC with a
+              200-character body-prefix snippet for filter-only queries.
               Filters (tag, pinned, date) compose with AND.
 ```
 
@@ -83,6 +84,8 @@ The atomicity guarantee is in-process only — Bear.app writes the source SQLite
 - **Everything else is tokenized via `[\p{L}\p{N}_]+\*?` and routed by shape.** Unicode-aware on purpose: ASCII `\w` would silently zero-hit any non-ASCII script (Cyrillic, accented Latin, Greek, etc.) because `unicode61` indexes those scripts as ordinary letter tokens. A single bareword (with optional `*` suffix) passes through unchanged so FTS5's prefix rule applies. Single-identifier punctuated input — no whitespace in the trimmed term, no wildcard tokens, e.g. `bear-notes-mcp` or `2026-04-15` — is tokenized and wrapped as an FTS5 phrase so the consecutive token sequence matches, restoring the substring-style precision v2.x's LIKE gave for slugs and identifiers; the no-wildcard guard exists because FTS5 only allows `*` on the last phrase token, so phrase-quoting a wildcard input would silently strip the prefix-match. Multi-word input with whitespace — bare or punctuation-laden — reduces to OR-rank-by-density. Incidental punctuation (brackets, hyphens, colons) within tokens is dropped because unicode61 tokenized the indexed corpus the same way, so query-side punctuation removal mirrors what FTS5 did on the body side. Input with no word characters at all falls through verbatim and surfaces an FTS5 syntax error (caught and reframed by `runWithFts5SyntaxRemap`).
 
 The OR-rank fallthrough is deliberate. FTS5's bareword default is implicit-AND, which silently filters out notes missing any single token — including notes that paraphrase or use a different word for one of the user's referents. The SVA-28 A/B eval found 73% of search calls containing a hyphen or colon returning zero hits under an earlier phrase-quote branch, which turned natural-language input into rigid token-order phrase matches. OR-rank with BM25 lets density-rich notes still surface, matching the user/agent expectation that ranked search returns relevance-ordered results rather than a strict filter.
+
+**Why per-column BM25 weights, not equal.** Bear's search corpus mixes authored text (title and body) with OCR text extracted from attached images and PDFs, which is noisier — receipts, screenshots, photos of unrelated material captured in passing. With default 1.0/1.0/1.0 weights, OCR and authored columns score identically, so a stray OCR hit can outrank an authored hit on length normalization alone. The persistent rank config installed at index build (`INSERT INTO notes(notes, rank) VALUES('rank', 'bm25(2.0, 2.0, 0.5)')`) uses title=2.0, body=2.0, ocr=0.5 — a 4× bias toward authored content. The bias is statistical rather than strict: BM25 also applies aggregate-doclen length normalization on top of the weighted term frequency, so a very short OCR-only note can still outrank a very long authored note. OCR-only matches still surface when nothing else matches (weight is 0.5, not 0). Term-query SQL uses `ORDER BY rank`, not `ORDER BY bm25(notes)`: the no-arg `bm25(notes)` ignores the rank config and always applies default 1.0/1.0/1.0 weights — only the `rank` auxiliary column reads the configured per-column weights. The config lives inside `buildIndex`, not at startup: rank config is per-connection state, and the `:memory:` DB is destroyed and recreated whenever drift triggers a fresh build.
 
 **Schema discovery.** Bear's tag-join table names embed Core Data entity IDs (`Z_5TAGS`, `Z_13TAGS`, etc.) that can shift across Bear schema migrations. `src/infra/bear-schema.ts:discoverBearSchema` resolves the actual names at runtime via `Z_PRIMARYKEY` (Core Data's entity registry). Both the FTS5 build path and `src/operations/tags.ts` consume this utility — no hardcoded entity IDs remain in the codebase.
 

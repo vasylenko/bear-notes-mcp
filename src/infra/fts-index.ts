@@ -156,6 +156,16 @@ function buildIndex(bearDb: DatabaseSync): IndexState {
       pinned UNINDEXED,
       tokenize='unicode61 remove_diacritics 2'
     );
+    -- Per-column BM25 weights: title/body equal (both hold primary authored
+    -- content); OCR at 1/4 to bias ranking toward authored content. The bias
+    -- is statistical, not strict — BM25 also applies aggregate-doclen length
+    -- normalization on top of the weighted TF, so a very short OCR-only note
+    -- can still outrank a very long body match. Re-installed on every rebuild
+    -- because rank config is per-connection state and the :memory: DB is
+    -- destroyed when drift triggers a fresh buildIndex. The (notes, rank) form
+    -- is FTS5's documented config-channel — without the table-name column the
+    -- INSERT is treated as data and creates a phantom row.
+    INSERT INTO notes(notes, rank) VALUES('rank', 'bm25(2.0, 2.0, 0.5)');
     CREATE TABLE note_tags(
       rowid INTEGER,
       tag TEXT,
@@ -458,11 +468,15 @@ function countMatches(memDb: DatabaseSync, spec: SearchSpec): number {
 
 function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchResults {
   const { hasTerm, whereClause, baseParams } = buildSearchSqlAndParams(spec);
-  // With a term: BM25 ranks results, snippet() produces the preview window.
+  // With a term: ORDER BY rank uses the per-column BM25 weights installed at
+  // index build (title/body=2.0, ocr=0.5) — authored hits outrank OCR-only
+  // hits at equal term frequency. (No-arg bm25(notes) would ignore the config
+  // and apply default 1.0/1.0/1.0 — only `rank` reads the installed weights.)
+  // snippet() builds the preview window.
   // Without: fall back to mod-date ordering (the pre-FTS5 contract for filter-
   // only browses) and a leading-200-char preview.
   const projection = hasTerm ? "snippet(notes, -1, '[', ']', '...', 80)" : 'SUBSTR(n.body, 1, 200)';
-  const orderBy = hasTerm ? 'bm25(notes)' : 'n.modified DESC';
+  const orderBy = hasTerm ? 'rank' : 'n.modified DESC';
   const query = `
     SELECT n.bear_id AS identifier,
            n.title, n.created, n.modified, n.pinned, n.rowid AS rowid,

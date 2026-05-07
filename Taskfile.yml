@@ -46,6 +46,27 @@ tasks:
       - npm run test:system
 
 
+  # === Dependencies ===
+
+  deps:dev:
+    desc: Update all dev dependencies to latest and pin to exact versions
+    cmds:
+      - npx npm-check-updates --upgrade --dep dev --removeRange --peer
+      - npm install
+      - npm run test
+      - npm run build
+      - echo "Dev deps updated and pinned. Review package.json + package-lock.json diff before committing."
+
+  deps:prod:
+    desc: Update all prod dependencies to latest and pin to exact versions
+    cmds:
+      - npx npm-check-updates --upgrade --dep prod --removeRange --peer
+      - npm install
+      - npm run test
+      - npm run build
+      - echo "Prod deps updated and pinned. Review package.json + package-lock.json diff before committing."
+
+
   # === Website ===
 
   website:dev:
