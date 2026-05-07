@@ -6,34 +6,51 @@
 
 # Bear Notes MCP Server
 
-Search, read, create, and update your Bear Notes from any AI assistant. Available as a one-click **Claude Desktop extension** and as a standalone **npm package** for any MCP client.
+An unofficial, opinionated MCP server for Bear Notes — built around relevance-ranked search instead of substring matching. Results come ranked across titles, bodies, and hierarchical tags, with snippets and combinable filters (tag, date, pinned). Reads run direct against Bear's SQLite database — no Bear app required for queries.
 
-This **local-only** MCP server reads Bear's SQLite database for fast search with OCR support, and uses Bear's native API for writes. Complete privacy: no external connections, all processing on your Mac.
+Writes route through Bear's own URL handler — atomic and validated by Bear. Offline-first: no network calls, no telemetry, all processing on your Mac. Works with any MCP client — Claude Desktop, Claude Code, Codex, Gemini, Cursor. Ships as a one-click **.mcpb extension** or a standalone **npm package**.
 
 Example prompts:
 
-> Summarize our conversation and create a new Bear note with it
+> Find the deep-dive I wrote on export pipelines, somewhere under #engineering/
 
-> Interview me about my side project idea and capture the key points in a Bear note
+> Append today's decisions to the 'Decisions' section of my Weekly Ops note
 
-> Help me restructure the outline in my "Product Launch" note
+> Pull every note under #research/llm-evals into a survey outline
 
-> Let's brainstorm blog post ideas — save the best ones to my Bear note and refine them as we go
+> Find my notes tagged #blog/drafts and draft this week's post outline
 
 ![](./docs/assets/demo.gif)
 
 ## ✨ Key Features
 
-- **12 MCP tools** for searching, reading, creating, updating, tagging, and archiving notes
-- **OCR search** — finds text inside attached images and PDFs
+- **12 MCP tools** for searching, reading, creating, editing, tagging, and archiving notes
+- **Relevance-ranked search** across titles, bodies, and tags — finds the right note, not just the ones that contained your literal words
 - **Date-based search** with relative dates ("yesterday", "last week", "start of last month")
-- **Tag management** — list tags as a tree, find untagged notes, add tags to notes
+- **Hierarchical tag management** — view tags as a tree with note counts; rename or delete a tag across the whole library
+- **Surgical writes** — append at a specific heading or attach files without rewriting the whole note
 - **New note convention** (opt-in) — place tags right after the title instead of at the bottom
 - **Content replacement** (opt-in) — replace the full note body or a specific section
-- **Local-only** — no network calls, all data stays on your Mac
+- **Local-first** — direct read-only SQLite reads, native `node:sqlite`, no network calls, no telemetry
 
 > [!NOTE]
 > Complete privacy (except the data you send to your AI provider when using an AI assistant, of course): this server makes no external connections. All processing happens locally on your Mac using Bear's own database and API. There is no extra telemetry, usage statistics or anything like that.
+
+## 👤 Who is this for
+
+This is an unofficial, opinionated alternative to the native Bear MCP. It fits when:
+
+- **You have years of notes and substring search isn't enough.** Search ranks results by relevance — titles, bodies, and tag matches across the whole library — so the right note rises to the top, even when your phrasing has drifted.
+
+- **You bounce between MCP clients.** Stdio transport works with Claude Desktop, Claude Code, Codex CLI, Gemini, Cursor, Windsurf — anything that speaks MCP. No per-client glue code, no lock-in.
+
+- **You want to query without pulling Bear forward.** Reads run straight against Bear's SQLite database. No need to keep Bear open — or even running — for a quick lookup mid-conversation. (Writes still route through Bear, atomically.)
+
+- **You manage tags across the whole library.** Rename or delete a tag everywhere it appears, atomically. Hierarchical tag matching in search rolls up subtags automatically — work that's tedious through Bear's UI alone.
+
+- **You care about supply-chain hygiene.** Native `node:sqlite` — no unsigned third-party binaries, no Gatekeeper hassles. Network-free server: no remote-fetch tools, no prompt-injection surface.
+
+If you have a small library and just want a quick notes integration, you may not need this yet.
 
 ## 📦 Installation
 
