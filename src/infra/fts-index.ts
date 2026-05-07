@@ -468,7 +468,9 @@ function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchRes
   const { hasTerm, whereClause, baseParams } = buildSearchSqlAndParams(spec);
   // With a term: ORDER BY rank uses the per-column BM25 weights installed at
   // index build (title/body=2.0, ocr=0.5) — authored hits outrank OCR-only
-  // hits at equal term frequency. snippet() builds the preview window.
+  // hits at equal term frequency. (No-arg bm25(notes) would ignore the config
+  // and apply default 1.0/1.0/1.0 — only `rank` reads the installed weights.)
+  // snippet() builds the preview window.
   // Without: fall back to mod-date ordering (the pre-FTS5 contract for filter-
   // only browses) and a leading-200-char preview.
   const projection = hasTerm ? "snippet(notes, -1, '[', ']', '...', 80)" : 'SUBSTR(n.body, 1, 200)';
