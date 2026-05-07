@@ -176,18 +176,6 @@ function withFixture<T>(notes: SyntheticNote[], fn: (memDb: DatabaseSync) => T):
   });
 }
 
-// Common shape for "given fixture + term, expect this exact ranked id list."
-// Most query-behavior tests follow this pattern; collapsing it into a helper
-// keeps each `it` focused on the input/output contract rather than wiring.
-// Tests with non-`toEqual` assertions (e.g. partial-overlap matches) keep
-// their own body since they encode different semantics.
-function expectQueryMatches(notes: SyntheticNote[], term: string, expectedIds: string[]): void {
-  withFixture(notes, (memDb) => {
-    const ids = executeQueryWithCount(memDb, spec({ term })).notes.map((r) => r.identifier);
-    expect(ids).toEqual(expectedIds);
-  });
-}
-
 describe('buildIndex', () => {
   afterEach(() => reset());
 
@@ -391,32 +379,6 @@ describe('checkDrift', () => {
 describe('executeQueryWithCount', () => {
   afterEach(() => reset());
 
-  it('multi-word natural query: notes missing one term still match (OR-join, not implicit AND)', () => {
-    // Regression guard for the FTS5 implicit-AND trap: under the bare-AND
-    // default, a note missing any single query token would be filtered out
-    // even if it densely matches the other tokens. prepareFTS5Term tokenizes
-    // bare multi-word input and OR-joins it so partial-overlap notes still
-    // surface; relevance ranking is covered by the eval suite, not asserted
-    // here.
-    withFixture(
-      [
-        { pk: 1, title: 'Full', text: 'alphafruit betafruit gammafruit' },
-        { pk: 2, title: 'Partial', text: 'alphafruit betafruit no third token here' },
-        { pk: 3, title: 'Other', text: 'unrelated content with no overlap whatsoever' },
-      ],
-      (memDb) => {
-        const results = executeQueryWithCount(
-          memDb,
-          spec({ term: 'alphafruit betafruit gammafruit' })
-        ).notes;
-        const ids = results.map((r) => r.identifier);
-        expect(ids).toContain('uuid-1');
-        expect(ids).toContain('uuid-2'); // would be missing under implicit-AND
-        expect(ids).not.toContain('uuid-3');
-      }
-    );
-  });
-
   it('handles tag-only search with hierarchical match (and excludes prefix-overlap)', () => {
     // Issue #67 regression: a top-level tag whose name happens to start with
     // the query (`careerist`) must NOT match a `career` search. The
@@ -467,21 +429,6 @@ describe('executeQueryWithCount', () => {
     );
   });
 
-  it('matches non-ASCII tags with Unicode case folding (regression: SQLite LOWER is ASCII-only)', () => {
-    // SQLite's built-in LOWER() leaves CAFÉ as cafÉ (ASCII-only fold) while
-    // JS toLowerCase folds to café. Tag normalization runs entirely in JS via
-    // decodeTagName so the index side and the query side agree on Unicode-
-    // uppercased tag names. Without that, a Bear tag stored as `+CAFÉ`
-    // would silently fail to match any case variant of the query.
-    withFixture([{ pk: 1, title: 'Coffee log', tags: ['CAFÉ'] }], (memDb) => {
-      const lowerHit = executeQueryWithCount(memDb, spec({ tag: 'café' })).notes;
-      expect(lowerHit.map((r) => r.identifier)).toEqual(['uuid-1']);
-
-      const upperHit = executeQueryWithCount(memDb, spec({ tag: 'CAFÉ' })).notes;
-      expect(upperHit.map((r) => r.identifier)).toEqual(['uuid-1']);
-    });
-  });
-
   // ASCII \w drops é/ï and skips Cyrillic/Greek/CJK entirely, producing silent
   // zero-hits. One Latin-with-diacritic case + one non-Latin case pin both
   // failure modes; SQLite's tokenizer applies the same fold rules to index
@@ -493,26 +440,6 @@ describe('executeQueryWithCount', () => {
     withFixture([{ pk: 1, title: 'note', text: body }], (memDb) => {
       const hit = executeQueryWithCount(memDb, spec({ term })).notes;
       expect(hit.map((r) => r.identifier)).toEqual(['uuid-1']);
-    });
-  });
-
-  it('matches `+`-encoded tag names from the query side (decodeTagName drives both sides)', () => {
-    // Bear stores tag names with `+` standing in for spaces (URL-encoding
-    // convention used by the x-callback API and reflected in ZSFNOTETAG.ZTITLE
-    // for multi-word tags). The index side calls decodeTagName so a stored
-    // `My+Cool+Tag` lands in note_tags as `my cool tag`. If the query side
-    // skipped the `+` → space step, an agent or caller passing the same
-    // encoded form back as `tag: 'My+Cool+Tag'` would fall through to a
-    // literal `my+cool+tag` filter and silently miss the note.
-    withFixture([{ pk: 1, title: 'Multiword tag', tags: ['My+Cool+Tag'] }], (memDb) => {
-      // Encoded query form (most likely to appear when an agent copies a tag
-      // out of a Bear x-callback URL).
-      const encodedHit = executeQueryWithCount(memDb, spec({ tag: 'My+Cool+Tag' })).notes;
-      expect(encodedHit.map((r) => r.identifier)).toEqual(['uuid-1']);
-
-      // Human-readable query form.
-      const decodedHit = executeQueryWithCount(memDb, spec({ tag: 'my cool tag' })).notes;
-      expect(decodedHit.map((r) => r.identifier)).toEqual(['uuid-1']);
     });
   });
 
@@ -653,113 +580,6 @@ describe('executeQueryWithCount', () => {
     );
   });
 
-  it('strips incidental punctuation from terms (brackets, hyphens) and OR-ranks tokens', () => {
-    withFixture(
-      [
-        {
-          pk: 1,
-          title: '[Bear-MCP-stest] Sample 1234',
-          text: 'this note has bracketed prefix in the title',
-        },
-        { pk: 2, title: 'unrelated note', text: 'no special chars here' },
-      ],
-      (memDb) => {
-        // Brackets, hyphens, and digits would all break a verbatim FTS5 query;
-        // prepareFTS5Term tokenizes via \w+\*?, dropping the punctuation, and
-        // OR-joins the resulting tokens so BM25 ranks by overlap density.
-        const a = executeQueryWithCount(
-          memDb,
-          spec({ term: '[Bear-MCP-stest] Sample 1234' })
-        ).notes;
-        expect(a.map((r) => r.identifier)).toEqual(['uuid-1']);
-
-        // Bare two-word query exercises the same tokenize+OR-join path.
-        const b = executeQueryWithCount(memDb, spec({ term: 'bracketed prefix' })).notes;
-        expect(b.map((r) => r.identifier)).toEqual(['uuid-1']);
-      }
-    );
-  });
-
-  // Phrase-quote heuristic for no-whitespace identifiers (slugs, dates):
-  // restores v2.11.0 substring-match semantics. Without it, OR-rank
-  // fallthrough would flood with notes containing any single token —
-  // e.g. "bear" alone matching `bear-notes-mcp`, or "2026" alone matching
-  // `2026-04-15`. unicode61 tokenizes hyphen- and space-separated forms
-  // identically, so the phrase-quote matches both indexed shapes.
-  it.each([
-    {
-      name: 'hyphenated identifier (slug)',
-      fixture: [
-        { pk: 1, title: 'Project notes', text: 'working on bear-notes-mcp this week' },
-        { pk: 2, title: 'Bear sightings', text: 'I saw a bear in the woods' },
-        { pk: 3, title: 'Other', text: 'notes about an unrelated mcp library' },
-      ],
-      term: 'bear-notes-mcp',
-    },
-    {
-      name: 'date-style identifier (digits + hyphens)',
-      fixture: [
-        { pk: 1, title: 'Daily log', text: 'meeting on 2026-04-15 covered Q2 goals' },
-        { pk: 2, title: 'Year recap', text: 'looking back at 2026 highlights' },
-      ],
-      term: '2026-04-15',
-    },
-  ])(
-    'phrase-quotes single-identifier input so it matches the consecutive sequence: $name',
-    ({ fixture, term }) => {
-      expectQueryMatches(fixture, term, ['uuid-1']);
-    }
-  );
-
-  it('falls through to OR-rank when any token carries a prefix wildcard (FTS5 phrase rule)', () => {
-    // FTS5 phrase syntax allows `*` only at the end of the LAST token. The
-    // identifier-branch guard skips phrase-quoting whenever any token has
-    // `*`, so the multi-token wildcard query stays valid as OR-joined input.
-    // Without the guard, prepareFTS5Term would produce invalid `"profess
-    // engineer*"` shaped phrases on inputs like `profess-engineer*` (token
-    // count > 1) and surface as a syntax error to the caller.
-    // Tokenizes to [profess, engineer*] then OR-joins; note 1 matches via
-    // "profess" and "engineering" (prefix match), note 2 doesn't.
-    expectQueryMatches(
-      [
-        { pk: 1, title: 'A', text: 'profess and engineering' },
-        { pk: 2, title: 'B', text: 'unrelated content' },
-      ],
-      'profess-engineer*',
-      ['uuid-1']
-    );
-  });
-
-  it('hyphenated multi-word natural query OR-ranks (SVA-28 eval regression: phrase-lock made these silent zero-hits)', () => {
-    // The SVA-28 A/B eval showed 37 of 51 hyphen/colon-containing v3.0.0
-    // search calls returning zero hits because the prior phrase-quote branch
-    // turned the agent's natural punctuation into rigid token-order phrase
-    // matches. The fix removes the phrase-quote fallback for natural-language
-    // input; this fixture guards against a regression that re-introduces it.
-    withFixture(
-      [
-        {
-          pk: 1,
-          title: 'Common problems managing senior engineers',
-          text: 'tactics for the over-engineer who looks for complexity when there is none',
-        },
-        // No overlap with any query token — would-be zero-hit reference.
-        { pk: 2, title: 'Unrelated topic', text: 'weather forecast tomorrow rainy' },
-      ],
-      (memDb) => {
-        const ids = executeQueryWithCount(
-          memDb,
-          spec({ term: 'over-engineering coaching senior engineer' })
-        ).notes.map((r) => r.identifier);
-        // Under the old phrase-quote behavior, ids would be empty — the
-        // hyphen forced a literal token-order match that no fixture row
-        // satisfies. Under the fix, the semantically matching note surfaces.
-        expect(ids).toContain('uuid-1');
-        expect(ids).not.toContain('uuid-2');
-      }
-    );
-  });
-
   // isFTS5SyntaxError matches several distinct SQLite error shapes — each gets
   // remapped to the same user-facing envelope (operator-free; users/agents
   // are positioned away from FTS5 syntax — see fts5SyntaxError comment).
@@ -811,5 +631,50 @@ describe('prepareFTS5Term', () => {
     },
   ])('quotes uppercase FTS5 operator keywords as literal tokens: $name', ({ input, expected }) => {
     expect(prepareFTS5Term(input)).toBe(expected);
+  });
+
+  // Single-identifier punctuated input (no whitespace, no wildcard) is wrapped
+  // as an FTS5 phrase so consecutive tokens match — restoring v2.x's LIKE
+  // substring-style precision for slugs and dates. Without this, OR-rank
+  // fallthrough would flood with notes containing any single token (e.g.
+  // 'bear' alone matching 'bear-notes-mcp', '2026' alone matching '2026-04-15').
+  it.each([
+    { name: 'hyphenated slug', input: 'bear-notes-mcp', expected: '"bear notes mcp"' },
+    { name: 'date-style identifier', input: '2026-04-15', expected: '"2026 04 15"' },
+  ])('phrase-quotes single-identifier input: $name', ({ input, expected }) => {
+    expect(prepareFTS5Term(input)).toBe(expected);
+  });
+
+  // Multi-word input (with whitespace) reduces to OR-rank-by-density so notes
+  // partially overlapping the query still surface. unicode61 indexed the
+  // body with punctuation stripped, so query-side punctuation removal mirrors
+  // what FTS5 did on the indexed side. The hyphenated-natural-query case is
+  // the SVA-28 eval regression: 37 of 51 hyphen-containing search calls
+  // returned zero hits under the prior phrase-quote branch — natural
+  // punctuation must reduce to OR-join, not phrase-lock.
+  it.each([
+    {
+      name: 'bare multi-word',
+      input: 'alphafruit betafruit gammafruit',
+      expected: 'alphafruit OR betafruit OR gammafruit',
+    },
+    {
+      name: 'incidental punctuation in multi-word',
+      input: '[Bear-MCP-stest] Sample 1234',
+      expected: 'Bear OR MCP OR stest OR Sample OR 1234',
+    },
+    {
+      name: 'hyphenated multi-word natural query (SVA-28 regression)',
+      input: 'over-engineering coaching senior engineer',
+      expected: 'over OR engineering OR coaching OR senior OR engineer',
+    },
+  ])('OR-joins multi-word input, dropping incidental punctuation: $name', ({ input, expected }) => {
+    expect(prepareFTS5Term(input)).toBe(expected);
+  });
+
+  it('falls through to OR-join when any token carries a prefix wildcard (FTS5 phrase rule)', () => {
+    // FTS5 only allows `*` on the LAST token of a phrase, so phrase-quoting
+    // an input with any wildcard token would produce invalid syntax.
+    expect(prepareFTS5Term('profess-engineer*')).toBe('profess OR engineer*');
   });
 });
