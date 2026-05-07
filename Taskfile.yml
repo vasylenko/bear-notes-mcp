@@ -51,17 +51,19 @@ tasks:
   deps:dev:
     desc: Update all dev dependencies to latest and pin to exact versions
     cmds:
-      - npx npm-check-updates --upgrade --dep dev --removeRange
+      - npx npm-check-updates --upgrade --dep dev --removeRange --peer
       - npm install
-      - npm test
+      - npm run test
+      - npm run build
       - echo "Dev deps updated and pinned. Review package.json + package-lock.json diff before committing."
 
   deps:prod:
     desc: Update all prod dependencies to latest and pin to exact versions
     cmds:
-      - npx npm-check-updates --upgrade --dep prod --removeRange
+      - npx npm-check-updates --upgrade --dep prod --removeRange --peer
       - npm install
-      - npm test
+      - npm run test
+      - npm run build
       - echo "Prod deps updated and pinned. Review package.json + package-lock.json diff before committing."
 
 
