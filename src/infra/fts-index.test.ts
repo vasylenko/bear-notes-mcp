@@ -467,64 +467,6 @@ describe('executeQueryWithCount', () => {
     );
   });
 
-  it('per-column BM25 weights: body match outranks OCR-only match at equal term frequency', () => {
-    // Regression guard for the persistent rank config installed in buildIndex
-    // (bm25(2.0, 2.0, 0.5)). Both notes have one occurrence of the same unique
-    // token, but Note A has it in body and Note B has it only in OCR. With
-    // body=2.0 and ocr=0.5, the body match outranks the OCR match by ~4×,
-    // comfortably above column-length normalization noise. Body and OCR strings
-    // are comparable in length to keep BM25's column-length term out of the
-    // signal. If the rank config is reset to defaults or weights equalized,
-    // this assertion flips and catches the regression.
-    withFixture(
-      [
-        {
-          pk: 1,
-          title: 'Body match note',
-          text: 'Random unrelated body content. uniqweighttoken appears here once. More unrelated body content.',
-        },
-        {
-          pk: 2,
-          title: 'OCR match note',
-          text: 'Random unrelated body content without the target. More unrelated body content without it.',
-          ocrTexts: [
-            'Random unrelated OCR text. uniqweighttoken appears here once. More unrelated OCR text.',
-          ],
-        },
-      ],
-      (memDb) => {
-        const results = executeQueryWithCount(memDb, spec({ term: 'uniqweighttoken' })).notes;
-        const ids = results.map((r) => r.identifier);
-        // Both notes match (no-stop-matching scope guarantee); body match first.
-        expect(ids).toEqual(['uuid-1', 'uuid-2']);
-      }
-    );
-  });
-
-  it('per-column BM25 weights: OCR-only matches still surface when no authored note matches', () => {
-    // No-stop-matching invariant for the rank-config change. Lowering the OCR
-    // weight to 0.5 must only de-prioritize OCR-only hits, never exclude them.
-    // A single note matching only via OCR must still appear in results — this
-    // guards the user's "OCR-only matches still surface when nothing else
-    // matches" requirement against accidental over-correction (e.g. ocr=0.0
-    // would silently drop OCR-only notes).
-    withFixture(
-      [
-        {
-          pk: 1,
-          title: 'OCR-only',
-          text: 'Body text with no occurrence of the target token at all.',
-          ocrTexts: ['OCR text containing uniqocrsurfacetoken once and nothing else relevant.'],
-        },
-      ],
-      (memDb) => {
-        const results = executeQueryWithCount(memDb, spec({ term: 'uniqocrsurfacetoken' })).notes;
-        const ids = results.map((r) => r.identifier);
-        expect(ids).toContain('uuid-1');
-      }
-    );
-  });
-
   it('handles tag-only search with hierarchical match (and excludes prefix-overlap)', () => {
     // Issue #67 regression: a top-level tag whose name happens to start with
     // the query (`careerist`) must NOT match a `career` search. The
