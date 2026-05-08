@@ -2,15 +2,15 @@
 const categories = [
   {
     title: 'Read & Search',
-    description: 'Relevance-ranked search across titles, bodies, and tags. Filter by tag, date range, or pinned status.',
+    description: 'Relevance-ranked search across titles, bodies, and tags. Filter by tag, date range, or pinned status. Available without Edit Mode.',
   },
   {
     title: 'Create & Edit',
-    description: 'Section-aware writes: append at a specific heading, replace a fenced block, or scope edits without rewriting the whole note. Plus attachments and archive.',
+    description: 'Section-aware writes in Edit Mode: append at a specific heading, replace a fenced block, or scope edits without rewriting the whole note. Plus attachments and archive.',
   },
   {
     title: 'Tag Management',
-    description: 'Library-wide tag operations: rename or delete a tag everywhere, view the full hierarchy with note counts.',
+    description: 'View the full tag hierarchy with note counts — available without Edit Mode. Rename, delete, or add tags across the whole library when Edit Mode is on.',
   },
 ];
 ---
@@ -18,10 +18,10 @@ const categories = [
 <section class="py-14 sm:py-20">
   <div class="text-center max-w-2xl mx-auto mb-12">
     <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
-      12 tools, three jobs
+      Read-only by default. 8 more in Edit Mode.
     </h2>
     <p class="mt-4 text-text-secondary leading-relaxed">
-      Each tool does one thing well.
+      4 tools always on for search and reading. 8 more unlock with Edit Mode (<code>UI_ENABLE_CONTENT_REPLACEMENT=true</code>) for creation, editing, and tag management.
     </p>
   </div>
 

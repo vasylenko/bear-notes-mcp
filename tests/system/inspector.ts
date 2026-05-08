@@ -3,6 +3,9 @@ import { resolve } from 'path';
 
 import { setTimeout as sleep } from 'node:timers/promises';
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
 import { closeBearDatabase, openBearDatabase } from '../../src/infra/database.js';
 export { sleep };
 
@@ -22,25 +25,44 @@ export interface ToolResponse {
   isError?: boolean;
 }
 
-/**
- * Invokes an MCP tool via the Inspector CLI and returns the full parsed response.
- * Each call spawns a fresh server process — no shared state between calls.
- */
-export function callTool({ toolName, args, env }: CallToolOptions): ToolResponse {
+// System tests default to Edit Mode ON because most exercise write tools,
+// which the registration-time gate (SVA-32) hides when off. Tests that need
+// gate-closed behavior import GATE_CLOSED_ENV and pass it as their env — the
+// explicit `'false'` overrides the default and fails the server-side
+// `=== 'true'` check, leaving the gate closed.
+//
+// Why `'false'` and not empty string: MCP Inspector's `-e KEY=VALUE` parser
+// rejects empty values ("Invalid parameter format: KEY="). Any non-empty
+// non-'true' value closes the gate equally well; `'false'` reads naturally.
+const SYSTEM_TEST_DEFAULT_ENV: Record<string, string> = {
+  UI_ENABLE_CONTENT_REPLACEMENT: 'true',
+};
+
+export const GATE_CLOSED_ENV: Record<string, string> = {
+  UI_ENABLE_CONTENT_REPLACEMENT: 'false',
+};
+
+// Centralizes env-var injection (`-e KEY=VALUE`) so every method caller stays
+// consistent. Inspector's `-e` flag forwards env to the spawned server process.
+function buildInspectorArgs(
+  env: Record<string, string> | undefined,
+  methodArgs: string[]
+): string[] {
   const cliArgs = ['@modelcontextprotocol/inspector', '--cli'];
 
-  // Inspector's -e flag passes env vars to the spawned server process
-  for (const [key, value] of Object.entries(env ?? {})) {
+  const fullEnv = { ...SYSTEM_TEST_DEFAULT_ENV, ...(env ?? {}) };
+  for (const [key, value] of Object.entries(fullEnv)) {
     cliArgs.push('-e', `${key}=${value}`);
   }
 
-  cliArgs.push('node', SERVER_PATH, '--method', 'tools/call', '--tool-name', toolName);
+  cliArgs.push('node', SERVER_PATH, ...methodArgs);
+  return cliArgs;
+}
 
-  for (const [key, value] of Object.entries(args ?? {})) {
-    cliArgs.push('--tool-arg', `${key}=${value}`);
-  }
-
-  const result = spawnSync('npx', cliArgs, {
+// Each method caller parses the stdout itself because response shapes differ
+// across tools/call, tools/list, and initialize.
+function execInspector(env: Record<string, string> | undefined, methodArgs: string[]): string {
+  const result = spawnSync('npx', buildInspectorArgs(env, methodArgs), {
     encoding: 'utf-8',
     timeout: TOOL_CALL_TIMEOUT,
   });
@@ -53,13 +75,94 @@ export function callTool({ toolName, args, env }: CallToolOptions): ToolResponse
     throw new Error(`Inspector CLI exited with code ${result.status}: ${result.stderr}`);
   }
 
-  const response: ToolResponse = JSON.parse(result.stdout);
+  return result.stdout;
+}
+
+/**
+ * Invokes an MCP tool via the Inspector CLI and returns the full parsed response.
+ * Each call spawns a fresh server process — no shared state between calls.
+ */
+export function callTool({ toolName, args, env }: CallToolOptions): ToolResponse {
+  const methodArgs = ['--method', 'tools/call', '--tool-name', toolName];
+
+  for (const [key, value] of Object.entries(args ?? {})) {
+    methodArgs.push('--tool-arg', `${key}=${value}`);
+  }
+
+  const stdout = execInspector(env, methodArgs);
+  const response: ToolResponse = JSON.parse(stdout);
 
   if (!response.content?.length) {
-    throw new Error(`Inspector returned empty content for tool "${toolName}": ${result.stdout}`);
+    throw new Error(`Inspector returned empty content for tool "${toolName}": ${stdout}`);
   }
 
   return response;
+}
+
+interface ToolListEntry {
+  name: string;
+  description?: string;
+}
+
+interface ToolListResponse {
+  tools: ToolListEntry[];
+}
+
+/**
+ * Calls MCP `tools/list` and returns the registered tool names. Used by
+ * registration-gate tests to assert which tools the server advertises under
+ * different env-var states.
+ */
+export function listTools(env?: Record<string, string>): string[] {
+  const stdout = execInspector(env, ['--method', 'tools/list']);
+  const response: ToolListResponse = JSON.parse(stdout);
+
+  if (!response.tools) {
+    throw new Error(`Inspector returned no tools list: ${stdout}`);
+  }
+
+  return response.tools.map((t) => t.name);
+}
+
+export interface InitializeResult {
+  serverInfo: { name: string; version: string };
+  instructions?: string;
+}
+
+// Inspector's CLI does not expose `--method initialize` (initialize is part of
+// the implicit handshake). We talk to the SDK Client directly instead — connect
+// performs the handshake, and the Client caches `instructions` and serverInfo
+// for read-back via getInstructions() / getServerVersion().
+export async function initialize(env?: Record<string, string>): Promise<InitializeResult> {
+  const transport = new StdioClientTransport({
+    command: 'node',
+    args: [SERVER_PATH],
+    env: {
+      ...process.env,
+      ...SYSTEM_TEST_DEFAULT_ENV,
+      ...(env ?? {}),
+    } as Record<string, string>,
+  });
+  const client = new Client(
+    { name: 'bear-notes-system-test', version: '1.0.0' },
+    { capabilities: {} }
+  );
+
+  try {
+    await client.connect(transport);
+    const serverInfo = client.getServerVersion();
+
+    if (!serverInfo) {
+      throw new Error('SDK Client returned no serverInfo after connect');
+    }
+
+    return {
+      serverInfo: { name: serverInfo.name, version: serverInfo.version },
+      instructions: client.getInstructions(),
+    };
+  } finally {
+    await client.close();
+  }
 }
 
 /**

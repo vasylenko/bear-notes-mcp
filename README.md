@@ -24,13 +24,12 @@ Example prompts:
 
 ## ✨ Key Features
 
-- **12 MCP tools** for searching, reading, creating, editing, tagging, and archiving notes
+- **Read-only by default — flip Edit Mode for writes.** 4 tools always on (search, open, find untagged, list tags); 8 more in Edit Mode for create, edit, attach, tag, archive
 - **Relevance-ranked search** across titles, bodies, and tags — finds the right note, not just the ones that contained your literal words
 - **Date-based search** with relative dates ("yesterday", "last week", "start of last month")
 - **Hierarchical tag management** — view tags as a tree with note counts; rename or delete a tag across the whole library
 - **Surgical writes** — append at a specific heading or attach files without rewriting the whole note
 - **New note convention** (opt-in) — place tags right after the title instead of at the bottom
-- **Content replacement** (opt-in) — replace the full note body or a specific section
 - **Local-first** — direct read-only SQLite reads, native `node:sqlite`, no network calls, no telemetry
 
 > [!NOTE]
@@ -103,7 +102,7 @@ Add to your MCP configuration file:
 - **`bear-create-note`** - Create a new note in your Bear library with optional title, content, and tags
 - **`bear-search-notes`** - Find notes by relevance across titles, body, and OCR-extracted text from attached images and PDFs. Use a phrase or a few keywords describing what you're looking for; results are ranked by relevance and each includes a context snippet. Also supports tag, date-range, and pinned-only filters — combine with a search term or use them on their own to browse.
 - **`bear-add-text`** - Insert text at the beginning or end of a Bear note, or within a specific section identified by its header
-- **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section. Requires content replacement to be enabled in settings.
+- **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section.
 - **`bear-add-file`** - Attach a local file (image, PDF, document) to an existing Bear note. Bear extracts text from images and PDFs via OCR, making attachment content searchable.
 - **`bear-list-tags`** - List all tags in your Bear library as a hierarchical tree with note counts
 - **`bear-find-untagged-notes`** - Find notes in your Bear library that have no tags assigned
@@ -163,17 +162,17 @@ Example standalone configuration with the convention enabled:
 }
 ```
 
-### Content Replacement
+### Edit Mode
 
-Enable the `bear-replace-text` tool to replace content in existing notes — either the full note body or a specific section under a header.
+Edit Mode unlocks all 8 write tools: create notes, add or replace text (full body or by section header), attach files, manage tags, archive. When off, the server is fully read-only — `tools/list` returns only the 4 read tools (`bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes`, `bear-list-tags`), so the LLM cannot mutate your library by mistake.
 
 > [!TIP]
-> This feature is **disabled by default** — it's opt-in because replacement is a destructive operation.
+> Edit Mode is **off by default** so the server is provably read-only out of the box. Turn it on when you're ready for writes — and only when.
 
-- **Claude Desktop**: Settings → Extensions → Configure (next to Bear Notes) → toggle "Content Replacement" → Save → Restart Claude
+- **Claude Desktop**: Settings → Extensions → Configure (next to Bear Notes) → toggle "Edit Mode" → Save → Restart Claude
 - **Standalone MCP server**: set environment variable `UI_ENABLE_CONTENT_REPLACEMENT=true`
 
-Example standalone configuration with content replacement enabled:
+Example standalone configuration with Edit Mode enabled:
 ```json
 {
   "mcpServers": {

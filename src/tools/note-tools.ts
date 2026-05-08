@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
+import { ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
 import { logger } from '../logging.js';
 import { applyNoteConventions } from '../operations/note-conventions.js';
 import {
@@ -19,6 +19,7 @@ import {
 import { findUntaggedNotes, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
+import { getWriteToolRegistrar } from './registration.js';
 import { createErrorResponse, createToolResponse } from './responses.js';
 
 // Cap bear-add-file attachment size. Well above realistic PDFs/images, well
@@ -151,6 +152,8 @@ ${trailingMessage}`);
  * and archiving.
  */
 export function registerNoteTools(server: McpServer): void {
+  const registerWriteTool = getWriteToolRegistrar(server);
+
   server.registerTool(
     'bear-open-note',
     {
@@ -263,7 +266,7 @@ Use bear-search-notes to find the correct note identifier.`);
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-create-note',
     {
       title: 'Create New Note',
@@ -489,7 +492,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-add-text',
     {
       title: 'Add Text to Note',
@@ -533,12 +536,12 @@ Try different search criteria or check if notes exist in Bear Notes.`);
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-replace-text',
     {
       title: 'Replace Note Content',
       description:
-        'Replace content in an existing Bear note — either the full body or a specific section. Requires content replacement to be enabled in settings. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead.',
+        'Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead.',
       inputSchema: {
         id: z
           .string()
@@ -573,12 +576,6 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       },
     },
     async ({ id, scope, text, header }): Promise<CallToolResult> => {
-      if (!ENABLE_CONTENT_REPLACEMENT) {
-        return createErrorResponse(`Content replacement is not enabled. Do not retry — this requires a settings change by the user.
-
-To use replace mode, the user must enable "Content Replacement" in the Bear Notes server settings.`);
-      }
-
       if (scope === 'section' && !header) {
         return createErrorResponse(`scope is "section" but no header was provided.
 
@@ -595,7 +592,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-add-file',
     {
       title: 'Add File to Note',
@@ -772,7 +769,7 @@ The file has been attached to your Bear note.`);
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-add-tag',
     {
       title: 'Add Tags to Note',
@@ -844,7 +841,7 @@ The tags have been added to the beginning of the note.`);
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-archive-note',
     {
       title: 'Archive Bear Note',

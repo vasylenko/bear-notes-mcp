@@ -7,6 +7,7 @@ import { listTags, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 import type { BearTag } from '../types.js';
 
+import { getWriteToolRegistrar } from './registration.js';
 import { createToolResponse } from './responses.js';
 
 /**
@@ -44,6 +45,8 @@ function formatTagTree(tags: BearTag[], isLast: boolean[] = []): string[] {
  * from every note that has it.
  */
 export function registerTagTools(server: McpServer): void {
+  const registerWriteTool = getWriteToolRegistrar(server);
+
   server.registerTool(
     'bear-list-tags',
     {
@@ -86,7 +89,7 @@ export function registerTagTools(server: McpServer): void {
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-rename-tag',
     {
       title: 'Rename Tag',
@@ -142,7 +145,7 @@ The tag has been renamed across all notes in your Bear library.`);
     }
   );
 
-  server.registerTool(
+  registerWriteTool(
     'bear-delete-tag',
     {
       title: 'Delete Tag',
