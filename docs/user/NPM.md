@@ -62,7 +62,7 @@ Add to your MCP configuration file:
 |---|---|---|
 | `UI_DEBUG_TOGGLE` | `false` | Enable debug logging for troubleshooting |
 | `UI_ENABLE_NEW_NOTE_CONVENTION` | `false` | Place tags right after the note title instead of at the bottom |
-| `UI_ENABLE_CONTENT_REPLACEMENT` | `false` | **Edit Mode** — registers all 8 write tools (create, add, replace, attach, tag mgmt, archive). Off by default; the server is read-only without it. |
+| `UI_ENABLE_CONTENT_REPLACEMENT` | `false` | **Edit Mode** — enables all 8 write tools (create, add, replace, attach, tag mgmt, archive). Off by default; the server is read-only without it. |
 
 Example with configuration:
 ```json

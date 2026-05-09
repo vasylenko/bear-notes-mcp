@@ -43,7 +43,7 @@ describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', ()
       expect(init.instructions).toBeDefined();
       expect(init.instructions).toMatch(/Edit Mode/);
       expect(init.instructions).toMatch(/UI_ENABLE_CONTENT_REPLACEMENT/);
-      // Edit-mode-only tool names must not leak — referencing unregistered
+      // Edit-mode-only tool names must not leak — referencing disabled
       // tools would invite hallucinated calls. `bear-add-text` is a stable
       // substring of editModeInstructions only.
       expect(init.instructions).not.toMatch(/bear-add-text/);

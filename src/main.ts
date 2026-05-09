@@ -22,8 +22,8 @@ const editModeInstructions = [
 ];
 
 // When Edit Mode is off, the LLM must not see write tool names — referencing
-// unregistered tools would invite hallucinated calls. The unlock guidance
-// names the env var and the Claude Desktop toggle path instead.
+// disabled tools would invite hallucinated calls. The unlock guidance names
+// the env var and the Claude Desktop toggle path instead.
 const readOnlyInstructions = [
   '',
   'Edit Mode is currently off — only the 4 read-only tools (bear-open-note, bear-search-notes, bear-find-untagged-notes, bear-list-tags) are advertised and available via tools/list.',
