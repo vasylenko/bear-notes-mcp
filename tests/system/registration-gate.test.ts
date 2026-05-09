@@ -73,7 +73,7 @@ describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', ()
   });
 
   describe('regression smoke', () => {
-    it('all 4 read tools dispatch successfully under default (gate-closed) registration', () => {
+    it('all 4 read tools are callable when the gate is closed', () => {
       // Test 1 proves the 4 read tools are *advertised* under gate-closed env.
       // This test exercises the dispatch path — proves they're callable, not
       // just declared. A future refactor that accidentally hides a read tool

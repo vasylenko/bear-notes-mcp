@@ -29,7 +29,7 @@ const editModeInstructions = [
 const readOnlyInstructions = [
   '',
   'Edit Mode is currently off — only the 4 read-only tools (bear-open-note, bear-search-notes, bear-find-untagged-notes, bear-list-tags) are registered.',
-  'To enable note creation and editing, set the env var UI_ENABLE_CONTENT_REPLACEMENT=true and restart the server. Claude Desktop users: toggle "Edit Mode" in Settings → Extensions → Configure (Bear Notes).',
+  'To enable Edit Mode (note creation, editing, attachments, tag management, archive), set UI_ENABLE_CONTENT_REPLACEMENT=true and restart the server. Claude Desktop users: toggle "Edit Mode" in Settings → Extensions → Configure (Bear Notes).',
 ];
 
 const instructions = (
