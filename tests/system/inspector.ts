@@ -103,7 +103,6 @@ interface ToolListResponse {
   tools: ToolListEntry[];
 }
 
-/** Returns the registered tool names from MCP `tools/list`. */
 export function listTools(env?: Record<string, string>): string[] {
   const stdout = execInspector(env, ['--method', 'tools/list']);
   const response: ToolListResponse = JSON.parse(stdout);

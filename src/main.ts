@@ -7,8 +7,7 @@ import { logger } from './logging.js';
 import { registerNoteTools } from './tools/note-tools.js';
 import { registerTagTools } from './tools/tag-tools.js';
 
-// Universal guidance — applies whether Edit Mode is on or off.
-const universalInstructions = [
+const baseInstructions = [
   'This server integrates with Bear, a markdown note-taking app.',
   'Each note has a unique ID, a title, a body, and optional tags.',
   'Notes use markdown headings (##, ###, etc.) to define sections.',
@@ -16,27 +15,23 @@ const universalInstructions = [
   'Whenever a tool surfaces a specific note in its response (search results, opened note, etc), the note ID is included. Pass that ID unchanged to any mutation tool that accepts `id`.',
 ];
 
-// Edit-mode-only guidance — references write tools that aren't registered
-// when Edit Mode is off; surfacing them would invite hallucinated calls.
 const editModeInstructions = [
   'To modify note content: bear-add-text inserts text without touching existing content; bear-replace-text overwrites content.',
   'When targeting a section by header, operations apply only to the direct content under that header — not nested sub-sections.',
   'To modify sub-sections, make separate calls targeting each sub-header.',
 ];
 
-// Read-only-mode suffix — names the env var and the Claude Desktop toggle
-// path so the LLM can tell the user how to unlock writes.
+// When Edit Mode is off, the LLM must not see write tool names — referencing
+// unregistered tools would invite hallucinated calls. The unlock guidance
+// names the env var and the Claude Desktop toggle path instead.
 const readOnlyInstructions = [
   '',
   'Edit Mode is currently off — only the 4 read-only tools (bear-open-note, bear-search-notes, bear-find-untagged-notes, bear-list-tags) are registered.',
   'To enable Edit Mode (note creation, editing, attachments, tag management, archive), set UI_ENABLE_CONTENT_REPLACEMENT=true and restart the server. Claude Desktop users: toggle "Edit Mode" in Settings → Extensions → Configure (Bear Notes).',
 ];
 
-const instructions = (
-  ENABLE_CONTENT_REPLACEMENT
-    ? [...universalInstructions, ...editModeInstructions]
-    : [...universalInstructions, ...readOnlyInstructions]
-).join('\n');
+const modeInstructions = ENABLE_CONTENT_REPLACEMENT ? editModeInstructions : readOnlyInstructions;
+const instructions = [...baseInstructions, ...modeInstructions].join('\n');
 
 const server = new McpServer(
   {
