@@ -105,6 +105,10 @@
     {
       "name": "bear-delete-tag",
       "description": "Delete a tag from all notes in your Bear library without affecting the notes"
+    },
+    {
+      "name": "bear-capabilities",
+      "description": "Report the current server mode (read-only or Edit Mode) and how to unlock additional capabilities"
     }
   ],
   "keywords": [

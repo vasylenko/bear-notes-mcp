@@ -30,6 +30,7 @@ An unofficial, opinionated MCP for Bear Notes — built around relevance-ranked 
 - **`bear-archive-note`** - Archive a Bear note to remove it from active lists without deleting it
 - **`bear-rename-tag`** - Rename a tag across all notes in your Bear library
 - **`bear-delete-tag`** - Delete a tag from all notes in your Bear library without affecting the notes
+- **`bear-capabilities`** - Report the current server mode (read-only or Edit Mode) and how to unlock additional capabilities
 <!-- TOOLS:END -->
 
 **Requirements**: Node.js 24.13.0+

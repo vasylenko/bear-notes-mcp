@@ -515,7 +515,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
             .trim()
             .optional()
             .describe(
-              'Optional section header to target (adds text within that section). Accepts any heading level, including the note title (H1).'
+              'Optional section header to target. The insertion applies only to the direct content under that header — not its nested sub-sections; to insert into a sub-section, target its sub-header directly. Accepts any heading level, including the note title (H1).'
             ),
           position: z
             .enum(['beginning', 'end'])

@@ -110,6 +110,7 @@ Add to your MCP configuration file:
 - **`bear-archive-note`** - Archive a Bear note to remove it from active lists without deleting it
 - **`bear-rename-tag`** - Rename a tag across all notes in your Bear library
 - **`bear-delete-tag`** - Delete a tag from all notes in your Bear library without affecting the notes
+- **`bear-capabilities`** - Report the current server mode (read-only or Edit Mode) and how to unlock additional capabilities
 <!-- TOOLS:END -->
 
 ## ⚙️ Configuration
@@ -164,7 +165,7 @@ Example standalone configuration with the convention enabled:
 
 ### Edit Mode
 
-Edit Mode unlocks all 8 write tools: create notes, add or replace text (full body or by section header), attach files, manage tags, archive. When off, the server is fully read-only — `tools/list` returns only the 4 read tools (`bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes`, `bear-list-tags`), so the LLM cannot mutate your library by mistake.
+Edit Mode unlocks all 8 write tools: create notes, add or replace text (full body or by section header), attach files, manage tags, archive. When off, the server is fully read-only — `tools/list` returns the 4 read tools (`bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes`, `bear-list-tags`) plus `bear-capabilities` (a discovery tool that surfaces this unlock guidance for clients that drop the MCP `instructions` field). The LLM cannot mutate your library by mistake.
 
 > [!TIP]
 > Edit Mode is **off by default** so the server is provably read-only out of the box. Turn it on when you're ready for writes — and only when.
