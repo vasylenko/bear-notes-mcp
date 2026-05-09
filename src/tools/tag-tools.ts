@@ -7,6 +7,7 @@ import { listTags, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 import type { BearTag } from '../types.js';
 
+import { applyWriteGate } from './registration.js';
 import { createToolResponse } from './responses.js';
 
 /**
@@ -86,105 +87,109 @@ export function registerTagTools(server: McpServer): void {
     }
   );
 
-  server.registerTool(
-    'bear-rename-tag',
-    {
-      title: 'Rename Tag',
-      description:
-        'Rename a tag across all notes in your Bear library. Useful for reorganizing tag taxonomy, fixing typos, or restructuring tag hierarchies. Use bear-list-tags first to see existing tags.',
-      inputSchema: {
-        name: z
-          .string()
-          .trim()
-          .transform(stripTagPrefix)
-          .pipe(z.string().min(1, 'Tag name is required'))
-          .describe('Current tag name to rename (without # symbol)'),
-        new_name: z
-          .string()
-          .trim()
-          .transform(stripTagPrefix)
-          .pipe(z.string().min(1, 'New tag name is required'))
-          .describe(
-            'New tag name (without # symbol). Use slashes for hierarchy, e.g., "archive/old-project"'
-          ),
+  applyWriteGate(
+    server.registerTool(
+      'bear-rename-tag',
+      {
+        title: 'Rename Tag',
+        description:
+          'Rename a tag across all notes in your Bear library. Useful for reorganizing tag taxonomy, fixing typos, or restructuring tag hierarchies. Use bear-list-tags first to see existing tags.',
+        inputSchema: {
+          name: z
+            .string()
+            .trim()
+            .transform(stripTagPrefix)
+            .pipe(z.string().min(1, 'Tag name is required'))
+            .describe('Current tag name to rename (without # symbol)'),
+          new_name: z
+            .string()
+            .trim()
+            .transform(stripTagPrefix)
+            .pipe(z.string().min(1, 'New tag name is required'))
+            .describe(
+              'New tag name (without # symbol). Use slashes for hierarchy, e.g., "archive/old-project"'
+            ),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ name, new_name }): Promise<CallToolResult> => {
-      logger.info(`bear-rename-tag called with name: "${name}", new_name: "${new_name}"`);
+      async ({ name, new_name }): Promise<CallToolResult> => {
+        logger.info(`bear-rename-tag called with name: "${name}", new_name: "${new_name}"`);
 
-      try {
-        const url = buildBearUrl('rename-tag', {
-          name,
-          new_name,
-          open_note: 'no',
-          new_window: 'no',
-          show_window: 'no',
-        });
+        try {
+          const url = buildBearUrl('rename-tag', {
+            name,
+            new_name,
+            open_note: 'no',
+            new_window: 'no',
+            show_window: 'no',
+          });
 
-        await executeBearXCallbackApi(url);
+          await executeBearXCallbackApi(url);
 
-        return createToolResponse(`Tag renamed successfully!
+          return createToolResponse(`Tag renamed successfully!
 
 From: #${name}
 To: #${new_name}
 
 The tag has been renamed across all notes in your Bear library.`);
-      } catch (error) {
-        logger.error('bear-rename-tag failed:', error);
-        throw error;
+        } catch (error) {
+          logger.error('bear-rename-tag failed:', error);
+          throw error;
+        }
       }
-    }
+    )
   );
 
-  server.registerTool(
-    'bear-delete-tag',
-    {
-      title: 'Delete Tag',
-      description:
-        'Delete a tag from all notes in your Bear library. Removes the tag but preserves the notes themselves. Use bear-list-tags first to see existing tags.',
-      inputSchema: {
-        name: z
-          .string()
-          .trim()
-          .transform(stripTagPrefix)
-          .pipe(z.string().min(1, 'Tag name is required'))
-          .describe('Tag name to delete (without # symbol)'),
+  applyWriteGate(
+    server.registerTool(
+      'bear-delete-tag',
+      {
+        title: 'Delete Tag',
+        description:
+          'Delete a tag from all notes in your Bear library. Removes the tag but preserves the notes themselves. Use bear-list-tags first to see existing tags.',
+        inputSchema: {
+          name: z
+            .string()
+            .trim()
+            .transform(stripTagPrefix)
+            .pipe(z.string().min(1, 'Tag name is required'))
+            .describe('Tag name to delete (without # symbol)'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ name }): Promise<CallToolResult> => {
-      logger.info(`bear-delete-tag called with name: "${name}"`);
+      async ({ name }): Promise<CallToolResult> => {
+        logger.info(`bear-delete-tag called with name: "${name}"`);
 
-      try {
-        const url = buildBearUrl('delete-tag', {
-          name,
-          open_note: 'no',
-          new_window: 'no',
-          show_window: 'no',
-        });
+        try {
+          const url = buildBearUrl('delete-tag', {
+            name,
+            open_note: 'no',
+            new_window: 'no',
+            show_window: 'no',
+          });
 
-        await executeBearXCallbackApi(url);
+          await executeBearXCallbackApi(url);
 
-        return createToolResponse(`Tag deleted successfully!
+          return createToolResponse(`Tag deleted successfully!
 
 Tag: #${name}
 
 The tag has been removed from all notes. The notes themselves are not affected.`);
-      } catch (error) {
-        logger.error('bear-delete-tag failed:', error);
-        throw error;
+        } catch (error) {
+          logger.error('bear-delete-tag failed:', error);
+          throw error;
+        }
       }
-    }
+    )
   );
 }

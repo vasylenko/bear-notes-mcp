@@ -6,12 +6,11 @@ An unofficial, opinionated MCP for Bear Notes — built around relevance-ranked 
 
 ## Key Features
 
-- **12 MCP tools** for full Bear Notes integration
+- **Read-only by default — flip Edit Mode for writes.** 4 tools always on for search and reading; 8 more in Edit Mode for creation, editing, and tag management
 - **Relevance-ranked search** across titles, bodies, and hierarchical tags — finds the right note, not just literal-match ones
 - **Library-wide tag operations** — rename or delete a tag everywhere, atomically
 - **Sectioned writes** — append at a specific heading or replace a fenced block
 - **Date-based search** with relative dates ("yesterday", "last week", etc.)
-- **Content replacement** for replacing note body or specific sections (opt-in)
 - **Configurable new note convention** for tag placement (opt-in)
 - **Local-first** — direct read-only SQLite, no network, no telemetry, no Bear app needed to query
 - **Supply-chain clean** — native node:sqlite, no unsigned third-party binaries
@@ -23,7 +22,7 @@ An unofficial, opinionated MCP for Bear Notes — built around relevance-ranked 
 - **`bear-create-note`** - Create a new note in your Bear library with optional title, content, and tags
 - **`bear-search-notes`** - Find notes by relevance across titles, body, and OCR-extracted text from attached images and PDFs. Use a phrase or a few keywords describing what you're looking for; results are ranked by relevance and each includes a context snippet. Also supports tag, date-range, and pinned-only filters — combine with a search term or use them on their own to browse.
 - **`bear-add-text`** - Insert text at the beginning or end of a Bear note, or within a specific section identified by its header
-- **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section. Requires content replacement to be enabled in settings.
+- **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section.
 - **`bear-add-file`** - Attach a local file (image, PDF, document) to an existing Bear note. Bear extracts text from images and PDFs via OCR, making attachment content searchable.
 - **`bear-list-tags`** - List all tags in your Bear library as a hierarchical tree with note counts
 - **`bear-find-untagged-notes`** - Find notes in your Bear library that have no tags assigned
@@ -63,7 +62,7 @@ Add to your MCP configuration file:
 |---|---|---|
 | `UI_DEBUG_TOGGLE` | `false` | Enable debug logging for troubleshooting |
 | `UI_ENABLE_NEW_NOTE_CONVENTION` | `false` | Place tags right after the note title instead of at the bottom |
-| `UI_ENABLE_CONTENT_REPLACEMENT` | `false` | Enable the `bear-replace-text` tool for replacing note content |
+| `UI_ENABLE_CONTENT_REPLACEMENT` | `false` | **Edit Mode** — enables all 8 write tools (create, add, replace, attach, tag mgmt, archive). Off by default; the server is read-only without it. |
 
 Example with configuration:
 ```json

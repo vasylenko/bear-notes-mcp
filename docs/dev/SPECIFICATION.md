@@ -95,9 +95,17 @@ The OR-rank fallthrough is deliberate. FTS5's bareword default is implicit-AND, 
 
 ## Safety Gates
 
-### Content Replacement Is Opt-In
+### Registration-Time Read/Write Gating
 
-The ability to overwrite note content (full body or specific sections) is **disabled by default**. Users must explicitly enable "Content Replacement" in server settings before `bear-replace-text` works. This prevents AI from accidentally destroying note content.
+Every tool registers directly via `server.registerTool(...)` — the call shape is identical for reads and writes. Write tools additionally pass the returned `RegisteredTool` through `applyWriteGate(...)` from `src/tools/registration.ts`, which calls `RegisteredTool.disable()` when `ENABLE_CONTENT_REPLACEMENT` is `false`. The MCP SDK auto-filters disabled tools out of `tools/list` (see `dist/esm/server/mcp.js` in `@modelcontextprotocol/sdk`) and refuses any `tools/call` against them with `McpError(InvalidParams, "Tool ... disabled")` — so write tools exist in the SDK's registry but are invisible on the wire when the gate is closed.
+
+The gate is the env var `UI_ENABLE_CONTENT_REPLACEMENT` (strict equality `=== 'true'`). It maps to the Claude Desktop user-config field labeled **"Edit Mode"** (the manifest's `enable_content_replacement` key with `title: "Edit Mode"`). The env var is read once at server construction in `src/config.ts:10` and never re-checked at call time.
+
+When the gate is closed (default), the server's `tools/list` returns only the 4 read-only tools. The `initialize` response's `instructions` field tells the LLM how to unlock Edit Mode (the env var name and the Claude Desktop toggle path). When the gate is open, all 12 tools are advertised in `tools/list` and `instructions` carries the existing edit-mode guidance.
+
+The 4-vs-8 split is locked in by the system test at `tests/system/registration-gate.test.ts`. Its `EXPECTED_READ_ONLY_TOOLS` and `EXPECTED_WRITE_TOOLS` constants enumerate which tool falls in which class; `task test:system` (run locally before merge) fails if a future tool registration is misclassified. System tests cannot run in CI — see *Testing Constraints* below.
+
+**Why registration-time, not call-time.** With the gate at call time the LLM still sees write tools in `tools/list`, picks one, and receives a runtime error — wasted tokens and confusing UX. Registration-time gating gives the user a *provably* read-only mode verifiable with a single MCP wire call. The gate also widens past content replacement: it now covers all 8 write operations, not just `bear-replace-text`. The user-facing label "Edit Mode" replaces the older "Content Replacement" to reflect this widened scope.
 
 ### No Note Deletion
 
@@ -140,14 +148,14 @@ Two tiers of errors, from the client's perspective:
 
 | Tier | When | What the client sees |
 |------|------|---------------------|
-| Soft error | Expected condition handled inside tool handlers (note not found, section missing, feature disabled, handler-level parameter validation, file errors) | `isError: true` response with text describing the problem and suggesting a fix |
+| Soft error | Expected condition handled inside tool handlers (note not found, section missing, handler-level parameter validation, file errors) | `isError: true` response with text describing the problem and suggesting a fix |
 | Hard error | Unexpected failure or deep validation error (subprocess crash, DB error, invalid date format) | MCP-level error response (thrown exception — SDK wraps these in `isError: true` automatically) |
 
 The classification boundary is: **"Did the tool accomplish what it was asked to do?"** If yes (even with zero results), it stays a normal response via `createToolResponse()`. If no, it becomes `isError: true` via `createErrorResponse()`.
 
 Normal responses (not errors): empty search results, no tags found, no untagged notes, title disambiguation — these are correct answers, not failures.
 
-Note-level write tools do pre-flight DB validation to turn silent Bear failures into clear soft errors. Global tag operations cannot be pre-validated. Permanent conditions (e.g., feature disabled) include explicit non-retryability language to prevent LLM retry loops.
+Note-level write tools do pre-flight DB validation to turn silent Bear failures into clear soft errors. Global tag operations cannot be pre-validated. Conditions tied to server configuration — such as Edit Mode being off — are surfaced via the MCP `instructions` field at registration time rather than via per-call soft errors (see *Registration-Time Read/Write Gating*).
 
 ---
 

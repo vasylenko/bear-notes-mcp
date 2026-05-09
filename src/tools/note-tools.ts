@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { ENABLE_CONTENT_REPLACEMENT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
+import { ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
 import { logger } from '../logging.js';
 import { applyNoteConventions } from '../operations/note-conventions.js';
 import {
@@ -19,6 +19,7 @@ import {
 import { findUntaggedNotes, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
+import { applyWriteGate } from './registration.js';
 import { createErrorResponse, createToolResponse } from './responses.js';
 
 // Cap bear-add-file attachment size. Well above realistic PDFs/images, well
@@ -263,84 +264,86 @@ Use bear-search-notes to find the correct note identifier.`);
     }
   );
 
-  server.registerTool(
-    'bear-create-note',
-    {
-      title: 'Create New Note',
-      description:
-        'Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app.',
-      inputSchema: {
-        title: z
-          .string()
-          .trim()
-          .optional()
-          .describe('Note title, e.g., "Meeting Notes" or "Research Ideas"'),
-        text: z
-          .string()
-          .trim()
-          .optional()
-          .describe(
-            'Note content in markdown format. Do not include a title heading — Bear adds it automatically from the title parameter.'
-          ),
-        tags: z
-          .string()
-          .trim()
-          .optional()
-          .describe('Tags separated by commas, e.g., "work,project,urgent"'),
+  applyWriteGate(
+    server.registerTool(
+      'bear-create-note',
+      {
+        title: 'Create New Note',
+        description:
+          'Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app.',
+        inputSchema: {
+          title: z
+            .string()
+            .trim()
+            .optional()
+            .describe('Note title, e.g., "Meeting Notes" or "Research Ideas"'),
+          text: z
+            .string()
+            .trim()
+            .optional()
+            .describe(
+              'Note content in markdown format. Do not include a title heading — Bear adds it automatically from the title parameter.'
+            ),
+          tags: z
+            .string()
+            .trim()
+            .optional()
+            .describe('Tags separated by commas, e.g., "work,project,urgent"'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ title, text, tags }): Promise<CallToolResult> => {
-      logger.debug(
-        `bear-create-note called with title: ${title ? '"' + title + '"' : 'none'}, text length: ${text ? text.length : 0}, tags: ${tags || 'none'}`
-      );
+      async ({ title, text, tags }): Promise<CallToolResult> => {
+        logger.debug(
+          `bear-create-note called with title: ${title ? '"' + title + '"' : 'none'}, text length: ${text ? text.length : 0}, tags: ${tags || 'none'}`
+        );
 
-      try {
-        // If ENABLE_NOTE_CONVENTIONS is true, embed tags in the text body using Bear's inline tag syntax, rather than passing as URL parameters
-        const { text: createText, tags: createTags } = ENABLE_NEW_NOTE_CONVENTIONS
-          ? applyNoteConventions({ text, tags })
-          : { text, tags };
+        try {
+          // If ENABLE_NOTE_CONVENTIONS is true, embed tags in the text body using Bear's inline tag syntax, rather than passing as URL parameters
+          const { text: createText, tags: createTags } = ENABLE_NEW_NOTE_CONVENTIONS
+            ? applyNoteConventions({ text, tags })
+            : { text, tags };
 
-        const url = buildBearUrl('create', { title, text: createText, tags: createTags });
+          const url = buildBearUrl('create', { title, text: createText, tags: createTags });
 
-        await executeBearXCallbackApi(url);
+          await executeBearXCallbackApi(url);
 
-        const createdNoteId = title ? await awaitNoteCreation(title) : undefined;
+          const createdNoteId = title ? await awaitNoteCreation(title) : undefined;
 
-        const responseLines: string[] = ['Bear note created successfully!', ''];
+          const responseLines: string[] = ['Bear note created successfully!', ''];
 
-        if (title) {
-          responseLines.push(`Title: "${title}"`);
-        }
+          if (title) {
+            responseLines.push(`Title: "${title}"`);
+          }
 
-        if (tags) {
-          responseLines.push(`Tags: ${tags}`);
-        }
+          if (tags) {
+            responseLines.push(`Tags: ${tags}`);
+          }
 
-        if (createdNoteId) {
-          responseLines.push(`Note ID: ${createdNoteId}`);
-        } else if (title) {
-          responseLines.push(
-            'Note ID: unknown — the create request was sent, but the new note could not be confirmed. Check in Bear to verify.'
-          );
-        }
+          if (createdNoteId) {
+            responseLines.push(`Note ID: ${createdNoteId}`);
+          } else if (title) {
+            responseLines.push(
+              'Note ID: unknown — the create request was sent, but the new note could not be confirmed. Check in Bear to verify.'
+            );
+          }
 
-        const hasContent = title || text || tags;
-        const finalMessage = hasContent ? responseLines.join('\n') : 'Empty note created';
+          const hasContent = title || text || tags;
+          const finalMessage = hasContent ? responseLines.join('\n') : 'Empty note created';
 
-        return createToolResponse(`${finalMessage}
+          return createToolResponse(`${finalMessage}
 
 The note has been added to your Bear Notes library.`);
-      } catch (error) {
-        logger.error('bear-create-note failed:', error);
-        throw error;
+        } catch (error) {
+          logger.error('bear-create-note failed:', error);
+          throw error;
+        }
       }
-    }
+    )
   );
 
   server.registerTool(
@@ -489,227 +492,231 @@ Try different search criteria or check if notes exist in Bear Notes.`);
     }
   );
 
-  server.registerTool(
-    'bear-add-text',
-    {
-      title: 'Add Text to Note',
-      description:
-        'Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text.',
-      inputSchema: {
-        id: z
-          .string()
-          .trim()
-          .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) for an existing Bear note'),
-        text: z
-          .string()
-          .trim()
-          .min(1, 'Text content is required')
-          .describe('Text content to add to the note'),
-        header: z
-          .string()
-          .trim()
-          .optional()
-          .describe(
-            'Optional section header to target (adds text within that section). Accepts any heading level, including the note title (H1).'
-          ),
-        position: z
-          .enum(['beginning', 'end'])
-          .optional()
-          .describe(
-            "Where to insert: 'end' (default) for appending, logs, updates; 'beginning' for prepending, summaries, top of mind, etc. When `header` is set, position applies within that section's content, not the whole note."
-          ),
+  applyWriteGate(
+    server.registerTool(
+      'bear-add-text',
+      {
+        title: 'Add Text to Note',
+        description:
+          'Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text.',
+        inputSchema: {
+          id: z
+            .string()
+            .trim()
+            .min(1, 'Note ID is required')
+            .describe('Note identifier (ID) for an existing Bear note'),
+          text: z
+            .string()
+            .trim()
+            .min(1, 'Text content is required')
+            .describe('Text content to add to the note'),
+          header: z
+            .string()
+            .trim()
+            .optional()
+            .describe(
+              'Optional section header to target (adds text within that section). Accepts any heading level, including the note title (H1).'
+            ),
+          position: z
+            .enum(['beginning', 'end'])
+            .optional()
+            .describe(
+              "Where to insert: 'end' (default) for appending, logs, updates; 'beginning' for prepending, summaries, top of mind, etc. When `header` is set, position applies within that section's content, not the whole note."
+            ),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ id, text, header, position }): Promise<CallToolResult> => {
-      const mode = position === 'beginning' ? 'prepend' : 'append';
-      return handleNoteTextUpdate(mode, { id, text, header });
-    }
+      async ({ id, text, header, position }): Promise<CallToolResult> => {
+        const mode = position === 'beginning' ? 'prepend' : 'append';
+        return handleNoteTextUpdate(mode, { id, text, header });
+      }
+    )
   );
 
-  server.registerTool(
-    'bear-replace-text',
-    {
-      title: 'Replace Note Content',
-      description:
-        'Replace content in an existing Bear note — either the full body or a specific section. Requires content replacement to be enabled in settings. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead.',
-      inputSchema: {
-        id: z
-          .string()
-          .trim()
-          .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) for an existing Bear note'),
-        scope: z
-          .enum(['section', 'full-note-body'])
-          .describe(
-            "Replacement target: 'section' replaces under a specific header (requires header), 'full-note-body' replaces the entire note body (header must not be set)"
-          ),
-        text: z
-          .string()
-          .trim()
-          .min(1, 'Text content is required')
-          .describe(
-            'Replacement text content. When scope is "section", provide only the direct content for the targeted header — do not include markdown sub-headers (###). Replace sub-sections with separate calls targeting each sub-header.'
-          ),
-        header: z
-          .string()
-          .trim()
-          .optional()
-          .describe(
-            'Section header to target — required when scope is "section", forbidden when scope is "full-note-body". Accepts any heading level, including the note title (H1).'
-          ),
+  applyWriteGate(
+    server.registerTool(
+      'bear-replace-text',
+      {
+        title: 'Replace Note Content',
+        description:
+          'Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead.',
+        inputSchema: {
+          id: z
+            .string()
+            .trim()
+            .min(1, 'Note ID is required')
+            .describe('Note identifier (ID) for an existing Bear note'),
+          scope: z
+            .enum(['section', 'full-note-body'])
+            .describe(
+              "Replacement target: 'section' replaces under a specific header (requires header), 'full-note-body' replaces the entire note body (header must not be set)"
+            ),
+          text: z
+            .string()
+            .trim()
+            .min(1, 'Text content is required')
+            .describe(
+              'Replacement text content. When scope is "section", provide only the direct content for the targeted header — do not include markdown sub-headers (###). Replace sub-sections with separate calls targeting each sub-header.'
+            ),
+          header: z
+            .string()
+            .trim()
+            .optional()
+            .describe(
+              'Section header to target — required when scope is "section", forbidden when scope is "full-note-body". Accepts any heading level, including the note title (H1).'
+            ),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async ({ id, scope, text, header }): Promise<CallToolResult> => {
-      if (!ENABLE_CONTENT_REPLACEMENT) {
-        return createErrorResponse(`Content replacement is not enabled. Do not retry — this requires a settings change by the user.
-
-To use replace mode, the user must enable "Content Replacement" in the Bear Notes server settings.`);
-      }
-
-      if (scope === 'section' && !header) {
-        return createErrorResponse(`scope is "section" but no header was provided.
+      async ({ id, scope, text, header }): Promise<CallToolResult> => {
+        if (scope === 'section' && !header) {
+          return createErrorResponse(`scope is "section" but no header was provided.
 
 Set the header parameter to the section heading you want to replace.`);
-      }
+        }
 
-      if (scope === 'full-note-body' && header) {
-        return createErrorResponse(`scope is "full-note-body" but a header was provided.
+        if (scope === 'full-note-body' && header) {
+          return createErrorResponse(`scope is "full-note-body" but a header was provided.
 
 Remove the header parameter to replace the full note body, or change scope to "section".`);
-      }
+        }
 
-      return handleNoteTextUpdate('replace', { id, text, header });
-    }
+        return handleNoteTextUpdate('replace', { id, text, header });
+      }
+    )
   );
 
-  server.registerTool(
-    'bear-add-file',
-    {
-      title: 'Add File to Note',
-      description:
-        'Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first.',
-      inputSchema: {
-        file_path: z
-          .string()
-          .trim()
-          .min(1)
-          .describe(
-            'Absolute path to a local file (e.g., "/Users/me/Documents/report.pdf"). Tilde (~) is not expanded — pass an explicit absolute path. Must be a regular non-empty file (no symlinks); maximum 25 MB.'
-          ),
-        filename: z
-          .string()
-          .trim()
-          .min(1)
-          .optional()
-          .describe(
-            'Filename with extension (e.g., budget.xlsx, report.pdf). Auto-inferred from file_path when omitted.'
-          ),
-        id: z.string().trim().optional().describe('Note identifier (ID) for an existing Bear note'),
-        title: z
-          .string()
-          .trim()
-          .optional()
-          .describe(
-            'Note title if ID is not available (case-insensitive). If multiple notes share the same title, returns a list of matches with IDs so you can pick one and retry with `id`.'
-          ),
+  applyWriteGate(
+    server.registerTool(
+      'bear-add-file',
+      {
+        title: 'Add File to Note',
+        description:
+          'Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first.',
+        inputSchema: {
+          file_path: z
+            .string()
+            .trim()
+            .min(1)
+            .describe(
+              'Absolute path to a local file (e.g., "/Users/me/Documents/report.pdf"). Tilde (~) is not expanded — pass an explicit absolute path. Must be a regular non-empty file (no symlinks); maximum 25 MB.'
+            ),
+          filename: z
+            .string()
+            .trim()
+            .min(1)
+            .optional()
+            .describe(
+              'Filename with extension (e.g., budget.xlsx, report.pdf). Auto-inferred from file_path when omitted.'
+            ),
+          id: z
+            .string()
+            .trim()
+            .optional()
+            .describe('Note identifier (ID) for an existing Bear note'),
+          title: z
+            .string()
+            .trim()
+            .optional()
+            .describe(
+              'Note title if ID is not available (case-insensitive). If multiple notes share the same title, returns a list of matches with IDs so you can pick one and retry with `id`.'
+            ),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: true,
-      },
-    },
-    async ({ file_path, filename, id, title }): Promise<CallToolResult> => {
-      if (!id && !title) {
-        return createErrorResponse(
-          'Either note ID or title is required. Use bear-search-notes to find the note ID.'
-        );
-      }
-      logger.info(
-        `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
-      );
-      try {
-        const attachment = readAttachmentFile(file_path);
-        if (!attachment.ok) return createErrorResponse(attachment.error);
-        const fileData = attachment.data;
-        const resolvedFilename = filename || basename(file_path);
-
-        // Resolve title-only callers to an ID up-front (mirrors bear-open-note)
-        // so the success response can always carry note title + ID per the
-        // mutation-response rule. Resolving here also avoids attempting a Bear
-        // write against an ambiguous or non-existent title.
-        // Folding the no-criterion guard into the same if/else chain lets TS
-        // infer resolvedId as `string` without a non-null assertion.
-        let resolvedId: string;
-        if (id) {
-          resolvedId = id;
-        } else if (title) {
-          const matches = findNotesByTitle(title);
-          if (matches.length === 0) {
-            return createErrorResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
-
-Use bear-search-notes to find notes by partial text match.`);
-          }
-          if (matches.length > 1) {
-            const matchList = matches
-              .map((m, i) => `${i + 1}. ID: ${m.identifier} (modified: ${m.modification_date})`)
-              .join('\n');
-            return createToolResponse(`Multiple notes found with title "${title}":
-
-${matchList}
-
-Use bear-add-file with a specific ID to attach to the desired note.`);
-          }
-          resolvedId = matches[0].identifier;
-        } else {
+      async ({ file_path, filename, id, title }): Promise<CallToolResult> => {
+        if (!id && !title) {
           return createErrorResponse(
             'Either note ID or title is required. Use bear-search-notes to find the note ID.'
           );
         }
+        logger.info(
+          `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
+        );
+        try {
+          const attachment = readAttachmentFile(file_path);
+          if (!attachment.ok) return createErrorResponse(attachment.error);
+          const fileData = attachment.data;
+          const resolvedFilename = filename || basename(file_path);
 
-        const existingNote = getNoteContent(resolvedId);
-        if (!existingNote) {
-          return createErrorResponse(`Note with ID '${resolvedId}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+          // Resolve title-only callers to an ID up-front (mirrors bear-open-note)
+          // so the success response can always carry note title + ID per the
+          // mutation-response rule. Resolving here also avoids attempting a Bear
+          // write against an ambiguous or non-existent title.
+          // Folding the no-criterion guard into the same if/else chain lets TS
+          // infer resolvedId as `string` without a non-null assertion.
+          let resolvedId: string;
+          if (id) {
+            resolvedId = id;
+          } else if (title) {
+            const matches = findNotesByTitle(title);
+            if (matches.length === 0) {
+              return createErrorResponse(`No note found with title "${title}". The note may have been deleted, archived, or the title may be different.
+
+Use bear-search-notes to find notes by partial text match.`);
+            }
+            if (matches.length > 1) {
+              const matchList = matches
+                .map((m, i) => `${i + 1}. ID: ${m.identifier} (modified: ${m.modification_date})`)
+                .join('\n');
+              return createToolResponse(`Multiple notes found with title "${title}":
+
+${matchList}
+
+Use bear-add-file with a specific ID to attach to the desired note.`);
+            }
+            resolvedId = matches[0].identifier;
+          } else {
+            return createErrorResponse(
+              'Either note ID or title is required. Use bear-search-notes to find the note ID.'
+            );
+          }
+
+          const existingNote = getNoteContent(resolvedId);
+          if (!existingNote) {
+            return createErrorResponse(`Note with ID '${resolvedId}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
-        }
-        const noteTitle = existingNote.title;
+          }
+          const noteTitle = existingNote.title;
 
-        const url = buildBearUrl('add-file', {
-          id: resolvedId,
-          file: fileData,
-          filename: resolvedFilename,
-          mode: 'append',
-        });
+          const url = buildBearUrl('add-file', {
+            id: resolvedId,
+            file: fileData,
+            filename: resolvedFilename,
+            mode: 'append',
+          });
 
-        logger.debug(`Executing Bear add-file URL for: ${resolvedFilename}`);
-        await executeBearXCallbackApi(url);
+          logger.debug(`Executing Bear add-file URL for: ${resolvedFilename}`);
+          await executeBearXCallbackApi(url);
 
-        return createToolResponse(`File "${resolvedFilename}" added successfully!
+          return createToolResponse(`File "${resolvedFilename}" added successfully!
 
 Note: "${noteTitle}"
 ID: ${resolvedId}
 
 The file has been attached to your Bear note.`);
-      } catch (error) {
-        logger.error('bear-add-file failed:', error);
-        throw error;
+        } catch (error) {
+          logger.error('bear-add-file failed:', error);
+          throw error;
+        }
       }
-    }
+    )
   );
 
   server.registerTool(
@@ -772,126 +779,130 @@ The file has been attached to your Bear note.`);
     }
   );
 
-  server.registerTool(
-    'bear-add-tag',
-    {
-      title: 'Add Tags to Note',
-      description:
-        'Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags.',
-      inputSchema: {
-        id: z
-          .string()
-          .trim()
-          .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) for an existing Bear note'),
-        tags: z
-          .array(
-            z
-              .string()
-              .trim()
-              .transform(stripTagPrefix)
-              .pipe(z.string().min(1, 'Tag name cannot be empty'))
-          )
-          .min(1, 'At least one tag is required')
-          .describe(
-            'Tag names (leading # is stripped if present), e.g., ["career", "career/meetings"]'
-          ),
+  applyWriteGate(
+    server.registerTool(
+      'bear-add-tag',
+      {
+        title: 'Add Tags to Note',
+        description:
+          'Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags.',
+        inputSchema: {
+          id: z
+            .string()
+            .trim()
+            .min(1, 'Note ID is required')
+            .describe('Note identifier (ID) for an existing Bear note'),
+          tags: z
+            .array(
+              z
+                .string()
+                .trim()
+                .transform(stripTagPrefix)
+                .pipe(z.string().min(1, 'Tag name cannot be empty'))
+            )
+            .min(1, 'At least one tag is required')
+            .describe(
+              'Tag names (leading # is stripped if present), e.g., ["career", "career/meetings"]'
+            ),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async ({ id, tags }): Promise<CallToolResult> => {
-      logger.info(`bear-add-tag called with id: ${id}, tags: [${tags.join(', ')}]`);
+      async ({ id, tags }): Promise<CallToolResult> => {
+        logger.info(`bear-add-tag called with id: ${id}, tags: [${tags.join(', ')}]`);
 
-      try {
-        const existingNote = getNoteContent(id);
-        if (!existingNote) {
-          return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+        try {
+          const existingNote = getNoteContent(id);
+          if (!existingNote) {
+            return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
-        }
+          }
 
-        const tagsString = tags.join(',');
+          const tagsString = tags.join(',');
 
-        const url = buildBearUrl('add-text', {
-          id,
-          tags: tagsString,
-          mode: 'prepend',
-          open_note: 'no',
-          show_window: 'no',
-          new_window: 'no',
-        });
+          const url = buildBearUrl('add-text', {
+            id,
+            tags: tagsString,
+            mode: 'prepend',
+            open_note: 'no',
+            show_window: 'no',
+            new_window: 'no',
+          });
 
-        await executeBearXCallbackApi(url);
+          await executeBearXCallbackApi(url);
 
-        const tagList = tags.map((t) => `#${t}`).join(', ');
+          const tagList = tags.map((t) => `#${t}`).join(', ');
 
-        return createToolResponse(`Tags added successfully!
+          return createToolResponse(`Tags added successfully!
 
 Note: "${existingNote.title}"
 ID: ${id}
 Tags: ${tagList}
 
 The tags have been added to the beginning of the note.`);
-      } catch (error) {
-        logger.error('bear-add-tag failed:', error);
-        throw error;
+        } catch (error) {
+          logger.error('bear-add-tag failed:', error);
+          throw error;
+        }
       }
-    }
+    )
   );
 
-  server.registerTool(
-    'bear-archive-note',
-    {
-      title: 'Archive Bear Note',
-      description:
-        "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID.",
-      inputSchema: {
-        id: z
-          .string()
-          .trim()
-          .min(1, 'Note ID is required')
-          .describe('Note identifier (ID) for an existing Bear note'),
+  applyWriteGate(
+    server.registerTool(
+      'bear-archive-note',
+      {
+        title: 'Archive Bear Note',
+        description:
+          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID.",
+        inputSchema: {
+          id: z
+            .string()
+            .trim()
+            .min(1, 'Note ID is required')
+            .describe('Note identifier (ID) for an existing Bear note'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async ({ id }): Promise<CallToolResult> => {
-      logger.info(`bear-archive-note called with id: ${id}`);
+      async ({ id }): Promise<CallToolResult> => {
+        logger.info(`bear-archive-note called with id: ${id}`);
 
-      try {
-        const existingNote = getNoteContent(id);
-        if (!existingNote) {
-          return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
+        try {
+          const existingNote = getNoteContent(id);
+          if (!existingNote) {
+            return createErrorResponse(`Note with ID '${id}' not found. The note may have been deleted, archived, or the ID may be incorrect.
 
 Use bear-search-notes to find the correct note identifier.`);
-        }
+          }
 
-        const url = buildBearUrl('archive', {
-          id,
-          show_window: 'no',
-        });
+          const url = buildBearUrl('archive', {
+            id,
+            show_window: 'no',
+          });
 
-        await executeBearXCallbackApi(url);
+          await executeBearXCallbackApi(url);
 
-        return createToolResponse(`Note archived successfully!
+          return createToolResponse(`Note archived successfully!
 
 Note: "${existingNote.title}"
 ID: ${id}
 
 The note has been moved to Bear's archive.`);
-      } catch (error) {
-        logger.error('bear-archive-note failed:', error);
-        throw error;
+        } catch (error) {
+          logger.error('bear-archive-note failed:', error);
+          throw error;
+        }
       }
-    }
+    )
   );
 }
