@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { APP_VERSION } from '../../src/config.js';
+import { readOnlyInstructions } from '../../src/instructions.js';
+
 import { callTool, GATE_CLOSED_ENV, initialize, listTools } from './inspector.js';
 
 // Source of truth for the read/write classification — referenced by
@@ -52,6 +55,24 @@ describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', ()
       // tools would invite hallucinated calls. `bear-add-text` is a stable
       // substring of editModeInstructions only.
       expect(init.instructions).not.toMatch(/bear-add-text/);
+    });
+
+    it('bear-capabilities call returns the composed unlock guidance verbatim', () => {
+      const response = callTool({ toolName: 'bear-capabilities', env: GATE_CLOSED_ENV });
+
+      // Reconstruct from the same constants the tool uses — any drift in the
+      // template, the unlock copy, or the version stamp surfaces as inequality.
+      const body = readOnlyInstructions.filter((line) => line.length > 0).join('\n');
+      const expected = [
+        '# Bear Notes MCP — capabilities',
+        '**Edit Mode:** OFF',
+        '',
+        body,
+        '',
+        `Server version: ${APP_VERSION}`,
+      ].join('\n');
+
+      expect(response.content[0].text).toBe(expected);
     });
   });
 
