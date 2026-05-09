@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { callTool, GATE_CLOSED_ENV, initialize, listTools } from './inspector.js';
 
-// Source of truth for the SVA-32 registration-time gate. The
-// `Read/Write Tool Gating` section of docs/dev/SPECIFICATION.md references
-// these constants. Adding a future tool requires updating exactly one of
-// the two arrays — and the assertions below force the choice to be explicit.
+// Source of truth for the read/write classification — referenced by
+// docs/dev/SPECIFICATION.md. Future tools update one of these arrays;
+// the assertions below force the choice to be explicit.
 const EXPECTED_READ_ONLY_TOOLS = [
   'bear-open-note',
   'bear-search-notes',
@@ -44,10 +43,9 @@ describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', ()
       expect(init.instructions).toBeDefined();
       expect(init.instructions).toMatch(/Edit Mode/);
       expect(init.instructions).toMatch(/UI_ENABLE_CONTENT_REPLACEMENT/);
-      // Edit-mode-only guidance must NOT leak — referencing tools that aren't
-      // registered would invite hallucinated tool calls. `bear-add-text` only
-      // appears in editModeInstructions; the tool name is a stable substring
-      // that survives any future copy-edits to the surrounding sentence.
+      // Edit-mode-only tool names must not leak — referencing unregistered
+      // tools would invite hallucinated calls. `bear-add-text` is a stable
+      // substring of editModeInstructions only.
       expect(init.instructions).not.toMatch(/bear-add-text/);
     });
   });
@@ -76,12 +74,10 @@ describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', ()
 
   describe('regression smoke', () => {
     it('all 4 read tools dispatch successfully under default (gate-closed) registration', () => {
-      // Test 1 proves the 4 read tools are advertised in tools/list. This test
-      // exercises the dispatch path for each — proving they're not just
-      // declared but actually callable when the gate is closed. A future
-      // refactor that accidentally moves a read tool into the write registrar
-      // (or adds a side effect that breaks dispatch under gate-closed env)
-      // would surface here, where Test 1 alone wouldn't notice.
+      // Test 1 proves the 4 read tools are *advertised* under gate-closed env.
+      // This test exercises the dispatch path — proves they're callable, not
+      // just declared. A future refactor that accidentally hides a read tool
+      // behind the gate would surface here.
       expect(() =>
         callTool({
           toolName: 'bear-search-notes',

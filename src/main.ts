@@ -16,18 +16,16 @@ const universalInstructions = [
   'Whenever a tool surfaces a specific note in its response (search results, opened note, etc), the note ID is included. Pass that ID unchanged to any mutation tool that accepts `id`.',
 ];
 
-// Edit-mode-only guidance — references write tools (bear-add-text,
-// bear-replace-text) that aren't registered when Edit Mode is off, so
-// surfacing these lines in read-only mode would invite hallucinated tool
-// calls.
+// Edit-mode-only guidance — references write tools that aren't registered
+// when Edit Mode is off; surfacing them would invite hallucinated calls.
 const editModeInstructions = [
   'To modify note content: bear-add-text inserts text without touching existing content; bear-replace-text overwrites content.',
   'When targeting a section by header, operations apply only to the direct content under that header — not nested sub-sections.',
   'To modify sub-sections, make separate calls targeting each sub-header.',
 ];
 
-// Read-only-mode suffix — tells the LLM (and, by extension, the user) writes
-// are unavailable and how to enable them.
+// Read-only-mode suffix — names the env var and the Claude Desktop toggle
+// path so the LLM can tell the user how to unlock writes.
 const readOnlyInstructions = [
   '',
   'Edit Mode is currently off — only the 4 read-only tools (bear-open-note, bear-search-notes, bear-find-untagged-notes, bear-list-tags) are registered.',

@@ -25,15 +25,13 @@ export interface ToolResponse {
   isError?: boolean;
 }
 
-// System tests default to Edit Mode ON because most exercise write tools,
-// which the registration-time gate (SVA-32) hides when off. Tests that need
-// gate-closed behavior import GATE_CLOSED_ENV and pass it as their env — the
-// explicit `'false'` overrides the default and fails the server-side
-// `=== 'true'` check, leaving the gate closed.
+// System tests default to Edit Mode ON: most exercise write tools, which
+// the registration-time gate hides when off. Tests that need gate-closed
+// behavior import GATE_CLOSED_ENV.
 //
-// Why `'false'` and not empty string: MCP Inspector's `-e KEY=VALUE` parser
-// rejects empty values ("Invalid parameter format: KEY="). Any non-empty
-// non-'true' value closes the gate equally well; `'false'` reads naturally.
+// Why `'false'` and not empty: MCP Inspector's `-e KEY=VALUE` parser rejects
+// empty values; any non-'true' string fails the server-side `=== 'true'`
+// check equally well.
 const SYSTEM_TEST_EDIT_MODE_ON_DEFAULT: Record<string, string> = {
   UI_ENABLE_CONTENT_REPLACEMENT: 'true',
 };
@@ -78,10 +76,7 @@ function execInspector(env: Record<string, string> | undefined, methodArgs: stri
   return result.stdout;
 }
 
-/**
- * Invokes an MCP tool via the Inspector CLI and returns the full parsed response.
- * Each call spawns a fresh server process — no shared state between calls.
- */
+/** Each call spawns a fresh server process — no shared state between calls. */
 export function callTool({ toolName, args, env }: CallToolOptions): ToolResponse {
   const methodArgs = ['--method', 'tools/call', '--tool-name', toolName];
 
@@ -108,11 +103,7 @@ interface ToolListResponse {
   tools: ToolListEntry[];
 }
 
-/**
- * Calls MCP `tools/list` and returns the registered tool names. Used by
- * registration-gate tests to assert which tools the server advertises under
- * different env-var states.
- */
+/** Returns the registered tool names from MCP `tools/list`. */
 export function listTools(env?: Record<string, string>): string[] {
   const stdout = execInspector(env, ['--method', 'tools/list']);
   const response: ToolListResponse = JSON.parse(stdout);
@@ -134,13 +125,10 @@ export interface InitializeResult {
 // performs the handshake, and the Client caches `instructions` and serverInfo
 // for read-back via getInstructions() / getServerVersion().
 export async function initialize(env?: Record<string, string>): Promise<InitializeResult> {
-  // Both this transport and `execInspector` must forward the test runner's
-  // process.env so the spawned server inherits BEAR_DB_PATH, PATH, HOME, etc.
-  // The Inspector path achieves it implicitly via npx subprocess inheritance;
-  // the SDK Client replaces process.env wholesale on the child unless we
-  // spread it explicitly here. The two mechanisms differ but converge on the
-  // same effective env, so assertions agree across callTool, listTools, and
-  // initialize.
+  // Both this transport and `execInspector` must forward process.env so the
+  // spawned server inherits BEAR_DB_PATH, PATH, HOME, etc. Inspector inherits
+  // implicitly via npx; SDK Client replaces process.env wholesale unless we
+  // spread it. Both converge on the same effective env.
   const transport = new StdioClientTransport({
     command: 'node',
     args: [SERVER_PATH],
