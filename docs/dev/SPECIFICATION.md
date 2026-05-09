@@ -97,11 +97,11 @@ The OR-rank fallthrough is deliberate. FTS5's bareword default is implicit-AND, 
 
 ### Registration-Time Read/Write Gating
 
-Tool registration is classified at the call site. Read-only tools register directly via `server.registerTool(...)`. Write tools register via a registrar function returned by `getWriteToolRegistrar(server)` in `src/tools/registration.ts` — by convention bound to a local `registerWriteTool` at each `register*Tools` call site. The registrar short-circuits when `ENABLE_CONTENT_REPLACEMENT` is `false`, so no write tool is advertised in `tools/list` when the gate is closed.
+Every tool registers directly via `server.registerTool(...)` — the call shape is identical for reads and writes. Write tools additionally pass the returned `RegisteredTool` through `applyWriteGate(...)` from `src/tools/registration.ts`, which calls `RegisteredTool.disable()` when `ENABLE_CONTENT_REPLACEMENT` is `false`. The MCP SDK auto-filters disabled tools out of `tools/list` (see `dist/esm/server/mcp.js` in `@modelcontextprotocol/sdk`) and refuses any `tools/call` against them with `McpError(InvalidParams, "Tool ... disabled")` — so write tools exist in the SDK's registry but are invisible on the wire when the gate is closed.
 
 The gate is the env var `UI_ENABLE_CONTENT_REPLACEMENT` (strict equality `=== 'true'`). It maps to the Claude Desktop user-config field labeled **"Edit Mode"** (the manifest's `enable_content_replacement` key with `title: "Edit Mode"`). The env var is read once at server construction in `src/config.ts:10` and never re-checked at call time.
 
-When the gate is closed (default), the server's `tools/list` returns only the 4 read-only tools. The `initialize` response's `instructions` field tells the LLM how to unlock Edit Mode (the env var name and the Claude Desktop toggle path). When the gate is open, all 12 tools register and `instructions` carries the existing edit-mode guidance.
+When the gate is closed (default), the server's `tools/list` returns only the 4 read-only tools. The `initialize` response's `instructions` field tells the LLM how to unlock Edit Mode (the env var name and the Claude Desktop toggle path). When the gate is open, all 12 tools are advertised in `tools/list` and `instructions` carries the existing edit-mode guidance.
 
 The 4-vs-8 split is locked in by the system test at `tests/system/registration-gate.test.ts`. Its `EXPECTED_READ_ONLY_TOOLS` and `EXPECTED_WRITE_TOOLS` constants enumerate which tool falls in which class; `task test:system` (run locally before merge) fails if a future tool registration is misclassified. System tests cannot run in CI — see *Testing Constraints* below.
 
