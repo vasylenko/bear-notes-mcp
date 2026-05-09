@@ -26,7 +26,7 @@ const editModeInstructions = [
 // names the env var and the Claude Desktop toggle path instead.
 const readOnlyInstructions = [
   '',
-  'Edit Mode is currently off — only the 4 read-only tools (bear-open-note, bear-search-notes, bear-find-untagged-notes, bear-list-tags) are registered.',
+  'Edit Mode is currently off — only the 4 read-only tools (bear-open-note, bear-search-notes, bear-find-untagged-notes, bear-list-tags) are advertised and available via tools/list.',
   'To enable Edit Mode (note creation, editing, attachments, tag management, archive), set UI_ENABLE_CONTENT_REPLACEMENT=true and restart the server. Claude Desktop users: toggle "Edit Mode" in Settings → Extensions → Configure (Bear Notes).',
 ];
 
