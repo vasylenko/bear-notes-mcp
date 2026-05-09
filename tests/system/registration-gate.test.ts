@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { APP_VERSION } from '../../src/config.js';
+import { readOnlyInstructions } from '../../src/instructions.js';
+
 import { callTool, GATE_CLOSED_ENV, initialize, listTools } from './inspector.js';
 
 // Source of truth for the read/write classification — referenced by
@@ -11,6 +14,10 @@ const EXPECTED_READ_ONLY_TOOLS = [
   'bear-find-untagged-notes',
   'bear-list-tags',
 ] as const;
+
+// bear-capabilities exists to discover the unlock path; it serves no purpose
+// once Edit Mode is on, so it's registered only when the gate is closed.
+const EXPECTED_OFF_ONLY_TOOLS = ['bear-capabilities'] as const;
 
 const EXPECTED_WRITE_TOOLS = [
   'bear-create-note',
@@ -25,12 +32,13 @@ const EXPECTED_WRITE_TOOLS = [
 
 describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', () => {
   describe('with the gate closed (UI_ENABLE_CONTENT_REPLACEMENT=false)', () => {
-    it('tools/list returns exactly the 4 read-only tools', () => {
+    it('tools/list returns the 4 read-only tools plus bear-capabilities', () => {
       const tools = new Set(listTools(GATE_CLOSED_ENV));
 
-      expect(tools.size).toBe(EXPECTED_READ_ONLY_TOOLS.length);
-      for (const name of EXPECTED_READ_ONLY_TOOLS) {
-        expect(tools.has(name), `expected read-only tool "${name}" to be advertised`).toBe(true);
+      const expected = [...EXPECTED_READ_ONLY_TOOLS, ...EXPECTED_OFF_ONLY_TOOLS];
+      expect(tools.size).toBe(expected.length);
+      for (const name of expected) {
+        expect(tools.has(name), `expected tool "${name}" to be advertised`).toBe(true);
       }
       for (const name of EXPECTED_WRITE_TOOLS) {
         expect(tools.has(name), `expected write tool "${name}" to be hidden`).toBe(false);
@@ -48,15 +56,36 @@ describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', ()
       // substring of editModeInstructions only.
       expect(init.instructions).not.toMatch(/bear-add-text/);
     });
+
+    it('bear-capabilities call returns the composed unlock guidance verbatim', () => {
+      const response = callTool({ toolName: 'bear-capabilities', env: GATE_CLOSED_ENV });
+
+      // Reconstruct from the same constants the tool uses — any drift in the
+      // template, the unlock copy, or the version stamp surfaces as inequality.
+      const body = readOnlyInstructions.filter((line) => line.length > 0).join('\n');
+      const expected = [
+        '# Bear Notes MCP — capabilities',
+        '**Edit Mode:** OFF',
+        '',
+        body,
+        '',
+        `Server version: ${APP_VERSION}`,
+      ].join('\n');
+
+      expect(response.content[0].text).toBe(expected);
+    });
   });
 
   describe('with the gate open (UI_ENABLE_CONTENT_REPLACEMENT=true)', () => {
-    it('tools/list returns all 12 tools', () => {
+    it('tools/list returns the 12 Bear-domain tools — bear-capabilities is gone', () => {
       const tools = new Set(listTools({ UI_ENABLE_CONTENT_REPLACEMENT: 'true' }));
 
       expect(tools.size).toBe(EXPECTED_READ_ONLY_TOOLS.length + EXPECTED_WRITE_TOOLS.length);
       for (const name of [...EXPECTED_READ_ONLY_TOOLS, ...EXPECTED_WRITE_TOOLS]) {
         expect(tools.has(name), `expected tool "${name}" to be advertised`).toBe(true);
+      }
+      for (const name of EXPECTED_OFF_ONLY_TOOLS) {
+        expect(tools.has(name), `expected off-only tool "${name}" to be hidden`).toBe(false);
       }
     });
 
@@ -74,7 +103,7 @@ describe('Registration-time read/write gate (UI_ENABLE_CONTENT_REPLACEMENT)', ()
 
   describe('regression smoke', () => {
     it('all 4 read tools are callable when the gate is closed', () => {
-      // Test 1 proves the 4 read tools are *advertised* under gate-closed env.
+      // Test 1 proves the read tools are *advertised* under gate-closed env.
       // This test exercises the dispatch path — proves they're callable, not
       // just declared. A future refactor that accidentally hides a read tool
       // behind the gate would surface here.

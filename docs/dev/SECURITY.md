@@ -63,7 +63,7 @@ Standing rules. These are how new code is expected to be written and how existin
 | Subprocess | Every invocation uses `spawn()` (or equivalent) with an argv array. Shell-string concatenation is forbidden. |
 | URL construction | URLs are built with `URLSearchParams`, not string concatenation. The `bear://` scheme is a constant, not input. |
 | Tool inputs | Tool inputs use zod schemas: required strings use a `.trim().min(1)` baseline; optional strings use `.trim()` with explicit handling of empty values. Use enum restriction where values are bounded and scheme restriction for URL inputs. |
-| Write tool registration | All write tools (create, append, replace, attach, tag mutations, archive) are gated behind an opt-in env var (`UI_ENABLE_CONTENT_REPLACEMENT`, surfaced as "Edit Mode" in Claude Desktop). When off (default), `tools/list` advertises only the 4 read-only tools — the LLM cannot select a write because none exist on the wire. No tool permanently deletes user data — archive is the substitute. |
+| Write tool registration | All write tools (create, append, replace, attach, tag mutations, archive) are gated behind an opt-in env var (`UI_ENABLE_CONTENT_REPLACEMENT`, surfaced as "Edit Mode" in Claude Desktop). When off (default), `tools/list` advertises only the 4 Bear-domain read-only tools plus `bear-capabilities` (a discovery tool active only in this mode) — the LLM cannot select a write because none exist on the wire. No tool permanently deletes user data — archive is the substitute. |
 | Surface-expanding tools | New tools that grant the Node process a capability the MCP client does not already provide (file read, network fetch) must narrow what the LLM can reach: path policy and size cap for filesystem, host filter for network. |
 
 ---
