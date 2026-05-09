@@ -26,7 +26,7 @@ const faqs = [
   },
   {
     question: 'Can it modify or delete my notes?',
-    answer: 'It can create notes, add text, and manage tags out of the box. The text replacement tool (bear-replace-text) is opt-in and disabled by default — you must explicitly enable it in settings, since replacement is a destructive operation.',
+    answer: 'By default the server is read-only — it can search and read your notes (including OCR\'d text from attached images and PDFs) but cannot modify them. Toggle "Edit Mode" in settings (or set UI_ENABLE_CONTENT_REPLACEMENT=true) to unlock the 8 write tools: create, add or replace text, attach files, manage tags, and archive. There is no delete tool — archive is the closest substitute, and it\'s reversible inside Bear.',
   },
   {
     question: 'Why does it read the database directly instead of using Bear\'s URL API?',

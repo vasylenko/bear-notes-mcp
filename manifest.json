@@ -52,7 +52,7 @@
     "enable_content_replacement": {
       "type": "boolean",
       "title": "Edit Mode",
-      "description": "Register write tools — create notes, edit text, replace content, attach files, manage tags, archive notes. When off, the server is fully read-only (search and read tools only).",
+      "description": "Allow Claude to create, edit, attach files, manage tags, and archive notes. When off, the server is read-only — Claude can search and read your notes but cannot modify them.",
       "default": false,
       "required": false
     }

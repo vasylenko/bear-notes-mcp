@@ -4,33 +4,24 @@ import { ENABLE_CONTENT_REPLACEMENT } from '../config.js';
 
 type RegisterTool = McpServer['registerTool'];
 
-// Cast through `unknown` because no real value structurally satisfies the
-// generic call signature — and the no-op never reaches the SDK anyway. The
-// short-circuit happens before any registration; the type is preserved purely
-// so call-site generic inference stays consistent with the `enabled` branch.
+// The no-op returns undefined; the SDK's RegisterTool returns RegisteredTool.
+// Cast through `unknown` because the simpler `(...args: Parameters<RegisterTool>) => void`
+// alternative collapses the SDK's generic parameters (`InputArgs`, `OutputArgs`)
+// to their constraints — verified by tsc: every write call site loses
+// inputSchema-to-handler-args inference and the destructured handler params
+// degrade to `any` (errors TS2345 + TS7031). Preserving the SDK's full method
+// type at the helper's return site keeps that inference working. No call site
+// reads the return value (verified across note-tools.ts and tag-tools.ts), so
+// the structural mismatch is safe at runtime.
 const noopRegisterTool = (() => undefined) as unknown as RegisterTool;
 
 /**
- * Returns the function used to register write-class tools.
- *
- * When `ENABLE_CONTENT_REPLACEMENT` is `true`: returns `server.registerTool`
- * bound to the server. Calls behave identically to `server.registerTool(...)`.
- *
- * When `ENABLE_CONTENT_REPLACEMENT` is `false`: returns a no-op. Calls do
- * nothing — the tool is never advertised in `tools/list`.
- *
- * Read-only tools should call `server.registerTool(...)` directly. The
- * asymmetry makes the read/write classification visible at every call site:
- * a `registerWriteTool(...)` line is a write tool by construction; everything
- * else is read-only.
- *
- * The return type is the SDK's full `registerTool` method type, so call-site
- * generic inference (inputSchema → handler args) works exactly as it does
- * with `server.registerTool` directly.
+ * Returns the function for registering write-class tools — `server.registerTool`
+ * bound to the server when Edit Mode is on, a no-op when off. Read-only tools
+ * call `server.registerTool(...)` directly; the asymmetry makes the read/write
+ * classification visible at every registration call site.
  */
 export function getWriteToolRegistrar(server: McpServer): RegisterTool {
-  if (!ENABLE_CONTENT_REPLACEMENT) {
-    return noopRegisterTool;
-  }
+  if (!ENABLE_CONTENT_REPLACEMENT) return noopRegisterTool;
   return server.registerTool.bind(server) as RegisterTool;
 }

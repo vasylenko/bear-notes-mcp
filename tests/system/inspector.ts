@@ -34,7 +34,7 @@ export interface ToolResponse {
 // Why `'false'` and not empty string: MCP Inspector's `-e KEY=VALUE` parser
 // rejects empty values ("Invalid parameter format: KEY="). Any non-empty
 // non-'true' value closes the gate equally well; `'false'` reads naturally.
-const SYSTEM_TEST_DEFAULT_ENV: Record<string, string> = {
+const SYSTEM_TEST_EDIT_MODE_ON_DEFAULT: Record<string, string> = {
   UI_ENABLE_CONTENT_REPLACEMENT: 'true',
 };
 
@@ -50,7 +50,7 @@ function buildInspectorArgs(
 ): string[] {
   const cliArgs = ['@modelcontextprotocol/inspector', '--cli'];
 
-  const fullEnv = { ...SYSTEM_TEST_DEFAULT_ENV, ...(env ?? {}) };
+  const fullEnv = { ...SYSTEM_TEST_EDIT_MODE_ON_DEFAULT, ...(env ?? {}) };
   for (const [key, value] of Object.entries(fullEnv)) {
     cliArgs.push('-e', `${key}=${value}`);
   }
@@ -134,12 +134,19 @@ export interface InitializeResult {
 // performs the handshake, and the Client caches `instructions` and serverInfo
 // for read-back via getInstructions() / getServerVersion().
 export async function initialize(env?: Record<string, string>): Promise<InitializeResult> {
+  // Both this transport and `execInspector` must forward the test runner's
+  // process.env so the spawned server inherits BEAR_DB_PATH, PATH, HOME, etc.
+  // The Inspector path achieves it implicitly via npx subprocess inheritance;
+  // the SDK Client replaces process.env wholesale on the child unless we
+  // spread it explicitly here. The two mechanisms differ but converge on the
+  // same effective env, so assertions agree across callTool, listTools, and
+  // initialize.
   const transport = new StdioClientTransport({
     command: 'node',
     args: [SERVER_PATH],
     env: {
       ...process.env,
-      ...SYSTEM_TEST_DEFAULT_ENV,
+      ...SYSTEM_TEST_EDIT_MODE_ON_DEFAULT,
       ...(env ?? {}),
     } as Record<string, string>,
   });
