@@ -29,8 +29,8 @@ Read the relevant reference doc when working in that area:
 
 - `docs/dev/SPECIFICATION.md` — system boundaries, design constraints, safety gates, hybrid read/write rationale. Read before architectural changes.
 - `docs/dev/SECURITY.md` — trust model and defenses.
-- `docs/dev/MCP_STANDARDS.md` — tool description vs schema separation, mutation response metadata rule, examples. Read when adding or modifying MCP tools.
-- `docs/dev/CODE_STYLE.md` — style choices not auto-enforced; the WHY-not-WHAT comments rule.
+- @docs/dev/MCP_STANDARDS.md — tool description vs schema separation, mutation response metadata rule, examples. Read when adding or modifying MCP tools.
+- @docs/dev/CODE_STYLE.md — style choices not auto-enforced; the WHY-not-WHAT comments rule.
 
 ## Core Workflows
 

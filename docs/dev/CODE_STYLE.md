@@ -23,7 +23,7 @@ Most style is auto-enforced by tsconfig + eslint + prettier — run `task check`
 ## Comments
 - JSDoc for public APIs
 - Inline comments only for complex logic
-- **All comments answer WHY, never WHAT.** A comment describing what the code does restates the obvious; a comment explaining why the code exists is captured intent that survives refactors.
+- **CRITICAL: All comments answer WHY, never WHAT.** A comment describing what the code does restates the obvious; a comment explaining why the code exists is captured intent that survives refactors.
 
 ## Formatting
 
