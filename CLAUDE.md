@@ -12,10 +12,6 @@ MCP server for Bear Notes, distributed through two channels:
     - If the assertion is about something the server decided before calling Bear (input validation, schema rejection, response format with no Bear interaction), it's almost always a misplaced unit test. System tests should verify behavior at the Bear-integration boundary — anything else is paying the spawn-Inspector / open-Bear cost for no integration risk.
     - Exception: when an input composition step is exhaustively unit-tested AND one system test exercises the URL roundtrip, additional system tests covering other input shapes are redundant — Bear's URL boundary doesn't discriminate between composed strings.
 
-## Code Style
-
-Style is enforced by tsconfig + eslint + prettier — run `task check`. Existing patterns in `src/` are the reference for anything not auto-enforced.
-
 ## Core Technical Documentation for this project
 - MCP TypeScript SDK - https://github.com/modelcontextprotocol/typescript-sdk/blob/main/README.md
 - MCPB (MCP Bundles) - https://github.com/anthropics/mcpb/blob/main/README.md
@@ -29,10 +25,12 @@ Style is enforced by tsconfig + eslint + prettier — run `task check`. Existing
 
 ## Additional technical context
 
-Read this before making architectural changes; covers system boundaries, design constraints, safety gates, and the rationale behind the hybrid read/write model:
+Read the relevant reference doc when working in that area:
 
-1 - Project Specification - docs/dev/SPECIFICATION.md
-2 - Security Posture - docs/dev/SECURITY.md
+- `docs/dev/SPECIFICATION.md` — system boundaries, design constraints, safety gates, hybrid read/write rationale. Read before architectural changes.
+- `docs/dev/SECURITY.md` — trust model and defenses.
+- `docs/dev/MCP_STANDARDS.md` — tool description vs schema separation, mutation response metadata rule, examples. Read when adding or modifying MCP tools.
+- `docs/dev/CODE_STYLE.md` — style choices not auto-enforced; the WHY-not-WHAT comments rule.
 
 ## Core Workflows
 
@@ -52,11 +50,3 @@ All releases go through these steps in order. See `Taskfile.yml` for the underly
 6. **Trigger release workflow** after CI passes: `gh workflow run release.yml --ref vX.Y.Z`
 
 The release workflow (`release.yml`) builds the `.mcpb` bundle, creates a GitHub Release, and publishes to npm with provenance.
-
-## MCP Standards
-
-Tool descriptions guide LLM tool selection; schema `describe()` text guides LLM invocation. Mirror the style of existing tools in `src/tools/` — they're the reference implementation.
-
-### Mutation Response Metadata
-
-Every note-level mutation tool — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — must return **note ID + note title + what changed** in its response. Both values are always available without post-write database reads: for modifications the ID comes from the input parameter and the title from the pre-flight `getNoteContent()` validation; for creation the title comes from the input parameter and the ID from post-create polling. Global tag mutations (`bear-rename-tag`, `bear-delete-tag`) are not note-level and intentionally omit note metadata. Never fetch tags or other metadata from the database after a write — Bear's fire-and-forget architecture means post-write reads return pre-mutation state, which would mislead the LLM into thinking the operation failed.
