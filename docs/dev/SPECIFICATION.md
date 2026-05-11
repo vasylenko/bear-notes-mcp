@@ -19,10 +19,11 @@ The server uses two distinct paths to interact with Bear, chosen to avoid corrup
   MCP Server (main.ts)
         │
         ├── READ path ──▶ Bear SQLite DB (direct, read-only)
-        │                  notes.ts, tags.ts
+        │                  src/operations/{notes,tags}.ts
+        │                  → src/infra/{database,bear-schema,bear-encoding,fts-index}.ts
         │
         └── WRITE path ──▶ Bear x-callback-url (fire-and-forget)
-                           bear-urls.ts → macOS `open -g` subprocess
+                           src/infra/bear-urls.ts → macOS `open -g` subprocess
 ```
 
 **Why not just use the database for everything?** Writing directly to Bear's Core Data SQLite would risk corruption — Bear doesn't expect external writers and could overwrite changes or crash.

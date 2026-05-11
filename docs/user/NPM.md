@@ -9,7 +9,8 @@ An unofficial, opinionated MCP for Bear Notes — built around relevance-ranked 
 - **Read-only by default — flip Edit Mode for writes.** 4 tools always on for search and reading; 8 more in Edit Mode for creation, editing, and tag management
 - **Relevance-ranked search** across titles, bodies, and hierarchical tags — finds the right note, not just literal-match ones
 - **Library-wide tag operations** — rename or delete a tag everywhere, atomically
-- **Sectioned writes** — append at a specific heading or replace a fenced block
+- **Sectioned writes** — append at a specific heading or replace a section
+- **File attachments** — attach images, PDFs, and documents up to 25 MB; symlinks rejected for safety
 - **Date-based search** with relative dates ("yesterday", "last week", etc.)
 - **Configurable new note convention** for tag placement (opt-in)
 - **Local-first** — direct read-only SQLite, no network, no telemetry, no Bear app needed to query
@@ -18,12 +19,12 @@ An unofficial, opinionated MCP for Bear Notes — built around relevance-ranked 
 ## Tools
 
 <!-- TOOLS:START -->
-- **`bear-open-note`** - Read the full text content of a Bear note including OCR'd text from attached images and PDFs
+- **`bear-open-note`** - Read the full text content of a Bear note by its ID or title, including OCR'd text from attached images and PDFs
 - **`bear-create-note`** - Create a new note in your Bear library with optional title, content, and tags
 - **`bear-search-notes`** - Find notes by relevance across titles, body, and OCR-extracted text from attached images and PDFs. Use a phrase or a few keywords describing what you're looking for; results are ranked by relevance and each includes a context snippet. Also supports tag, date-range, and pinned-only filters — combine with a search term or use them on their own to browse.
 - **`bear-add-text`** - Insert text at the beginning or end of a Bear note, or within a specific section identified by its header
 - **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section.
-- **`bear-add-file`** - Attach a local file (image, PDF, document) to an existing Bear note. Bear extracts text from images and PDFs via OCR, making attachment content searchable.
+- **`bear-add-file`** - Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable.
 - **`bear-list-tags`** - List all tags in your Bear library as a hierarchical tree with note counts
 - **`bear-find-untagged-notes`** - Find notes in your Bear library that have no tags assigned
 - **`bear-add-tag`** - Add one or more tags to an existing Bear note
@@ -38,7 +39,7 @@ An unofficial, opinionated MCP for Bear Notes — built around relevance-ranked 
 ## Quick Start - Claude Code (One Command)
 
 ```bash
-claude mcp add bear-notes --transport stdio -- npx -y bear-notes-mcp@latest
+claude mcp add -s user bear-notes -- npx -y bear-notes-mcp@latest
 ```
 
 That's it! The server will be downloaded from npm and configured automatically.
@@ -96,7 +97,7 @@ npm run build
 
 For Claude Code:
 ```bash
-claude mcp add bear-notes --transport stdio -- node /absolute/path/to/dist/main.js
+claude mcp add -s user bear-notes -- node /absolute/path/to/dist/main.js
 ```
 
 For other AI assistants:

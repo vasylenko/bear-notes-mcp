@@ -60,7 +60,7 @@
   "tools": [
     {
       "name": "bear-open-note",
-      "description": "Read the full text content of a Bear note including OCR'd text from attached images and PDFs"
+      "description": "Read the full text content of a Bear note by its ID or title, including OCR'd text from attached images and PDFs"
     },
     {
       "name": "bear-create-note",
@@ -80,7 +80,7 @@
     },
     {
       "name": "bear-add-file",
-      "description": "Attach a local file (image, PDF, document) to an existing Bear note. Bear extracts text from images and PDFs via OCR, making attachment content searchable."
+      "description": "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable."
     },
     {
       "name": "bear-list-tags",
