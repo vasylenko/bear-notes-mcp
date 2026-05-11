@@ -17,6 +17,7 @@
     "format:check": "prettier --check src",
     "check": "npm run lint:check && npm run format:check",
     "fix": "npm run lint && npm run format",
+    "//prepublishOnly": "Renames docs/user/NPM.md → README.md so npmjs.com shows the npm-page README instead of the GitHub README",
     "prepublishOnly": "npm run build && mv docs/user/NPM.md README.md"
   },
   "dependencies": {

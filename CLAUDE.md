@@ -39,6 +39,7 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 │   ├── main.ts            # Server entry point
 │   ├── config.ts          # Configuration management
 │   ├── logging.ts         # Logging setup
+│   ├── instructions.ts    # Server-instructions string composer (mode-aware: read-only vs Edit Mode)
 │   ├── types.ts           # Type definitions
 │   ├── infra/             # Infrastructure layer
 │   │   ├── bear-encoding.ts # Bear encoding/decoding utilities
@@ -55,15 +56,19 @@ You are world-class NodeJS developer, senior engineer with a vast experience in 
 │   └── tools/             # MCP tool handlers
 │       ├── note-tools.ts  # Note tool registrations and handlers
 │       ├── tag-tools.ts   # Tag tool registrations and handlers
+│       ├── capability-tools.ts # bear-capabilities tool (registered only when Edit Mode is OFF)
+│       ├── registration.ts # applyWriteGate helper — hides write tools at registration time when Edit Mode is OFF
 │       └── responses.ts   # Tool response helpers
 ├── tests/
 │   ├── fixtures/          # Test fixtures (sample notes, images)
 │   └── system/            # System tests (require Bear app running)
 │       ├── inspector.ts   # Test helpers: callTool, pollUntil, cleanup
+│       ├── registration-gate.test.ts # Locks the read/write tool classification — source of truth for which tools the gate hides
 │       └── *.test.ts      # Per-tool system test suites
 ├── docs/
 │   ├── dev/               # Developer documentation (also for you -- Claude Code)
-│   └── user/              # User documentation
+│   ├── user/              # User documentation
+│   └── assets/            # Demo gif and screenshots embedded in README
 ├── evals/                 # LLM evaluation suite (promptfoo-based A/B testing)
 ├── scripts/               # Build and doc automation scripts
 ├── dist/                  # Compiled JavaScript (build output)
@@ -85,7 +90,7 @@ Read this before making architectural changes; covers system boundaries, design 
 
 ### Website
 
-Promotional single-page landing at `bear-notes-mcp.vercel.app` (Vercel free domain, no custom domain). Built with Astro + Tailwind CSS, lives in `website/`. When adding or removing tools, update the tool count in `website/src/components/FeatureGrid.astro` alongside README.md and docs/user/NPM.md.
+Promotional single-page landing at `bear-notes-mcp.vercel.app` (Vercel free domain, no custom domain). Built with Astro + Tailwind CSS, lives in `website/`. When adding or removing tools, update the tool count in `website/src/components/FeatureGrid.astro`, `website/src/components/InstallGuide.astro`, and `website/src/components/FAQ.astro` alongside README.md and docs/user/NPM.md.
 
 ### Release Process
 
@@ -112,7 +117,7 @@ Design to optimize for LLM consumption patterns; tools are first discovered via 
 
 ### Mutation Response Metadata
 
-Every note-level mutation tool must return **note ID + note title + what changed** in its response. Both values are always available without post-write database reads: the ID comes from the input parameter or creation polling, and the title comes from the pre-flight `getNoteContent()` validation. Never fetch tags or other metadata from the database after a write — Bear's fire-and-forget architecture means post-write reads return pre-mutation state, which would mislead the LLM into thinking the operation failed.
+Every note-level mutation tool — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — must return **note ID + note title + what changed** in its response. Both values are always available without post-write database reads: for modifications the ID comes from the input parameter and the title from the pre-flight `getNoteContent()` validation; for creation the title comes from the input parameter and the ID from post-create polling. Global tag mutations (`bear-rename-tag`, `bear-delete-tag`) are not note-level and intentionally omit note metadata. Never fetch tags or other metadata from the database after a write — Bear's fire-and-forget architecture means post-write reads return pre-mutation state, which would mislead the LLM into thinking the operation failed.
 
 ### Tool Description
 The description field should provide a concise, high-level explanation of what the tool accomplishes:

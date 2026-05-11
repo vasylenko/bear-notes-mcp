@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
+import { DEFAULT_SEARCH_LIMIT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
 import { logger } from '../logging.js';
 import { applyNoteConventions } from '../operations/note-conventions.js';
 import {
@@ -372,7 +372,9 @@ The note has been added to your Bear Notes library.`);
           .int()
           .min(1)
           .optional()
-          .describe('Maximum number of results to return (default: 50, min: 1)'),
+          .describe(
+            `Maximum number of results to return (default: ${DEFAULT_SEARCH_LIMIT}, min: 1)`
+          ),
         createdAfter: z
           .string()
           .optional()

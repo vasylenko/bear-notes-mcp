@@ -19,7 +19,7 @@ Two evals live here:
 
 1. **Bear app running** — the MCP server reads Bear's SQLite DB
 2. **`dist/main.js` built** — run `task build` from project root
-3. **`evals/released/` populated** — drop a baseline npm release into it
+3. **`evals/released/` populated** — drop the **v2.11.0** baseline (the cleanest pre-FTS5 release) into it for `fts5-vs-like.yaml`
 4. **`ANTHROPIC_API_KEY` exported** in your shell
 
 ## Provider Isolation
