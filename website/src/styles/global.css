@@ -1,8 +1,9 @@
 @import 'tailwindcss';
 
-/* Class-based dark variant so an inline <head> script can flip the theme
-   from localStorage + system preference before first paint. The script
-   adds .dark to <html> when the resolved theme is dark. */
+/* Class-based dark variant so an inline <head> script can apply the
+   OS-resolved theme before first paint and the in-page toggle can
+   override it for the session. The script adds .dark to <html> when
+   the resolved theme is dark. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @font-face {
