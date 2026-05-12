@@ -13,13 +13,6 @@ export default [
         sourceType: 'module',
         project: './tsconfig.json',
       },
-      globals: {
-        process: 'readonly',
-        Buffer: 'readonly',
-        console: 'readonly',
-        __dirname: 'readonly',
-        __filename: 'readonly',
-      },
     },
     plugins: {
       '@typescript-eslint': tseslint,
@@ -51,6 +44,14 @@ export default [
         'ignoreDeclarationSort': true
       }],
       
+      // 'no-undef' duplicates a check TypeScript already enforces, and its
+      // lexical-only analysis miscalls Node globals like URLSearchParams.
+      // Per typescript-eslint ("strongly recommend that you do not use the
+      // no-undef lint rule on TypeScript projects" -
+      // https://typescript-eslint.io/troubleshooting/faqs/eslint/) and
+      // ESLint's own 'Handled by TypeScript' note for the rule.
+      'no-undef': 'off',
+
       // Keep it simple - disable overly strict rules
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unused-expressions': 'off',

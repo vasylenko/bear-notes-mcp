@@ -15,13 +15,25 @@ const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
 
-function formatBearNote(row: Record<string, unknown>): BearNote {
-  const title = (row.title as string) || 'Untitled';
-  const identifier = row.identifier as string;
-  const modificationDate = row.modificationDate as number;
-  const creationDate = row.creationDate as number;
-  const pinned = row.pinned as number | undefined;
-  const text = row.text as string | undefined;
+interface NoteContentRow {
+  title: string | null;
+  identifier: string;
+  modificationDate: number;
+  creationDate: number;
+  pinned: number | null;
+  text: string | null;
+  filename: string | null;
+  fileContent: string | null;
+}
+
+interface NoteTitleMatchRow {
+  title: string | null;
+  identifier: string;
+  modificationDate: number;
+}
+
+function formatBearNote(row: NoteContentRow): BearNote {
+  const { title, identifier, modificationDate, creationDate, pinned, text } = row;
 
   if (!identifier) {
     logAndThrow('Database error: Note identifier is missing from database row');
@@ -37,12 +49,12 @@ function formatBearNote(row: Record<string, unknown>): BearNote {
   const pin: 'yes' | 'no' = pinned ? 'yes' : 'no';
 
   return {
-    title,
+    title: title || 'Untitled',
     identifier,
     modification_date,
     creation_date,
     pin,
-    ...(text !== undefined && { text }),
+    ...(text !== null && text !== undefined && { text }),
   };
 }
 
@@ -83,31 +95,25 @@ export function getNoteContent(identifier: string): BearNote | null {
         AND note.ZTRASHED = 0
         AND note.ZENCRYPTED = 0
     `;
-    const stmt = db.prepare(query);
-    const rows = stmt.all(identifier);
-    if (!rows || rows.length === 0) {
+    const rows = db.prepare(query).all(identifier) as unknown as NoteContentRow[];
+    if (rows.length === 0) {
       logger.info(`Note not found for identifier: ${identifier}`);
       return null;
     }
 
     // Process multiple rows (note + files) into single note object
-    const firstRow = rows[0] as Record<string, unknown>;
-    const formattedNote = formatBearNote(firstRow);
+    const formattedNote = formatBearNote(rows[0]);
 
     // Collect file content into a structured array — kept separate from note text
     // to prevent the synthetic file section from leaking into write operations (#86)
     const files: AttachedFile[] = [];
     for (const row of rows) {
-      const rowData = row as Record<string, unknown>;
-      const filename = rowData.filename as string;
-      const fileContent = rowData.fileContent as string;
-
-      if (filename) {
-        const trimmed = fileContent?.trim();
+      if (row.filename) {
+        const trimmed = row.fileContent?.trim();
         const content = trimmed
           ? trimmed
           : '*[File content not available — Bear has not extracted text from this file type]*';
-        files.push({ filename, content });
+        files.push({ filename: row.filename, content });
       }
     }
 
@@ -160,24 +166,20 @@ export function findNotesByTitle(title: string): NoteTitleMatch[] {
         AND ZENCRYPTED = 0
       ORDER BY ZMODIFICATIONDATE DESC
     `;
-    const stmt = db.prepare(query);
-    const rows = stmt.all(title.trim());
+    const rows = db.prepare(query).all(title.trim()) as unknown as NoteTitleMatchRow[];
 
-    if (!rows || rows.length === 0) {
+    if (rows.length === 0) {
       logger.info(`No notes found with title: "${title}"`);
       return [];
     }
 
     logger.info(`Found ${rows.length} note(s) with title: "${title}"`);
 
-    return rows.map((row) => {
-      const r = row as Record<string, unknown>;
-      return {
-        identifier: r.identifier as string,
-        title: (r.title as string) || 'Untitled',
-        modification_date: convertCoreDataTimestamp(r.modificationDate as number),
-      };
-    });
+    return rows.map((row) => ({
+      identifier: row.identifier,
+      title: row.title || 'Untitled',
+      modification_date: convertCoreDataTimestamp(row.modificationDate),
+    }));
   } catch (error) {
     logAndThrow(
       `Database error: Failed to find notes by title: ${error instanceof Error ? error.message : String(error)}`
@@ -245,8 +247,8 @@ export function searchNotes(
   // Data timestamps. The infra layer takes pre-resolved numeric timestamps so it
   // doesn't need to know about Bear's relative-date conventions.
   const spec: SearchSpec = { limit: limit || DEFAULT_SEARCH_LIMIT };
-  if (hasSearchTerm) spec.term = trimmedTerm!;
-  if (hasTag) spec.tag = trimmedTag!;
+  if (trimmedTerm) spec.term = trimmedTerm;
+  if (trimmedTag) spec.tag = trimmedTag;
   if (hasPinnedFilter) spec.pinned = true;
   if (dateFilter) {
     // Snaps the user's date to either start-of-day (inclusive lower bound) or
@@ -435,8 +437,7 @@ export function parseDateString(dateString: string): Date {
 export function stripLeadingHeader(text: string, header: string): string {
   if (!header) return text;
 
-  const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const leadingHeaderRegex = new RegExp(`^#{1,6}\\s+${escaped}\\s*\\n?`, 'i');
+  const leadingHeaderRegex = new RegExp(`^#{1,6}\\s+${RegExp.escape(header)}\\s*\\n?`, 'i');
   return text.replace(leadingHeaderRegex, '');
 }
 
@@ -447,7 +448,6 @@ export function stripLeadingHeader(text: string, header: string): string {
  */
 export function noteHasHeader(noteText: string, header: string): boolean {
   const cleanHeader = header.replace(/^#+\s*/, '');
-  const escaped = cleanHeader.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headerRegex = new RegExp(`^#{1,6}\\s+${escaped}\\s*$`, 'mi');
+  const headerRegex = new RegExp(`^#{1,6}\\s+${RegExp.escape(cleanHeader)}\\s*$`, 'mi');
   return headerRegex.test(noteText);
 }
