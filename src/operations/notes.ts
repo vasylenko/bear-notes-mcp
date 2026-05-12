@@ -437,7 +437,7 @@ export function parseDateString(dateString: string): Date {
 export function stripLeadingHeader(text: string, header: string): string {
   if (!header) return text;
 
-  const leadingHeaderRegex = new RegExp(`^#{1,6}\\s+${RegExp.escape(header)}\\s*\\n?`, 'i');
+  const leadingHeaderRegex = new RegExp(String.raw`^#{1,6}\s+${RegExp.escape(header)}\s*\n?`, 'i');
   return text.replace(leadingHeaderRegex, '');
 }
 
@@ -448,6 +448,6 @@ export function stripLeadingHeader(text: string, header: string): string {
  */
 export function noteHasHeader(noteText: string, header: string): boolean {
   const cleanHeader = header.replace(/^#+\s*/, '');
-  const headerRegex = new RegExp(`^#{1,6}\\s+${RegExp.escape(cleanHeader)}\\s*$`, 'mi');
+  const headerRegex = new RegExp(String.raw`^#{1,6}\s+${RegExp.escape(cleanHeader)}\s*$`, 'mi');
   return headerRegex.test(noteText);
 }
