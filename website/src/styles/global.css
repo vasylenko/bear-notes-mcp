@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+/* Class-based dark variant so an inline <head> script can apply the
+   OS-resolved theme before first paint and the in-page toggle can
+   override it for the session. The script adds .dark to <html> when
+   the resolved theme is dark. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: 'Plus Jakarta Sans';
   font-style: normal;
@@ -34,6 +40,25 @@
   /* Radius — two tiers: pills (buttons/badges) and cards (content containers) */
   --radius-pill: 9999px;
   --radius-card: 16px;
+}
+
+:root.dark {
+  /* Bear's red — lifted for AA 4.5:1 on surface-1 (4.83:1) and surface-0 (5.98:1) */
+  --color-accent: #ff5060;
+  --color-accent-muted: rgba(255, 80, 96, 0.2);
+
+  /* Warm dark surfaces — elevation inverts: surface-0 deeper than surface-1 */
+  --color-surface-0: #15140f;
+  --color-surface-1: #252321;
+
+  /* Warm light text */
+  --color-text-primary: #e8e4df;
+  --color-text-secondary: #a8a39c;
+  --color-text-muted: #8a857e;
+
+  /* Soft borders */
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 80, 96, 0.35);
 }
 
 /* Text highlight */
@@ -138,5 +163,21 @@
 .trust-pill:hover {
   border-color: var(--color-border-hover);
   color: var(--color-text-primary);
+}
+
+/* Dark mode — override selectors with hardcoded rgba(0,0,0,…) literals.
+   Borders rely on --color-border (now light-on-dark) for the visible edge;
+   shadows drop or invert to keep depth without "glow". */
+.dark .surface-card {
+  box-shadow: none;
+}
+.dark .surface-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+.dark .cta-pill {
+  box-shadow: none;
+}
+.dark .trust-pill {
+  background: rgba(255, 255, 255, 0.04);
 }
 

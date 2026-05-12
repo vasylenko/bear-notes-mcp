@@ -2,6 +2,7 @@
 import { site } from '../data/site';
 import '../styles/global.css';
 import Footer from '../components/Footer.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
 import Analytics from '@vercel/analytics/astro';
 
 interface Props {
@@ -48,6 +49,27 @@ const jsonLd = {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f9f8f5" id="theme-color-meta" />
+    <script is:inline>
+      // Synchronous theme resolution before first paint — OS preference only,
+      // no persistence. The toggle button is session-only: it flips the class
+      // for the current view but a reload (or any OS-pref change) restores
+      // the OS-matched state.
+      (function () {
+        try {
+          var mq = window.matchMedia('(prefers-color-scheme: dark)');
+          function apply(isDark) {
+            document.documentElement.classList.toggle('dark', isDark);
+            var meta = document.getElementById('theme-color-meta');
+            if (meta) meta.setAttribute('content', isDark ? '#15140f' : '#f9f8f5');
+          }
+          apply(mq.matches);
+          mq.addEventListener('change', function (e) {
+            apply(e.matches);
+          });
+        } catch (e) {}
+      })();
+    </script>
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <meta name="google-site-verification" content="a6qE3fvLsWnhHgfRHpPvnMbtvXwSGLn2SzgdNt9e4XE" />
@@ -76,9 +98,12 @@ const jsonLd = {
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   </head>
   <body class="bg-surface-0 text-text-primary min-h-screen antialiased selection:bg-accent/10 selection:text-accent">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-accent focus:rounded-lg focus:shadow-md">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white dark:focus:bg-surface-1 focus:text-accent focus:rounded-lg focus:shadow-md">
       Skip to content
     </a>
+    <div class="fixed top-4 right-4 z-40">
+      <ThemeToggle />
+    </div>
     <main id="main-content">
       <slot />
     </main>

@@ -1,0 +1,52 @@
+---
+---
+
+<button
+  id="theme-toggle"
+  type="button"
+  class="inline-flex items-center justify-center w-9 h-9 rounded-pill border border-border bg-surface-1 text-text-muted hover:text-accent hover:border-border-hover transition-colors"
+  aria-label="Switch theme"
+  aria-pressed="false"
+  title="Switch theme"
+>
+  <svg id="theme-icon-light" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+  </svg>
+  <svg id="theme-icon-dark" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  </svg>
+</button>
+
+<script is:inline>
+  (function () {
+    var btn = document.getElementById('theme-toggle');
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = 'true';
+
+    function syncIcon() {
+      var isDark = document.documentElement.classList.contains('dark');
+      var sun = document.getElementById('theme-icon-light');
+      var moon = document.getElementById('theme-icon-dark');
+      if (sun) sun.classList.toggle('hidden', isDark);
+      if (moon) moon.classList.toggle('hidden', !isDark);
+      var label = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
+      btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+    }
+
+    syncIcon();
+    new MutationObserver(syncIcon).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    btn.addEventListener('click', function () {
+      var willBeDark = !document.documentElement.classList.contains('dark');
+      document.documentElement.classList.toggle('dark', willBeDark);
+      var meta = document.getElementById('theme-color-meta');
+      if (meta) meta.setAttribute('content', willBeDark ? '#15140f' : '#f9f8f5');
+    });
+  })();
+</script>
