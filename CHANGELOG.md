@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.1] - 2026-05-12
 
 ### Internal
 - **TypeScript upgraded from 5.9.3 to 6.0.3** — `@types/node` is now declared explicitly in `tsconfig.json` (TS6 no longer auto-loads ambient types reachable only through transitive peer deps). Hand-rolled regex escapes in `operations/notes.ts` replaced with the Stage-4 `RegExp.escape` (V8 13.6; ships with all Node 24 releases). SQL rows are now cast to typed interfaces at the query boundary instead of field-by-field. No user-facing behavior changes.
