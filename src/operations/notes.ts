@@ -54,7 +54,7 @@ function formatBearNote(row: NoteContentRow): BearNote {
     modification_date,
     creation_date,
     pin,
-    ...(text !== null && text !== undefined && { text }),
+    ...(text != null && { text }),
   };
 }
 
