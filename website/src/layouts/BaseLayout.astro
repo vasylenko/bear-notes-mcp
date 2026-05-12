@@ -48,8 +48,31 @@ const jsonLd = {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f8f5" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#15140f" />
+    <meta name="theme-color" content="#f9f8f5" id="theme-color-meta" />
+    <script is:inline>
+      // Synchronous theme resolution before first paint. Order of precedence:
+      //   1. localStorage.theme ('light' | 'dark') — user's manual override
+      //   2. matchMedia('(prefers-color-scheme: dark)') — OS preference fallback
+      // When no override is set, the matchMedia listener keeps .dark in sync
+      // with OS changes live (the "auto" mode).
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = stored === 'dark' || (stored !== 'light' && systemDark);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.getElementById('theme-color-meta').setAttribute('content', '#15140f');
+          }
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+            if (!localStorage.getItem('theme')) {
+              document.documentElement.classList.toggle('dark', e.matches);
+              document.getElementById('theme-color-meta').setAttribute('content', e.matches ? '#15140f' : '#f9f8f5');
+            }
+          });
+        } catch (e) {}
+      })();
+    </script>
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <meta name="google-site-verification" content="a6qE3fvLsWnhHgfRHpPvnMbtvXwSGLn2SzgdNt9e4XE" />
