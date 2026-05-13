@@ -112,6 +112,43 @@ The read/write classification is locked in by the system test at `tests/system/r
 
 There is no delete tool. Too destructive for AI-assisted workflows — a misidentified note ID would mean permanent data loss. Archiving is the closest alternative and is reversible in Bear.
 
+### Optimistic Concurrency Control (Inform Half)
+
+Every note-scoped tool response carries the note's current revision (`ZSFNOTE.Z_OPT`) as `Revision: <n>` alongside the note ID. This is the *inform* half of Optimistic Concurrency Control (OCC, version-number variant) — the pattern Kung & Robinson defined in their 1981 ACM TODS paper *"On Optimistic Methods for Concurrency Control"* and that RFC 9110 §13.1.1 ships as HTTP `If-Match` / `412 Precondition Failed`.
+
+The *enforce* half — requiring a client-supplied revision on every write and rejecting stale ones with a `412`-equivalent — is a separate future sub-issue (SVA-22) and is **not** part of inform. Inform is strictly additive: no input schemas change, no new error states, no consumer coordination needed.
+
+Two write-path patterns capture the revision honestly:
+
+```
+  Content writes (add-text, replace-text, create, add-file, add-tag)
+    │
+    ▼ existingNote.revision (free from pre-flight getNoteContent)
+    │
+    ▼ fire bear://x-callback-url/...
+    │
+    ▼ awaitRevisionIncrement(id, baseline) — polls Z_OPT every 15ms
+    │   until the value differs from baseline, capped at 500ms
+    ▼
+   response includes `Revision: <newRev>` or
+   `Revision: unknown (write confirmation timed out after 500ms)`
+
+  bear-archive-note (special — post-archive the note is filtered)
+    │
+    ▼ existingNote.revision (captured BEFORE the archive URL fires)
+    │
+    ▼ fire bear://x-callback-url/archive
+    ▼
+   response includes `Revision at time of archive: <preArchiveRev>`
+   (explicit temporal label — distinguishable from a live current revision)
+```
+
+**Constraint partially lifted: write verification.** *Key Design Constraints → Bear's URL Scheme Quirks* notes "Write verification: No way to confirm Bear processed a URL action." OCC inform lifts this for any write that bumps `Z_OPT` — polling waits for the change, so a non-null `Revision` in the response *is* the confirmation. The constraint persists for writes that don't bump `Z_OPT` (the timeout sentence honestly signals this rather than masking it).
+
+**Constraint partially lifted: test pause-after-write.** *Testing Constraints* notes existing tests pause briefly after writes "giving Bear time to process the callback." New OCC system tests instead use the response's `Revision` as a deterministic completion signal — the polling already waited for Bear, so no test-side `sleep` is needed.
+
+Empirical findings about `Z_OPT` behavior across URL actions live in `BEAR_DATABASE_SCHEMA.md`. The compound polling rule (compare for inequality, not `baseline + 1`) is driven by the empirically observed `+2` first-edit-after-creation jump.
+
 ---
 
 ## Key Design Constraints

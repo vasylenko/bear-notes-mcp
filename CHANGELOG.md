@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Every note-scoped tool response now carries a `Revision: <n>` line** alongside the note ID, sourced from Bear's `ZSFNOTE.Z_OPT` optimistic-locking counter. This is the inform half of Optimistic Concurrency Control (OCC) — your client (or LLM agent) can compare the revision between calls to detect "did this note change since I last read it." Applies to the 9 note-scoped tools (`bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes`, `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note`); global tag tools and `bear-capabilities` are unaffected. For writes, the new value is captured via a post-dispatch poll that doubles as write confirmation — previously only `bear-create-note` had this; now every note-mutating tool does. On the rare poll timeout the response surfaces `Revision: unknown (write confirmation timed out after 500ms)` rather than a stale value. `bear-archive-note` reports the pre-archive revision with the explicit label `Revision at time of archive: <n>` because post-archive the note is filtered from default queries. Strictly additive: no input schemas change, no new error states. Enforcement (rejecting writes that supply a stale revision with a 412-equivalent) is a separate follow-up.
+
 ## [3.0.1] - 2026-05-12
 
 ### Internal
