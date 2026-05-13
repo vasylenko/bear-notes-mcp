@@ -63,11 +63,20 @@ All write operations execute in the background without disrupting the user's Bea
         │     (unicode61 tokenizer, remove_diacritics=2) plus a side
         │     note_tags table.
         │
-        └──▶ Run: FTS5 MATCH + ORDER BY rank (per-column BM25 weights:
-              title/body=2.0, ocr=0.5) with snippet() output (matched terms
-              wrapped in `[...]`) for term queries; mod-date DESC with a
-              200-character body-prefix snippet for filter-only queries.
-              Filters (tag, pinned, date) compose with AND.
+        ├──▶ Run: FTS5 MATCH + ORDER BY rank (per-column BM25 weights:
+        │     title/body=2.0, ocr=0.5) with snippet() output (matched terms
+        │     wrapped in `[...]`) for term queries; mod-date DESC with a
+        │     200-character body-prefix snippet for filter-only queries.
+        │     Filters (tag, pinned, date) compose with AND.
+        │
+        └──▶ Hydrate revision (`fetchRevisionsForResults`): batch SELECT
+              against the live Bear DB to attach each result's current
+              `Z_OPT`. Goes against the live DB rather than the FTS shadow
+              because the drift sentinel above misses pin-only and tag-only
+              writes that bump `Z_OPT` without bumping `ZMODIFICATIONDATE` —
+              a cached revision would silently lag. Identifiers absent from
+              the live DB (note vanished between rebuild and hydration)
+              surface as `Revision: unknown` with `REVISION_UNAVAILABLE_SENTENCE`.
 ```
 
 **Why in-memory, not persistent.** Bear syncs notes across the user's machines via iCloud. Any persistent derived state (a side-car DB, a shadow FTS5 file) would diverge from Bear's authoritative state without coordination. In-memory rebuild satisfies cross-Mac consistency by construction. Build cost (~70 ms / 229 notes empirically) is small enough to absorb on first search per server process.
