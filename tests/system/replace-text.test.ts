@@ -4,8 +4,10 @@ import {
   callTool,
   cleanupTestNotes,
   extractNoteBody,
-  tryExtractNoteId,
+  readNoteRevision,
   sleep,
+  tryExtractNoteId,
+  tryExtractRevision,
   uniqueTitle,
 } from './inspector.js';
 
@@ -237,5 +239,42 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     expect(noteBody).toContain('Tracking content here');
     expect(noteBody).toContain('Services content here');
     expect(noteBody).toContain('Other content');
+  });
+
+  it('emits Revision honestly after replace-text (OCC inform)', async () => {
+    // /add-text in replace mode bumps ZSFNOTE.Z_OPT by +1 (empirically
+    // confirmed — see docs/dev/BEAR_DATABASE_SCHEMA.md). The disjunction
+    // (numeric revision OR timeout sentence) stays for forward-compat: a
+    // future Bear regression that stops bumping should still pass via the
+    // timeout branch rather than a silent stale value.
+    const title = uniqueTitle(TEST_PREFIX, 'ReplaceTextRevision', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Pre-replace body for revision test', tags: 'system-test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    // Settle briefly so the create-write has fully propagated before reading baseline.
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const preWriteRevision = readNoteRevision(noteId);
+    expect(preWriteRevision).not.toBeNull();
+
+    const result = callTool({
+      toolName: 'bear-replace-text',
+      args: { id: noteId, scope: 'full-note-body', text: 'Replaced body for revision test' },
+      env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
+    }).content[0].text;
+
+    const containsTimeoutSentence = result.includes('Revision: unknown');
+    const responseRevision = tryExtractRevision(result);
+
+    expect(
+      containsTimeoutSentence || responseRevision !== null,
+      `Expected either a numeric Revision or the timeout sentence, got:\n${result}`
+    ).toBe(true);
+
+    if (responseRevision !== null) {
+      expect(responseRevision).toBeGreaterThanOrEqual(preWriteRevision!);
+    }
   });
 });

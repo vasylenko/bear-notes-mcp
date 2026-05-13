@@ -4,8 +4,10 @@ import {
   callTool,
   cleanupTestNotes,
   extractNoteBody,
+  readNoteRevision,
   sleep,
   tryExtractNoteId,
+  tryExtractRevision,
   uniqueTitle,
 } from './inspector.js';
 
@@ -99,5 +101,41 @@ describe('bear-add-text via MCP Inspector CLI', () => {
     const noteBody = extractNoteBody(openResult);
     expect(noteBody).toContain('Original content');
     expect(noteBody).toContain('Appended text');
+  });
+
+  it('emits Revision honestly after add-text (OCC inform)', async () => {
+    // /add-text bumps ZSFNOTE.Z_OPT by +1 (empirically confirmed — see
+    // docs/dev/BEAR_DATABASE_SCHEMA.md). The disjunction (numeric revision OR
+    // timeout sentence) stays for forward-compat: a future Bear regression
+    // that stops bumping should still pass via the timeout branch rather than
+    // a silent stale value.
+    const title = uniqueTitle(TEST_PREFIX, 'AddTextRevision', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Pre-write body for revision test', tags: 'system-test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    // Settle briefly so the create-write has fully propagated before reading baseline.
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const preWriteRevision = readNoteRevision(noteId);
+    expect(preWriteRevision).not.toBeNull();
+
+    const result = callTool({
+      toolName: 'bear-add-text',
+      args: { id: noteId, text: 'Appended text for revision test' },
+    }).content[0].text;
+
+    const containsTimeoutSentence = result.includes('Revision: unknown');
+    const responseRevision = tryExtractRevision(result);
+
+    expect(
+      containsTimeoutSentence || responseRevision !== null,
+      `Expected either a numeric Revision or the timeout sentence, got:\n${result}`
+    ).toBe(true);
+
+    if (responseRevision !== null) {
+      expect(responseRevision).toBeGreaterThanOrEqual(preWriteRevision!);
+    }
   });
 });

@@ -4,8 +4,10 @@ import {
   callTool,
   cleanupTestNotes,
   extractNoteBody,
+  readNoteRevision,
   trashNote,
   tryExtractNoteId,
+  tryExtractRevision,
   uniqueTitle,
 } from './inspector.js';
 
@@ -131,5 +133,26 @@ describe('bear-open-note by title', () => {
 
     expect(openResult).toContain(noteTitle);
     expect(extractNoteBody(openResult)).toContain(noteText);
+  });
+
+  it('emits Revision matching live Z_OPT in the metadata block (OCC inform)', () => {
+    const noteTitle = title('Revision');
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title: noteTitle, text: 'Revision-line metadata test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    const openResult = callTool({
+      toolName: 'bear-open-note',
+      args: { id: noteId },
+    }).content[0].text;
+
+    const responseRevision = tryExtractRevision(openResult);
+    const dbRevision = readNoteRevision(noteId);
+
+    expect(responseRevision).not.toBeNull();
+    expect(dbRevision).not.toBeNull();
+    expect(responseRevision).toBe(dbRevision);
   });
 });
