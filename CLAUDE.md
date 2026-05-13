@@ -29,7 +29,7 @@ Read the relevant reference doc when working in that area:
 
 - `docs/dev/SPECIFICATION.md` — system boundaries, design constraints, safety gates, hybrid read/write rationale. Read before architectural changes.
 - `docs/dev/SECURITY.md` — trust model and defenses.
-- @docs/dev/MCP_STANDARDS.md — generic MCP server design conventions (tool description vs schema separation, mutation response conventions, examples). Project-agnostic — Bear-specific rules live in SPECIFICATION.md. Read when adding or modifying MCP tools.
+- @docs/dev/MCP_STANDARDS.md — this project's standards for designing our MCP server's tool surface (tool description vs schema separation, mutation response conventions, examples). Bear-specific implementation details (specific tool names, DB columns, helper functions) live in SPECIFICATION.md, not here. Read when adding or modifying MCP tools.
 - @docs/dev/CODE_STYLE.md — style choices not auto-enforced; the WHY-not-WHAT comments rule.
 
 ## Core Workflows

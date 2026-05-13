@@ -1,8 +1,8 @@
 # MCP Standards
 
-Generic conventions for designing MCP server tool surfaces — how to write tool descriptions, schemas, and mutation responses so they work well with LLM clients. The rules here are portable: they apply to any MCP server, not just this one. Read when adding a new tool or modifying an existing one.
+This project's conventions for designing our MCP server's tool surface — how we write tool descriptions, schemas, and mutation responses so they work well with LLM clients. Project-wide rules; they apply to every tool we add or modify. Read when adding a new tool or touching an existing one.
 
-Project-specific instantiations (which fields a mutation response carries on this server, which underlying system tokens it threads, which exceptions the underlying system's write semantics force) belong in `SPECIFICATION.md` and `BEAR_DATABASE_SCHEMA.md`, not here. This doc stays free of Bear-specific tool names, column names, and helper functions so that the rules can be lifted into a future MCP project as-is.
+Specific instantiation details (which fields a particular mutation response carries, which underlying system tokens it threads, which exceptions Bear's URL-API quirks force) live in `SPECIFICATION.md` and `BEAR_DATABASE_SCHEMA.md` — not here. This doc stays focused on the conventions themselves, so they remain easy to apply consistently across new and existing tools; it deliberately doesn't name specific tools, DB columns, or helper functions, because those belong with the implementations they describe.
 
 ## Separation of Concerns
 
