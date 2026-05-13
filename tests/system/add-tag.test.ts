@@ -12,6 +12,7 @@ import {
 
 const TEST_PREFIX = '[Bear-MCP-stest-add-tag]';
 const RUN_ID = Date.now();
+const PAUSE_AFTER_WRITE_OP = 100; // ms to wait after write operations for Bear to process changes
 
 afterAll(() => {
   cleanupTestNotes(TEST_PREFIX);
@@ -72,7 +73,7 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
     // Settle briefly so create's subtitle/index recompute save lands before
     // we read the baseline (otherwise Z_OPT can still jump +2 between baseline
     // and the handler's pre-flight read — see BEAR_DATABASE_SCHEMA.md).
-    await sleep(100);
+    await sleep(PAUSE_AFTER_WRITE_OP);
     const preAddRevision = readNoteRevision(noteId);
     expect(preAddRevision).not.toBeNull();
 
