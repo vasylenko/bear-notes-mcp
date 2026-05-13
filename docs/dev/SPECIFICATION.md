@@ -118,10 +118,11 @@ Every note-scoped tool response carries the note's current revision (`ZSFNOTE.Z_
 
 The *enforce* half — requiring a client-supplied revision on every write and rejecting stale ones with a `412`-equivalent — is a separate future sub-issue (SVA-22) and is **not** part of inform. Inform is strictly additive: no input schemas change, no new error states, no consumer coordination needed.
 
-Two write-path patterns capture the revision honestly:
+Three write-path patterns capture the revision honestly — one per shape of "what's known before vs after the URL fires":
 
 ```
-  Content writes (add-text, replace-text, create, add-file, add-tag)
+  Content writes (add-text, replace-text, add-file, add-tag)
+  — pre-write baseline + post-write poll for the change
     │
     ▼ existingNote.revision (free from pre-flight getNoteContent)
     │
@@ -133,7 +134,22 @@ Two write-path patterns capture the revision honestly:
    response includes `Revision: <newRev>` or
    `Revision: unknown (write confirmation timed out after 500ms)`
 
-  bear-archive-note (special — post-archive the note is filtered)
+  bear-create-note
+  — no pre-flight baseline (note doesn't exist yet); single bundled SELECT
+  for {id, revision} after the URL fires
+    │
+    ▼ fire bear://x-callback-url/create
+    │
+    ▼ awaitNoteCreation(title) — polls ZSFNOTE by (title, recent ZCREATIONDATE),
+    │   projecting both ZUNIQUEIDENTIFIER and Z_OPT in one SELECT
+    ▼
+   response includes `Note ID: <id>` + `Revision: <revision>`, or both
+   marked as unknown when the new row is never observed within the
+   creation poll window
+
+  bear-archive-note
+  — pre-write snapshot only; post-archive the note is filtered from
+  default queries (ZARCHIVED = 1), so a post-write read would return null
     │
     ▼ existingNote.revision (captured BEFORE the archive URL fires)
     │
