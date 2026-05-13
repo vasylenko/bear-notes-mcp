@@ -1,6 +1,8 @@
 # MCP Standards
 
-Conventions for the MCP server's tool surface — how to write tool descriptions, schemas, and mutation responses so they work well with LLM clients. Read this when adding a new tool or modifying an existing one.
+Generic conventions for designing MCP server tool surfaces — how to write tool descriptions, schemas, and mutation responses so they work well with LLM clients. The rules here are portable: they apply to any MCP server, not just this one. Read when adding a new tool or modifying an existing one.
+
+Project-specific instantiations (which fields a mutation response carries on this server, which underlying system tokens it threads, which exceptions the underlying system's write semantics force) belong in `SPECIFICATION.md` and `BEAR_DATABASE_SCHEMA.md`, not here. This doc stays free of Bear-specific tool names, column names, and helper functions so that the rules can be lifted into a future MCP project as-is.
 
 ## Separation of Concerns
 
@@ -10,16 +12,17 @@ Tool descriptions help with tool **selection** and understanding; schema (`descr
 
 Tools are first discovered via descriptions, then invoked via schemas. Optimize both for the consumer (an LLM), not for human readability. The reference implementations are `src/tools/note-tools.ts` and `src/tools/tag-tools.ts` — mirror their patterns when adding new tools.
 
-## Mutation Response Metadata
+## Mutation Response Conventions
 
-Every note-level mutation tool — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — must return **note ID + note title + what changed** in its response. Both values are always available without post-write database reads:
+A mutation tool's response should give the LLM enough metadata to:
 
-- For modifications: ID comes from the input parameter, title from the pre-flight `getNoteContent()` validation
-- For creation: title comes from the input parameter, ID from post-create polling
+1. **Confirm the write landed** — a "what-changed" summary or a version token the LLM can compare against its prior view.
+2. **Address the affected resource in follow-up calls** — a stable identifier (note ID, row ID, document path, etc.) the LLM can pass back without round-tripping through search.
+3. **Reason about freshness for subsequent writes** — a version token where the underlying system exposes one (HTTP `ETag`, Core Data `Z_OPT`, document revision, etc.). This is what enables eventual *enforce*-style optimistic concurrency (HTTP `If-Match` / `412 Precondition Failed`).
 
-Global tag mutations (`bear-rename-tag`, `bear-delete-tag`) are not note-level and intentionally omit note metadata.
+**Field-sourcing discipline matters more than the field list.** Prefer values already available pre-write — input parameters, pre-flight validation reads, helpers that bundle id+version in a single SELECT — over post-write reads that may reflect pre-mutation state if the underlying write path is asynchronous and has no completion handle. When a post-write read is genuinely required to capture a version token, design it to wait for a *change* (write-confirmation) rather than to sample current state, and surface a clearly-labelled sentinel on timeout instead of a value that could be stale.
 
-Never fetch tags or other metadata from the database after a write — Bear's fire-and-forget architecture means post-write reads return pre-mutation state, which would mislead the LLM into thinking the operation failed.
+For this server's instantiation — which fields the response carries, which underlying token is the version, how it's sourced safely, and the narrow exceptions to the general "never read after write" rule — see `SPECIFICATION.md`.
 
 ## Tool Description
 
