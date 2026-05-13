@@ -378,7 +378,21 @@ export async function awaitRevisionIncrement(
 
   try {
     db = openBearDatabase();
-    const stmt = db.prepare('SELECT Z_OPT as revision FROM ZSFNOTE WHERE ZUNIQUEIDENTIFIER = ?');
+    // The trash/archive/encrypted filters guard against attributing an unrelated
+    // mid-poll Z_OPT bump to our write. If a concurrent process trashes/archives/
+    // encrypts the note during the 500ms poll window and Bear bumps Z_OPT for
+    // THAT row update, our poll would resolve on it and falsely report
+    // confirmation of OUR write. With the filters, such a note becomes invisible
+    // to this query mid-poll and we fall through to timeout, emitting
+    // REVISION_TIMEOUT_SENTENCE honestly. bear-archive-note uses a pre-write
+    // snapshot (not this helper), so no interaction.
+    const stmt = db.prepare(
+      `SELECT Z_OPT as revision FROM ZSFNOTE
+       WHERE ZUNIQUEIDENTIFIER = ?
+         AND ZARCHIVED = 0
+         AND ZTRASHED = 0
+         AND ZENCRYPTED = 0`
+    );
     const deadline = Date.now() + REVISION_POLL_CAP_MS;
 
     while (Date.now() < deadline) {

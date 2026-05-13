@@ -204,7 +204,10 @@ describe('awaitRevisionIncrement', () => {
       CREATE TABLE ZSFNOTE (
         Z_PK INTEGER PRIMARY KEY,
         ZUNIQUEIDENTIFIER TEXT,
-        Z_OPT INTEGER DEFAULT 1
+        Z_OPT INTEGER DEFAULT 1,
+        ZARCHIVED INTEGER DEFAULT 0,
+        ZTRASHED INTEGER DEFAULT 0,
+        ZENCRYPTED INTEGER DEFAULT 0
       )
     `);
     originalBearDbPath = process.env.BEAR_DB_PATH;
