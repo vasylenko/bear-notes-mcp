@@ -294,12 +294,12 @@ export function searchNotes(
  * the note creation already succeeded, so errors here degrade gracefully to
  * null instead of throwing.
  *
- * Returns both id and revision (OCC inform) in a single tuple because the
+ * Returns both id and revision (OCC inform) in a single object because the
  * existing SELECT already reads the note row; projecting Z_OPT is a no-cost
  * change that saves callers a second DB round trip.
  *
  * @param title - Exact title to match (case-sensitive, as Bear stores it)
- * @returns Tuple of created note's identifier and revision, or null on timeout
+ * @returns Object with the created note's identifier and revision, or null on timeout
  */
 export async function awaitNoteCreation(
   title: string
