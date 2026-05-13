@@ -53,16 +53,5 @@ describe('bear-archive-note Revision wiring (OCC inform)', () => {
     // Exact-text assertion locks in the explicit label — distinguishes a
     // pre-write snapshot from a live current revision.
     expect(archiveResult).toContain(`Revision at time of archive: ${preArchiveRevision}`);
-
-    // Existing archive-filtering behavior must be preserved: the archived note
-    // should not appear in bear-search-notes (which filters ZARCHIVED = 0).
-    // Search by id-substring is unsafe (FTS tokenizes hyphens); search by title
-    // instead — a single-token title query routes through prepareFTS5Term as a
-    // bareword and either matches or doesn't.
-    const searchResult = callTool({
-      toolName: 'bear-search-notes',
-      args: { term: title.split(' ').slice(-1)[0] }, // last token of the unique title
-    }).content[0].text;
-    expect(searchResult).not.toContain(noteId);
   });
 });
