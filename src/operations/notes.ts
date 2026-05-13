@@ -1,6 +1,6 @@
 import { setTimeout } from 'node:timers/promises';
 
-import type { AttachedFile, BearNote, DateFilter, NoteTitleMatch } from '../types.js';
+import type { AttachedFile, BearNote, DateFilter, NoteRevision, NoteTitleMatch } from '../types.js';
 import { DEFAULT_SEARCH_LIMIT } from '../config.js';
 import { closeBearDatabase, openBearDatabase } from '../infra/database.js';
 import { type SearchResults, type SearchSpec, searchByQuery } from '../infra/fts-index.js';
@@ -15,12 +15,20 @@ const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
 
+// OCC inform polling cap (SVA-21). 500ms is a generous upper bound vs. SVA-20's
+// empirically observed <30ms typical propagation from `open -g` to observable
+// SQLite. 15ms interval keeps polls tight enough to capture sub-30ms writes
+// without spamming SQLite (~33 in-process reads worst case per write).
+export const REVISION_POLL_INTERVAL_MS = 15;
+export const REVISION_POLL_CAP_MS = 500;
+
 interface NoteContentRow {
   title: string | null;
   identifier: string;
   modificationDate: number;
   creationDate: number;
   pinned: number | null;
+  revision: number;
   text: string | null;
   filename: string | null;
   fileContent: string | null;
@@ -33,7 +41,7 @@ interface NoteTitleMatchRow {
 }
 
 function formatBearNote(row: NoteContentRow): BearNote {
-  const { title, identifier, modificationDate, creationDate, pinned, text } = row;
+  const { title, identifier, modificationDate, creationDate, pinned, revision, text } = row;
 
   if (!identifier) {
     logAndThrow('Database error: Note identifier is missing from database row');
@@ -54,6 +62,7 @@ function formatBearNote(row: NoteContentRow): BearNote {
     modification_date,
     creation_date,
     pin,
+    revision,
     ...(text != null && { text }),
   };
 }
@@ -85,6 +94,7 @@ export function getNoteContent(identifier: string): BearNote | null {
              note.ZCREATIONDATE as creationDate,
              note.ZMODIFICATIONDATE as modificationDate,
              note.ZPINNED as pinned,
+             note.Z_OPT as revision,
              note.ZTEXT as text,
              f.ZFILENAME as filename,
              f.ZSEARCHTEXT as fileContent
@@ -279,14 +289,21 @@ export function searchNotes(
 }
 
 /**
- * Polls Bear's SQLite database for the identifier of a recently created note.
- * Designed for use after bear-create-note fires the URL API — the note creation already
- * succeeded, so errors here degrade gracefully to null instead of throwing.
+ * Polls Bear's SQLite database for the identifier and revision of a recently
+ * created note. Designed for use after bear-create-note fires the URL API —
+ * the note creation already succeeded, so errors here degrade gracefully to
+ * null instead of throwing.
+ *
+ * Returns both id and revision (OCC inform) in a single tuple because the
+ * existing SELECT already reads the note row; projecting Z_OPT is a no-cost
+ * change that saves callers a second DB round trip.
  *
  * @param title - Exact title to match (case-sensitive, as Bear stores it)
- * @returns The created note's identifier, or null if not found within the timeout window
+ * @returns Tuple of created note's identifier and revision, or null on timeout
  */
-export async function awaitNoteCreation(title: string): Promise<string | null> {
+export async function awaitNoteCreation(
+  title: string
+): Promise<{ id: string; revision: NoteRevision } | null> {
   if (!title?.trim()) {
     logger.debug('awaitNoteCreation: skipped — no title provided');
     return null;
@@ -304,7 +321,7 @@ export async function awaitNoteCreation(title: string): Promise<string | null> {
     db = openBearDatabase();
 
     const stmt = db.prepare(`
-      SELECT ZUNIQUEIDENTIFIER as identifier
+      SELECT ZUNIQUEIDENTIFIER as identifier, Z_OPT as revision
       FROM ZSFNOTE
       WHERE ZTITLE = ? AND ZCREATIONDATE >= ?
         AND ZARCHIVED = 0 AND ZTRASHED = 0 AND ZENCRYPTED = 0
@@ -314,10 +331,12 @@ export async function awaitNoteCreation(title: string): Promise<string | null> {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
 
     while (Date.now() < deadline) {
-      const row = stmt.get(title, sinceTimestamp) as { identifier: string } | undefined;
+      const row = stmt.get(title, sinceTimestamp) as
+        | { identifier: string; revision: number }
+        | undefined;
       if (row) {
-        logger.debug(`awaitNoteCreation: found note "${title}"`);
-        return row.identifier;
+        logger.debug(`awaitNoteCreation: found note "${title}" at revision ${row.revision}`);
+        return { id: row.identifier, revision: row.revision };
       }
       await setTimeout(POLL_INTERVAL_MS);
     }
@@ -328,6 +347,58 @@ export async function awaitNoteCreation(title: string): Promise<string | null> {
     // Intentionally not using logAndThrow — the note was already created via URL API,
     // failing to retrieve its ID should not turn a successful creation into an error
     logger.error('awaitNoteCreation failed:', error);
+    return null;
+  } finally {
+    if (db) closeBearDatabase(db);
+  }
+}
+
+/**
+ * Polls Bear's SQLite database until ZSFNOTE.Z_OPT for the given note differs
+ * from `baseline`, capturing the post-write revision. Used after fire-and-forget
+ * writes to convert them into write-confirmed responses (OCC inform half).
+ *
+ * Compares for inequality (not baseline+1) because Bear can bump Z_OPT by +2 on
+ * the first edit after note creation — a subtitle/index recompute save observed
+ * empirically in SVA-20. On timeout the caller surfaces the absence honestly via
+ * REVISION_TIMEOUT_SENTENCE rather than reporting a stale value.
+ *
+ * Opens one DB connection for the lifetime of the poll loop (mirrors
+ * awaitNoteCreation) to avoid ~33 SQLite opens per write in the worst case.
+ *
+ * @param identifier - The unique identifier of the Bear note being written to
+ * @param baseline - Z_OPT value read before the write fired
+ * @returns The new revision when Z_OPT differs from baseline, null on timeout
+ */
+export async function awaitRevisionIncrement(
+  identifier: string,
+  baseline: NoteRevision
+): Promise<NoteRevision | null> {
+  let db: ReturnType<typeof openBearDatabase> | undefined;
+
+  try {
+    db = openBearDatabase();
+    const stmt = db.prepare('SELECT Z_OPT as revision FROM ZSFNOTE WHERE ZUNIQUEIDENTIFIER = ?');
+    const deadline = Date.now() + REVISION_POLL_CAP_MS;
+
+    while (Date.now() < deadline) {
+      const row = stmt.get(identifier) as { revision: number } | undefined;
+      if (row && row.revision !== baseline) {
+        logger.debug(
+          `awaitRevisionIncrement: revision ${baseline} → ${row.revision} for ${identifier}`
+        );
+        return row.revision;
+      }
+      await setTimeout(REVISION_POLL_INTERVAL_MS);
+    }
+
+    logger.info(`awaitRevisionIncrement: timed out waiting for revision change on ${identifier}`);
+    return null;
+  } catch (error) {
+    // Mirrors awaitNoteCreation: the underlying write already fired via
+    // x-callback-url, so failing to capture the new revision must not turn a
+    // successful write into a thrown error. Caller emits REVISION_TIMEOUT_SENTENCE.
+    logger.error('awaitRevisionIncrement failed:', error);
     return null;
   } finally {
     if (db) closeBearDatabase(db);

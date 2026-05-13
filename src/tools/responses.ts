@@ -1,5 +1,8 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
+import { REVISION_POLL_CAP_MS } from '../operations/notes.js';
+import type { NoteRevision } from '../types.js';
+
 /**
  * Creates a standardized MCP tool response with consistent formatting.
  * Centralizes response structure to follow DRY principles.
@@ -30,4 +33,21 @@ export function createToolResponse(text: string): Pick<CallToolResult, 'content'
  */
 export function createErrorResponse(text: string): Pick<CallToolResult, 'content' | 'isError'> {
   return { ...createToolResponse(text), isError: true };
+}
+
+// Composed from REVISION_POLL_CAP_MS so the sentence stays in lockstep with the
+// runtime cap — per MCP_STANDARDS.md: "Source numeric defaults from runtime
+// constants, not string literals."
+export const REVISION_TIMEOUT_SENTENCE = `Revision: unknown (write confirmation timed out after ${REVISION_POLL_CAP_MS}ms)`;
+
+/**
+ * Formats the OCC revision line that accompanies every note-scoped tool
+ * response. Centralized so the format and the timeout fallback are identical
+ * across read responses, search result entries, and write responses.
+ *
+ * @param revision - Z_OPT value, or null when post-write polling timed out
+ * @returns "Revision: <n>" or the timeout sentence
+ */
+export function formatRevisionLine(revision: NoteRevision | null): string {
+  return revision === null ? REVISION_TIMEOUT_SENTENCE : `Revision: ${revision}`;
 }

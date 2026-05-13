@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import type { BearNote } from '../types.js';
+import type { BearNote, NoteRevision } from '../types.js';
 import { logAndThrow, logger } from '../logging.js';
 
 import { convertCoreDataTimestamp, decodeTagName } from './bear-encoding.js';
@@ -83,7 +83,7 @@ export function searchByQuery(spec: SearchSpec): SearchResults {
   const bearDb = openBearDatabase();
   try {
     const fresh = ensureFreshIndex(bearDb);
-    return executeQueryWithCount(fresh.memDb, spec);
+    return executeQueryWithCount(fresh.memDb, spec, bearDb);
   } catch (error) {
     // FTS5 syntax errors are already remapped by runWithFts5SyntaxRemap into a
     // user-facing envelope — pass them through so the LLM can retry with
@@ -466,7 +466,11 @@ function countMatches(memDb: DatabaseSync, spec: SearchSpec): number {
   return row.c;
 }
 
-function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchResults {
+function executeQueryWithCount(
+  memDb: DatabaseSync,
+  spec: SearchSpec,
+  bearDb?: DatabaseSync
+): SearchResults {
   const { hasTerm, whereClause, baseParams } = buildSearchSqlAndParams(spec);
   // With a term: ORDER BY rank uses the per-column BM25 weights installed at
   // index build (title/body=2.0, ocr=0.5) — authored hits outrank OCR-only
@@ -496,6 +500,17 @@ function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchRes
     rows.map((r) => r.rowid)
   );
 
+  // Hydrate revision (Z_OPT) from the live Bear DB rather than caching in the
+  // FTS shadow. The drift sentinel `MAX(ZMODIFICATIONDATE) + COUNT(*)` doesn't
+  // catch pin-only or tag-only writes that bump Z_OPT without bumping the
+  // modification date, so cached revisions would silently lag. `bearDb` is
+  // optional only so existing tests that don't assert on revision can stay as
+  // they are; production callers always pass it.
+  const identifiers = rows.map((r) => r.identifier);
+  const revisionsByIdentifier = bearDb
+    ? fetchRevisionsForResults(bearDb, identifiers)
+    : new Map<string, NoteRevision>();
+
   // exactOptionalPropertyTypes: omit optional keys instead of assigning undefined.
   const notes = rows.map((row) => {
     const tags = tagsByRowid.get(row.rowid);
@@ -505,6 +520,7 @@ function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchRes
       creation_date: convertCoreDataTimestamp(row.created),
       modification_date: convertCoreDataTimestamp(row.modified),
       pin: row.pinned === 1 ? ('yes' as const) : ('no' as const),
+      revision: revisionsByIdentifier.get(row.identifier) ?? 0,
     };
     if (tags) result.tags = tags;
     if (row.snippet) result.snippet = row.snippet;
@@ -531,6 +547,26 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
     )
     .all(...rowIds) as unknown as Array<{ rowid: number; tags: string }>;
   return new Map(tagRows.map((tr) => [tr.rowid, tr.tags.split(',')]));
+}
+
+// Mirrors fetchTagsForResults but reads from Bear's live DB (not the FTS shadow).
+// Single round trip via an IN-clause. Caller must ensure identifiers is non-empty
+// before iterating the returned Map, since `null` Z_OPT values from missing rows
+// would be silently absent (callers should handle the missing case explicitly).
+function fetchRevisionsForResults(
+  bearDb: DatabaseSync,
+  identifiers: string[]
+): Map<string, NoteRevision> {
+  if (identifiers.length === 0) return new Map();
+  const placeholders = identifiers.map(() => '?').join(',');
+  const rows = bearDb
+    .prepare(
+      `SELECT ZUNIQUEIDENTIFIER as identifier, Z_OPT as revision
+         FROM ZSFNOTE
+        WHERE ZUNIQUEIDENTIFIER IN (${placeholders})`
+    )
+    .all(...identifiers) as unknown as Array<{ identifier: string; revision: number }>;
+  return new Map(rows.map((r) => [r.identifier, r.revision]));
 }
 
 // FTS5 surfaces user-query problems via several distinct SQLite error messages:

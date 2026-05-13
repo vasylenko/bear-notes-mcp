@@ -1,6 +1,19 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as scheduleAfter } from 'node:timers';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { noteHasHeader, parseDateString, searchNotes, stripLeadingHeader } from './notes.js';
+import {
+  awaitNoteCreation,
+  awaitRevisionIncrement,
+  noteHasHeader,
+  parseDateString,
+  searchNotes,
+  stripLeadingHeader,
+} from './notes.js';
 
 describe('parseDateString', () => {
   beforeEach(() => {
@@ -168,5 +181,139 @@ describe('searchNotes validation', () => {
     { name: 'all parameters omitted', call: () => searchNotes() },
   ])('throws when no real search criterion is provided: $name', ({ call }) => {
     expect(call).toThrow(/Please provide a search term, tag, date filter, or pinned filter/);
+  });
+});
+
+describe('awaitRevisionIncrement', () => {
+  // Inline file-backed synthetic DB rather than `:memory:`. The function-under-test
+  // opens its own read-only connection via openBearDatabase(BEAR_DB_PATH); both
+  // connections need to see the same data, which only works for a file-backed
+  // SQLite (since `:memory:` is per-connection).
+  let tempDir: string;
+  let dbPath: string;
+  let writeDb: DatabaseSync;
+  let originalBearDbPath: string | undefined;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'bear-mcp-occ-'));
+    dbPath = join(tempDir, 'database.sqlite');
+    writeDb = new DatabaseSync(dbPath);
+    writeDb.exec(`
+      CREATE TABLE ZSFNOTE (
+        Z_PK INTEGER PRIMARY KEY,
+        ZUNIQUEIDENTIFIER TEXT,
+        Z_OPT INTEGER DEFAULT 1
+      )
+    `);
+    originalBearDbPath = process.env.BEAR_DB_PATH;
+    process.env.BEAR_DB_PATH = dbPath;
+  });
+
+  afterEach(() => {
+    writeDb.close();
+    rmSync(tempDir, { recursive: true, force: true });
+    if (originalBearDbPath === undefined) {
+      delete process.env.BEAR_DB_PATH;
+    } else {
+      process.env.BEAR_DB_PATH = originalBearDbPath;
+    }
+  });
+
+  it('resolves with the new revision when Z_OPT changes (inequality, not baseline+1)', async () => {
+    writeDb
+      .prepare('INSERT INTO ZSFNOTE (Z_PK, ZUNIQUEIDENTIFIER, Z_OPT) VALUES (1, ?, 5)')
+      .run('note-id');
+
+    // Schedule a +2 jump mid-poll. The +2 (not +1) mirrors first-edit-after-creation
+    // empirical behavior; the helper must resolve on inequality, not wait for 6.
+    scheduleAfter(() => {
+      writeDb.prepare('UPDATE ZSFNOTE SET Z_OPT = 7 WHERE ZUNIQUEIDENTIFIER = ?').run('note-id');
+    }, 50);
+
+    const result = await awaitRevisionIncrement('note-id', 5);
+    expect(result).toBe(7);
+  });
+
+  it('returns null on timeout when Z_OPT does not change', async () => {
+    writeDb
+      .prepare('INSERT INTO ZSFNOTE (Z_PK, ZUNIQUEIDENTIFIER, Z_OPT) VALUES (1, ?, 5)')
+      .run('note-id');
+
+    const start = Date.now();
+    const result = await awaitRevisionIncrement('note-id', 5);
+    const elapsed = Date.now() - start;
+
+    expect(result).toBeNull();
+    // Cap is REVISION_POLL_CAP_MS=500; allow slack for CI/system variance.
+    expect(elapsed).toBeGreaterThanOrEqual(450);
+    expect(elapsed).toBeLessThan(900);
+  });
+
+  it('returns null when the note does not exist', async () => {
+    // stmt.get returns undefined every poll; loop never matches; falls through to timeout.
+    const result = await awaitRevisionIncrement('ghost-id', 0);
+    expect(result).toBeNull();
+  });
+});
+
+describe('awaitNoteCreation', () => {
+  // Reuses the same file-backed temp-DB pattern as awaitRevisionIncrement.
+  // The function opens its own read-only connection via BEAR_DB_PATH; mid-poll
+  // INSERT proves the {id, revision} tuple is bundled from a single SELECT
+  // (no second round trip for revision). Schema mirrors what awaitNoteCreation
+  // actually reads: ZTITLE, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZARCHIVED,
+  // ZTRASHED, ZENCRYPTED, Z_OPT.
+  let tempDir: string;
+  let dbPath: string;
+  let writeDb: DatabaseSync;
+  let originalBearDbPath: string | undefined;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'bear-mcp-create-'));
+    dbPath = join(tempDir, 'database.sqlite');
+    writeDb = new DatabaseSync(dbPath);
+    writeDb.exec(`
+      CREATE TABLE ZSFNOTE (
+        Z_PK INTEGER PRIMARY KEY,
+        ZTITLE TEXT,
+        ZUNIQUEIDENTIFIER TEXT,
+        ZCREATIONDATE REAL,
+        ZARCHIVED INTEGER DEFAULT 0,
+        ZTRASHED INTEGER DEFAULT 0,
+        ZENCRYPTED INTEGER DEFAULT 0,
+        Z_OPT INTEGER DEFAULT 1
+      )
+    `);
+    originalBearDbPath = process.env.BEAR_DB_PATH;
+    process.env.BEAR_DB_PATH = dbPath;
+  });
+
+  afterEach(() => {
+    writeDb.close();
+    rmSync(tempDir, { recursive: true, force: true });
+    if (originalBearDbPath === undefined) {
+      delete process.env.BEAR_DB_PATH;
+    } else {
+      process.env.BEAR_DB_PATH = originalBearDbPath;
+    }
+  });
+
+  it('resolves with both id and revision when the note is found', async () => {
+    // ZCREATIONDATE in Core Data epoch (seconds since 2001-01-01). Any value
+    // >= now - CREATION_LOOKBACK_MS qualifies; convertDateToCoreDataTimestamp
+    // for `now` is well within range.
+    const coreDataNow = Math.floor(Date.now() / 1000) - 978307200;
+
+    // Schedule INSERT mid-poll to mirror Bear's async creation.
+    scheduleAfter(() => {
+      writeDb
+        .prepare(
+          'INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZUNIQUEIDENTIFIER, ZCREATIONDATE, Z_OPT) VALUES (1, ?, ?, ?, 3)'
+        )
+        .run('Fresh Note', 'created-id', coreDataNow);
+    }, 50);
+
+    const result = await awaitNoteCreation('Fresh Note');
+    expect(result).toEqual({ id: 'created-id', revision: 3 });
   });
 });

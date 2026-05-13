@@ -22,6 +22,7 @@ interface SyntheticNote {
   text?: string;
   uniqueId?: string;
   pinned?: boolean;
+  z_opt?: number; // ZSFNOTE.Z_OPT — defaults to 1 (fresh note's revision after first save)
   archived?: boolean;
   trashed?: boolean;
   encrypted?: boolean;
@@ -55,6 +56,7 @@ function buildSyntheticBearDb(notes: SyntheticNote[]): DatabaseSync {
       ZCREATIONDATE REAL,
       ZMODIFICATIONDATE REAL,
       ZPINNED INTEGER DEFAULT 0,
+      Z_OPT INTEGER DEFAULT 1,
       ZARCHIVED INTEGER DEFAULT 0,
       ZTRASHED INTEGER DEFAULT 0,
       ZENCRYPTED INTEGER DEFAULT 0
@@ -107,8 +109,8 @@ function buildSyntheticBearDb(notes: SyntheticNote[]): DatabaseSync {
     INSERT INTO ZSFNOTE (
       Z_PK, ZTITLE, ZTEXT, ZUNIQUEIDENTIFIER,
       ZCREATIONDATE, ZMODIFICATIONDATE,
-      ZPINNED, ZARCHIVED, ZTRASHED, ZENCRYPTED
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ZPINNED, Z_OPT, ZARCHIVED, ZTRASHED, ZENCRYPTED
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertFile = db.prepare('INSERT INTO ZSFNOTEFILE (ZNOTE, ZSEARCHTEXT) VALUES (?, ?)');
   const insertNoteTag = db.prepare('INSERT INTO Z_5TAGS (Z_5NOTES, Z_13TAGS) VALUES (?, ?)');
@@ -125,6 +127,7 @@ function buildSyntheticBearDb(notes: SyntheticNote[]): DatabaseSync {
       note.created ?? 700_000_000,
       note.modified ?? 700_000_000,
       note.pinned ? 1 : 0,
+      note.z_opt ?? 1,
       note.archived ? 1 : 0,
       note.trashed ? 1 : 0,
       note.encrypted ? 1 : 0
@@ -427,6 +430,32 @@ describe('executeQueryWithCount', () => {
         expect(untagged[0].tags).toBeUndefined();
       }
     );
+  });
+
+  it('hydrates revision from live Bear DB, reflecting Z_OPT changes outside the FTS drift sentinel', () => {
+    // Coverage for fetchRevisionsForResults (OCC inform). The FTS index is a
+    // cached shadow rebuilt only when the drift sentinel MAX(ZMODIFICATIONDATE)
+    // + COUNT(*) changes. Pin-only and tag-only writes bump Z_OPT without
+    // bumping ZMODIFICATIONDATE, so caching revision in the FTS would silently
+    // lag. The mid-search Z_OPT-only mutation proves hydration goes against
+    // the live Bear DB rather than the FTS shadow.
+    withBearDb([{ pk: 1, title: 'hello world', text: 'body', z_opt: 5 }], (bearDb) => {
+      const state = buildIndex(bearDb);
+      try {
+        const first = executeQueryWithCount(state.memDb, spec({ term: 'hello' }), bearDb);
+        expect(first.notes[0].revision).toBe(5);
+
+        // Bump Z_OPT only — does NOT move drift sentinel, so FTS will NOT
+        // rebuild. The next search returns the same cached FTS rows but the
+        // hydration step must surface the fresh Z_OPT.
+        bearDb.prepare('UPDATE ZSFNOTE SET Z_OPT = 9 WHERE Z_PK = 1').run();
+
+        const second = executeQueryWithCount(state.memDb, spec({ term: 'hello' }), bearDb);
+        expect(second.notes[0].revision).toBe(9);
+      } finally {
+        state.memDb.close();
+      }
+    });
   });
 
   // ASCII \w drops é/ï and skips Cyrillic/Greek/CJK entirely, producing silent
