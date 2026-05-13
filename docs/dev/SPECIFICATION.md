@@ -143,7 +143,7 @@ Two write-path patterns capture the revision honestly:
    (explicit temporal label — distinguishable from a live current revision)
 ```
 
-**Constraint partially lifted: write verification.** *Key Design Constraints → Bear's URL Scheme Quirks* notes "Write verification: No way to confirm Bear processed a URL action." OCC inform lifts this for any write that bumps `Z_OPT` — polling waits for the change, so a non-null `Revision` in the response *is* the confirmation. The constraint persists for writes that don't bump `Z_OPT` (the timeout sentence honestly signals this rather than masking it).
+**Constraint partially lifted: write verification.** *Key Design Constraints → Intentional Exclusions* notes "Write verification: No way to confirm Bear processed a URL action." OCC inform lifts this for any write that bumps `Z_OPT` — polling waits for the change, so a non-null `Revision` in the response *is* the confirmation. The constraint persists for writes that don't bump `Z_OPT` (the timeout sentence honestly signals this rather than masking it).
 
 **Constraint partially lifted: test pause-after-write.** *Testing Constraints* notes existing tests pause briefly after writes "giving Bear time to process the callback." New OCC system tests instead use the response's `Revision` as a deterministic completion signal — the polling already waited for Bear, so no test-side `sleep` is needed.
 
