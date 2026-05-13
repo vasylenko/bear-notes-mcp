@@ -5,6 +5,7 @@ import {
   cleanupTestNotes,
   readNoteRevision,
   tryExtractNoteId,
+  tryExtractRevision,
   uniqueTitle,
 } from './inspector.js';
 
@@ -173,12 +174,11 @@ describe('tag search via MCP Inspector CLI', () => {
     const noteId = tryExtractNoteId(result);
     expect(noteId).toBeTruthy();
 
-    // Per-result Revision lives between the ID and the next result/footer. The
-    // regex matches the FIRST "Revision:" — which is for the FIRST result, which
-    // is our target note since UNTAGGED_MARKER returns exactly one hit.
-    const responseRevisionMatch = result.match(/Revision:\s+(\d+)/);
-    expect(responseRevisionMatch).toBeTruthy();
-    const responseRevision = parseInt(responseRevisionMatch![1], 10);
+    // tryExtractRevision returns the FIRST "Revision:" numeric value — which
+    // is the first result's, and UNTAGGED_MARKER returns exactly one hit so
+    // it's our target.
+    const responseRevision = tryExtractRevision(result);
+    expect(responseRevision).not.toBeNull();
 
     const dbRevision = readNoteRevision(noteId!);
     expect(dbRevision).not.toBeNull();
