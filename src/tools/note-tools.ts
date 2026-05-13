@@ -281,7 +281,7 @@ Use bear-search-notes to find the correct note identifier.`);
       {
         title: 'Create New Note',
         description:
-          "Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app. The response includes the note's revision (a version token); a future enhancement will let you supply this value on writes to detect stale-body overwrites.",
+          'Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app.',
         inputSchema: {
           title: z
             .string()
@@ -513,7 +513,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Add Text to Note',
         description:
-          "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text. The response includes the note's revision (a version token); a future enhancement will let you supply this value on writes to detect stale-body overwrites.",
+          'Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text.',
         inputSchema: {
           id: z
             .string()
@@ -559,7 +559,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Replace Note Content',
         description:
-          "Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead. The response includes the note's revision (a version token); a future enhancement will let you supply this value on writes to detect stale-body overwrites.",
+          'Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead.',
         inputSchema: {
           id: z
             .string()
@@ -617,7 +617,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
       {
         title: 'Add File to Note',
         description:
-          "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first. The response includes the note's revision (a version token); a future enhancement will let you supply this value on writes to detect stale-body overwrites.",
+          'Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first.',
         inputSchema: {
           file_path: z
             .string()
@@ -811,7 +811,7 @@ The file has been attached to your Bear note.`);
       {
         title: 'Add Tags to Note',
         description:
-          "Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags. The response includes the note's revision (a version token); a future enhancement will let you supply this value on writes to detect stale-body overwrites.",
+          'Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags.',
         inputSchema: {
           id: z
             .string()
@@ -895,7 +895,7 @@ The tags have been added to the beginning of the note.`);
       {
         title: 'Archive Bear Note',
         description:
-          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID. The response includes the note's revision (a version token); a future enhancement will let you supply this value on writes to detect stale-body overwrites.",
+          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID.",
         inputSchema: {
           id: z
             .string()
