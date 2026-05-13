@@ -51,12 +51,17 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
     expect(response.isError).toBe(true);
   });
 
-  it('emits Revision honestly after add-tag (OCC inform)', async () => {
+  it('emits Revision matching live Z_OPT after add-tag (OCC inform)', async () => {
     // /add-text with a `tags` param bumps ZSFNOTE.Z_OPT by +1 (empirically
     // confirmed — see docs/dev/BEAR_DATABASE_SCHEMA.md; the separate /add-tags
-    // URL does NOT bump per SVA-20). The disjunction (numeric revision OR
-    // timeout sentence) stays for forward-compat against a future Bear
-    // regression that stops bumping.
+    // URL does NOT bump per SVA-20). awaitRevisionIncrement returns only when
+    // Z_OPT !== baseline, so the response carries the post-write revision
+    // captured directly from the live DB at poll time — assertions match it
+    // against (a) the pre-write baseline (strictly greater, proving the
+    // baseline wasn't echoed back) and (b) the current live Z_OPT (proving
+    // the response value is fresh and matches reality). A future Bear
+    // regression that stopped bumping would surface as a tryExtractRevision
+    // null and fail the toBe(liveDbRevision) assertion loudly.
     const title = uniqueTitle(TEST_PREFIX, 'AddTagRevision', RUN_ID);
     const createResult = callTool({
       toolName: 'bear-create-note',
@@ -64,7 +69,9 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
-    // Settle briefly so create propagates before reading baseline.
+    // Settle briefly so create's subtitle/index recompute save lands before
+    // we read the baseline (otherwise Z_OPT can still jump +2 between baseline
+    // and the handler's pre-flight read — see BEAR_DATABASE_SCHEMA.md).
     await sleep(100);
     const preAddRevision = readNoteRevision(noteId);
     expect(preAddRevision).not.toBeNull();
@@ -74,18 +81,11 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
       args: { id: noteId, tags: JSON.stringify([`stest-rev-${RUN_ID}`]) },
     }).content[0].text;
 
-    const containsTimeoutSentence = result.includes('Revision: unknown');
     const responseRevision = tryExtractRevision(result);
+    expect(responseRevision).not.toBeNull();
+    expect(responseRevision!).toBeGreaterThan(preAddRevision!);
 
-    expect(
-      containsTimeoutSentence || responseRevision !== null,
-      `Expected a numeric Revision or the timeout sentence, got:\n${result}`
-    ).toBe(true);
-
-    if (responseRevision !== null) {
-      // Bump branch: must be >= pre-add value (strictly greater on bump, equal
-      // if Bear's /add-text returns the same Z_OPT for the tags-only call shape).
-      expect(responseRevision).toBeGreaterThanOrEqual(preAddRevision!);
-    }
+    const liveDbRevision = readNoteRevision(noteId);
+    expect(responseRevision).toBe(liveDbRevision);
   });
 });

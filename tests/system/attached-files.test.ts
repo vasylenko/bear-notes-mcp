@@ -260,12 +260,12 @@ describe('attached files content separation', () => {
     expect(response.content[1].text).toContain('custom-name.jpg');
   });
 
-  it('emits Revision honestly after add-file (OCC inform)', async () => {
+  it('emits Revision matching live Z_OPT after add-file (OCC inform)', async () => {
     // /add-file bumps ZSFNOTE.Z_OPT by +1 (empirically confirmed —
     // see docs/dev/BEAR_DATABASE_SCHEMA.md; note-row bumps, not only
-    // ZSFNOTEFILE). The disjunction (numeric revision OR timeout sentence)
-    // stays for forward-compat: a future Bear regression that stops bumping
-    // should still pass via the timeout branch rather than a silent stale value.
+    // ZSFNOTEFILE). Response Revision must (a) exceed the pre-attach
+    // baseline (proving the baseline wasn't echoed back) and (b) equal
+    // current live Z_OPT (proving freshness).
     const title = uniqueTitle(TEST_PREFIX, 'AddFileRevision', RUN_ID);
     const createResult = callTool({
       toolName: 'bear-create-note',
@@ -273,7 +273,8 @@ describe('attached files content separation', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
-    // Settle briefly so the create-write has fully propagated before we read baseline.
+    // Settle briefly so create's subtitle/index recompute save lands before
+    // we read the baseline (Z_OPT +2 jump per BEAR_DATABASE_SCHEMA.md).
     await sleep(PAUSE_AFTER_WRITE_OP);
 
     const preAttachRevision = readNoteRevision(noteId);
@@ -284,20 +285,11 @@ describe('attached files content separation', () => {
       args: { id: noteId, file_path: TINY_PNG_PATH },
     }).content[0].text;
 
-    // Response must contain SOME revision line — either a real value or the
-    // timeout sentence. The sentence path is honest about Bear's behavior; the
-    // bump path proves attachment-add updates ZSFNOTE.Z_OPT.
-    const containsTimeoutSentence = addResult.includes('Revision: unknown');
     const responseRevision = tryExtractRevision(addResult);
+    expect(responseRevision).not.toBeNull();
+    expect(responseRevision!).toBeGreaterThan(preAttachRevision!);
 
-    expect(
-      containsTimeoutSentence || responseRevision !== null,
-      `Expected either a numeric Revision or the timeout sentence, got:\n${addResult}`
-    ).toBe(true);
-
-    if (responseRevision !== null) {
-      // Bump branch: must be > pre-attach revision (or = if Bear emits same value)
-      expect(responseRevision).toBeGreaterThanOrEqual(preAttachRevision!);
-    }
+    const liveDbRevision = readNoteRevision(noteId);
+    expect(responseRevision).toBe(liveDbRevision);
   });
 });

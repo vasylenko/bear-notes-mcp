@@ -241,12 +241,11 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     expect(noteBody).toContain('Other content');
   });
 
-  it('emits Revision honestly after replace-text (OCC inform)', async () => {
+  it('emits Revision matching live Z_OPT after replace-text (OCC inform)', async () => {
     // /add-text in replace mode bumps ZSFNOTE.Z_OPT by +1 (empirically
-    // confirmed — see docs/dev/BEAR_DATABASE_SCHEMA.md). The disjunction
-    // (numeric revision OR timeout sentence) stays for forward-compat: a
-    // future Bear regression that stops bumping should still pass via the
-    // timeout branch rather than a silent stale value.
+    // confirmed — see docs/dev/BEAR_DATABASE_SCHEMA.md). Response Revision
+    // must (a) exceed the pre-write baseline (proving the baseline wasn't
+    // echoed back) and (b) equal current live Z_OPT (proving freshness).
     const title = uniqueTitle(TEST_PREFIX, 'ReplaceTextRevision', RUN_ID);
     const createResult = callTool({
       toolName: 'bear-create-note',
@@ -254,7 +253,8 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
-    // Settle briefly so the create-write has fully propagated before reading baseline.
+    // Settle briefly so create's subtitle/index recompute save lands before
+    // we read the baseline (Z_OPT +2 jump per BEAR_DATABASE_SCHEMA.md).
     await sleep(PAUSE_AFTER_WRITE_OP);
     const preWriteRevision = readNoteRevision(noteId);
     expect(preWriteRevision).not.toBeNull();
@@ -265,16 +265,11 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     }).content[0].text;
 
-    const containsTimeoutSentence = result.includes('Revision: unknown');
     const responseRevision = tryExtractRevision(result);
+    expect(responseRevision).not.toBeNull();
+    expect(responseRevision!).toBeGreaterThan(preWriteRevision!);
 
-    expect(
-      containsTimeoutSentence || responseRevision !== null,
-      `Expected either a numeric Revision or the timeout sentence, got:\n${result}`
-    ).toBe(true);
-
-    if (responseRevision !== null) {
-      expect(responseRevision).toBeGreaterThanOrEqual(preWriteRevision!);
-    }
+    const liveDbRevision = readNoteRevision(noteId);
+    expect(responseRevision).toBe(liveDbRevision);
   });
 });
