@@ -1,6 +1,10 @@
 # MCP Standards
 
-Conventions for the MCP server's tool surface — how to write tool descriptions, schemas, and mutation responses so they work well with LLM clients. Read this when adding a new tool or modifying an existing one.
+This project's conventions for designing our MCP server's tool surface — how we write tool descriptions, schemas, and mutation responses so they work well with LLM clients. Project-wide rules; they apply to every tool we add or modify. Read when adding a new tool or touching an existing one.
+
+Specific instantiation details (which fields a particular mutation response carries, which underlying system tokens it threads, which exceptions Bear's URL-API quirks force) live in `SPECIFICATION.md`.
+
+This doc is focused on the conventions themselves, so they remain easy to apply consistently across new and existing tools; it deliberately doesn't name specific tools, DB columns, or helper functions, because those belong with the implementations they describe.
 
 ## Separation of Concerns
 
@@ -8,18 +12,7 @@ Tool descriptions help with tool **selection** and understanding; schema (`descr
 
 ## LLM-First Design
 
-Tools are first discovered via descriptions, then invoked via schemas. Optimize both for the consumer (an LLM), not for human readability. The reference implementations are `src/tools/note-tools.ts` and `src/tools/tag-tools.ts` — mirror their patterns when adding new tools.
-
-## Mutation Response Metadata
-
-Every note-level mutation tool — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — must return **note ID + note title + what changed** in its response. Both values are always available without post-write database reads:
-
-- For modifications: ID comes from the input parameter, title from the pre-flight `getNoteContent()` validation
-- For creation: title comes from the input parameter, ID from post-create polling
-
-Global tag mutations (`bear-rename-tag`, `bear-delete-tag`) are not note-level and intentionally omit note metadata.
-
-Never fetch tags or other metadata from the database after a write — Bear's fire-and-forget architecture means post-write reads return pre-mutation state, which would mislead the LLM into thinking the operation failed.
+Tools are first discovered via descriptions, then invoked via schemas. Optimize both for the AI agent and the LLM, not for humans. 
 
 ## Tool Description
 
@@ -60,3 +53,15 @@ const schema = z.object({
     .describe("Array of file paths to read. Each path must be a valid absolute or relative file path.")
 });
 ```
+
+## Mutation Response Conventions
+
+A mutation tool's response should give the LLM enough metadata to:
+
+1. **Confirm the write landed** — a "what-changed" summary or a version token the LLM can compare against its prior view.
+2. **Address the affected resource in follow-up calls** — a stable identifier (note ID, row ID, document path, etc.) the LLM can pass back without round-tripping through search.
+3. **Reason about freshness for subsequent writes** — a version token where the underlying system exposes one (HTTP `ETag`, Core Data `Z_OPT`, document revision, etc.). This is what enables eventual *enforce*-style optimistic concurrency (HTTP `If-Match` / `412 Precondition Failed`).
+
+**Field-sourcing discipline matters more than the field list.** Prefer values already available pre-write — input parameters, pre-flight validation reads, helpers that bundle id+version in a single SELECT — over post-write reads that may reflect pre-mutation state if the underlying write path is asynchronous and has no completion handle. When a post-write read is genuinely required to capture a version token, design it to wait for a *change* (write-confirmation) rather than to sample current state, and surface a clearly-labelled sentinel on timeout instead of a value that could be stale.
+
+For this server's instantiation — which fields the response carries, which underlying token is the version, how it's sourced safely, and the narrow exceptions to the general "never read after write" rule — see `SPECIFICATION.md`.
