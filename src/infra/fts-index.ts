@@ -39,8 +39,17 @@ export interface SearchSpec {
   limit: number;
 }
 
-/** A single search hit. Extends `BearNote` with an optional snippet. */
-export interface SearchResult extends BearNote {
+/**
+ * A single search hit. Widens `BearNote.revision` to `NoteRevision | null` so
+ * the post-FTS live-DB hydration step can surface "note vanished between index
+ * build and hydration read" honestly via the sentinel sentence, rather than
+ * defaulting to a structurally-impossible `0`. Other note-producing operations
+ * (`getNoteContent`, `findUntaggedNotes`, `awaitNoteCreation`) read Z_OPT in
+ * the same SELECT that finds the row, so their revision is always non-null —
+ * widening only happens on this read-side miss path.
+ */
+export interface SearchResult extends Omit<BearNote, 'revision'> {
+  revision: NoteRevision | null;
   /**
    * Snippet shape depends on the query:
    * - Term query: FTS5 `snippet()` excerpt with matched terms wrapped in `[...]`.
@@ -83,7 +92,7 @@ export function searchByQuery(spec: SearchSpec): SearchResults {
   const bearDb = openBearDatabase();
   try {
     const fresh = ensureFreshIndex(bearDb);
-    return executeQueryWithCount(fresh.memDb, spec, bearDb);
+    return executeQueryWithCount(fresh.memDb, bearDb, spec);
   } catch (error) {
     // FTS5 syntax errors are already remapped by runWithFts5SyntaxRemap into a
     // user-facing envelope — pass them through so the LLM can retry with
@@ -468,8 +477,8 @@ function countMatches(memDb: DatabaseSync, spec: SearchSpec): number {
 
 function executeQueryWithCount(
   memDb: DatabaseSync,
-  spec: SearchSpec,
-  bearDb?: DatabaseSync
+  bearDb: DatabaseSync,
+  spec: SearchSpec
 ): SearchResults {
   const { hasTerm, whereClause, baseParams } = buildSearchSqlAndParams(spec);
   // With a term: ORDER BY rank uses the per-column BM25 weights installed at
@@ -503,13 +512,13 @@ function executeQueryWithCount(
   // Hydrate revision (Z_OPT) from the live Bear DB rather than caching in the
   // FTS shadow. The drift sentinel `MAX(ZMODIFICATIONDATE) + COUNT(*)` doesn't
   // catch pin-only or tag-only writes that bump Z_OPT without bumping the
-  // modification date, so cached revisions would silently lag. `bearDb` is
-  // optional only so existing tests that don't assert on revision can stay as
-  // they are; production callers always pass it.
+  // modification date, so cached revisions would silently lag. When a row from
+  // the FTS shadow has no match in the live DB (note vanished between index
+  // build and this hydration read — deleted/archived/encrypted concurrently),
+  // the revision is surfaced as `null` so the caller renders the
+  // REVISION_UNAVAILABLE_SENTENCE instead of a misleading `0`.
   const identifiers = rows.map((r) => r.identifier);
-  const revisionsByIdentifier = bearDb
-    ? fetchRevisionsForResults(bearDb, identifiers)
-    : new Map<string, NoteRevision>();
+  const revisionsByIdentifier = fetchRevisionsForResults(bearDb, identifiers);
 
   // exactOptionalPropertyTypes: omit optional keys instead of assigning undefined.
   const notes = rows.map((row) => {
@@ -520,7 +529,7 @@ function executeQueryWithCount(
       creation_date: convertCoreDataTimestamp(row.created),
       modification_date: convertCoreDataTimestamp(row.modified),
       pin: row.pinned === 1 ? ('yes' as const) : ('no' as const),
-      revision: revisionsByIdentifier.get(row.identifier) ?? 0,
+      revision: revisionsByIdentifier.get(row.identifier) ?? null,
     };
     if (tags) result.tags = tags;
     if (row.snippet) result.snippet = row.snippet;
@@ -550,9 +559,10 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
 }
 
 // Mirrors fetchTagsForResults but reads from Bear's live DB (not the FTS shadow).
-// Single round trip via an IN-clause. Caller must ensure identifiers is non-empty
-// before iterating the returned Map, since `null` Z_OPT values from missing rows
-// would be silently absent (callers should handle the missing case explicitly).
+// Single round trip via an IN-clause. Identifiers without a matching live-DB row
+// are absent from the returned Map (the IN-clause SELECT simply doesn't produce
+// a row for them); callers handle this by treating a missing entry as a null
+// revision and rendering REVISION_UNAVAILABLE_SENTENCE.
 function fetchRevisionsForResults(
   bearDb: DatabaseSync,
   identifiers: string[]

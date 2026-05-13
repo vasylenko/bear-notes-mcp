@@ -21,7 +21,12 @@ import { findUntaggedNotes, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
 import { applyWriteGate } from './registration.js';
-import { createErrorResponse, createToolResponse, formatRevisionLine } from './responses.js';
+import {
+  REVISION_UNAVAILABLE_SENTENCE,
+  createErrorResponse,
+  createToolResponse,
+  formatRevisionLine,
+} from './responses.js';
 
 // Cap bear-add-file attachment size. Well above realistic PDFs/images, well
 // below "exfiltrate the entire ~/Library."
@@ -489,7 +494,13 @@ Try different search criteria or check if notes exist in Bear Notes.`);
             resultLines.push(`   Tags: ${note.tags.join(', ')}`);
           }
           resultLines.push(`   ID: ${note.identifier}`);
-          resultLines.push(`   ${formatRevisionLine(note.revision)}`);
+          // Search hydrates revision from the live Bear DB, which can miss a
+          // row if the note vanished after the FTS shadow was built. Pass the
+          // unavailable-sentence so the response distinguishes that from a
+          // write-side timeout.
+          resultLines.push(
+            `   ${formatRevisionLine(note.revision, REVISION_UNAVAILABLE_SENTENCE)}`
+          );
           resultLines.push('');
         });
 

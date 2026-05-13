@@ -40,14 +40,27 @@ export function createErrorResponse(text: string): Pick<CallToolResult, 'content
 // constants, not string literals."
 export const REVISION_TIMEOUT_SENTENCE = `Revision: unknown (write confirmation timed out after ${REVISION_POLL_CAP_MS}ms)`;
 
+// The write-timeout sentence reads as "the value should exist but we couldn't
+// confirm it"; for search-result hydration the truth is different — the note
+// vanished from the live DB between the FTS index build and the hydration read
+// (deleted, archived, or encrypted concurrently). A read-side miss against the
+// write-side sentence would lie about the origin of the unknown.
+export const REVISION_UNAVAILABLE_SENTENCE =
+  'Revision: unknown (note not found in live database — likely deleted, archived, or encrypted since the search index was built)';
+
 /**
  * Formats the OCC revision line that accompanies every note-scoped tool
- * response. Centralized so the format and the timeout fallback are identical
+ * response. Centralized so numeric and sentinel renderings stay consistent
  * across read responses, search result entries, and write responses.
  *
- * @param revision - Z_OPT value, or null when post-write polling timed out
- * @returns "Revision: <n>" or the timeout sentence
+ * @param revision - Z_OPT value, or null when the revision could not be captured
+ * @param unknownSentence - which sentinel to emit on null (defaults to the
+ *   write-timeout sentence; pass REVISION_UNAVAILABLE_SENTENCE for read-side misses)
+ * @returns "Revision: <n>" or the chosen sentinel sentence
  */
-export function formatRevisionLine(revision: NoteRevision | null): string {
-  return revision === null ? REVISION_TIMEOUT_SENTENCE : `Revision: ${revision}`;
+export function formatRevisionLine(
+  revision: NoteRevision | null,
+  unknownSentence: string = REVISION_TIMEOUT_SENTENCE
+): string {
+  return revision === null ? unknownSentence : `Revision: ${revision}`;
 }
