@@ -347,6 +347,12 @@ Use bear-search-notes to find the correct note identifier.`);
             responseLines.push(
               'Note ID: unknown — the create request was sent, but the new note could not be confirmed. Check in Bear to verify.'
             );
+            // Emit Revision: unknown alongside the ID: unknown line so the
+            // mutation-response contract (note ID + title + revision +
+            // what-changed) stays symmetric on the timeout branch. Without
+            // this, a consumer parsing every response for a Revision line
+            // would need to special-case the create-timeout path.
+            responseLines.push(formatRevisionLine(null));
           }
 
           const hasContent = title || text || tags;
