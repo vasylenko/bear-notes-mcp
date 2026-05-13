@@ -159,6 +159,14 @@ Three write-path patterns capture the revision honestly — one per shape of "wh
    (explicit temporal label — distinguishable from a live current revision)
 ```
 
+**In-scope tools.** The six note-mutating tools — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — and the three note-reading tools that return notes — `bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes` — emit a revision line per the diagrams above. Global tag tools (`bear-rename-tag`, `bear-delete-tag`, `bear-list-tags`) and `bear-capabilities` do not reference a specific note and emit no revision line.
+
+**Field-sourcing discipline.** Per the mutation-response-metadata rule in `MCP_STANDARDS.md`, every field must come from a value known before the write or from a write-confirming poll — never from a post-write read that samples current state. Concrete sourcing:
+
+- **Note ID** — for modifications, from the input parameter. For creation, from `awaitNoteCreation`'s post-create poll (the only path that needs polling at all, since the ID doesn't exist before the URL fires).
+- **Note title** — for modifications, from the pre-flight `getNoteContent` validation. For creation, from the input parameter when one was provided (the title-less creation path omits the line).
+- **Revision** — from `existingNote.revision` (free from the same pre-flight read), then post-write via `awaitRevisionIncrement(id, baseline)` for content writes, via `awaitNoteCreation` (bundled `{id, revision}` SELECT) for create, or directly from the pre-flight snapshot for archive. Helper constants: `REVISION_POLL_CAP_MS` (poll budget), `REVISION_TIMEOUT_SENTENCE` (write-timeout sentinel), `REVISION_UNAVAILABLE_SENTENCE` (read-side hydration miss; see *In-memory FTS5 Index* above).
+
 **Constraint partially lifted: write verification.** *Key Design Constraints → Intentional Exclusions* notes "Write verification: No way to confirm Bear processed a URL action." OCC inform lifts this for any write that bumps `Z_OPT` — polling waits for the change, so a non-null `Revision` in the response *is* the confirmation. The constraint persists for writes that don't bump `Z_OPT` (the timeout sentence honestly signals this rather than masking it).
 
 **Constraint partially lifted: test pause-after-write.** *Testing Constraints* notes existing tests pause briefly after writes "giving Bear time to process the callback." New OCC system tests use the response's `Revision` as a deterministic completion signal for the *under-test* write — the polling already waited for Bear, so no `sleep` is needed between the write and its readback. Tests that chain a prior `create-note` before the under-test write still pause between them because Bear performs a subtitle/index recompute save shortly after creation (the `+2` first-edit jump in `BEAR_DATABASE_SCHEMA.md`); the polling on the under-test write doesn't cover that earlier gap.

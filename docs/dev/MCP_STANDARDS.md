@@ -12,20 +12,20 @@ Tools are first discovered via descriptions, then invoked via schemas. Optimize 
 
 ## Mutation Response Metadata
 
-Every note-level mutation tool — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — must return **note ID + note title + revision + what changed** in its response. ID and title are always available without post-write database reads:
+A mutation tool's response must carry enough metadata for the LLM consumer to confirm the write landed, address the affected resource in follow-up calls, and detect concurrent edits. Concretely:
 
-- For modifications: ID comes from the input parameter, title from the pre-flight `getNoteContent()` validation
-- For creation: title comes from the input parameter, ID from post-create polling
+- **Stable identifier** of the affected resource so the consumer doesn't have to re-search to follow up.
+- **Human-readable label** naming the resource (e.g. note title) when one is available — so the response is meaningful to the user looking over the agent's shoulder.
+- **Version token** that moves monotonically across writes, so the consumer can compare across calls and detect "did this change since I last read it" (OCC inform).
+- **What changed** in user-facing terms.
 
-Revision (the OCC version token, `ZSFNOTE.Z_OPT`) is sourced via post-write polling — see the "polling for change" exception below.
+Source these from values already known before the write (input parameters, pre-flight validation reads) or from polls that wait *for state to change*. **Never from a post-write read that samples current state** — fire-and-forget write architectures (anything where the underlying API has no synchronous completion handle) can return pre-mutation state in a naïvely-timed post-write read, which would mislead the LLM into thinking the operation failed.
 
-Global tag mutations (`bear-rename-tag`, `bear-delete-tag`) are not note-level and intentionally omit note metadata.
+**Exception: polling for change.** A post-write read IS permitted if it waits *until* the version token differs from a captured pre-write baseline. This preserves the spirit of the rule: the consumer receives a value that confirms the write landed, not a snapshot that might still reflect pre-mutation state. On timeout the response must surface a clearly-labeled sentinel rather than a value that could be stale.
 
-Never fetch tags or other metadata from the database after a write — Bear's fire-and-forget architecture means post-write reads return pre-mutation state, which would mislead the LLM into thinking the operation failed.
+Global mutations whose target is a taxonomy rather than a specific resource intentionally omit per-resource metadata.
 
-**Exception: polling for change.** Reading `ZSFNOTE.Z_OPT` post-write IS permitted iff the read waits *for the value to change* (write-confirmation), not for current state. This preserves the spirit of the rule — the LLM receives a value that confirms the write landed, not a pre-mutation snapshot mistaken for fresh state. Implementation: `awaitRevisionIncrement` in `src/operations/notes.ts`. On timeout (write didn't land within `REVISION_POLL_CAP_MS`), the response emits `REVISION_TIMEOUT_SENTENCE` rather than a stale value.
-
-**Archive-flow exception.** `bear-archive-note` uses `existingNote.revision` captured BEFORE the archive URL fires, labeled `Revision at time of archive: <n>`. This is NOT a post-write read — it's a pre-write snapshot with explicit temporal labeling that signals to the LLM consumer that the value is frozen at the moment of archival (post-archive the note is filtered from default queries, so a fresh read would return null).
+The concrete instantiation for this server — which tools are in scope, which helpers implement these patterns, the runtime constants and labels — lives in `docs/dev/SPECIFICATION.md` under "Optimistic Concurrency Control (Inform Half)". Empirical findings about the underlying DB columns those helpers read live in `docs/dev/BEAR_DATABASE_SCHEMA.md`.
 
 ## Tool Description
 
