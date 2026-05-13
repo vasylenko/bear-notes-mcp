@@ -6,6 +6,8 @@ import { setTimeout as scheduleAfter } from 'node:timers';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CORE_DATA_EPOCH_OFFSET } from '../config.js';
+
 import {
   awaitNoteCreation,
   awaitRevisionIncrement,
@@ -302,7 +304,7 @@ describe('awaitNoteCreation', () => {
     // ZCREATIONDATE in Core Data epoch (seconds since 2001-01-01). Any value
     // >= now - CREATION_LOOKBACK_MS qualifies; convertDateToCoreDataTimestamp
     // for `now` is well within range.
-    const coreDataNow = Math.floor(Date.now() / 1000) - 978307200;
+    const coreDataNow = Math.floor(Date.now() / 1000) - CORE_DATA_EPOCH_OFFSET;
 
     // Schedule INSERT mid-poll to mirror Bear's async creation.
     scheduleAfter(() => {
