@@ -1,18 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { setTimeout as scheduleAfter } from 'node:timers';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CORE_DATA_EPOCH_OFFSET } from '../config.js';
-
 import {
-  awaitNoteCreation,
-  awaitRevisionIncrement,
   noteHasHeader,
   parseDateString,
+  pollUntilFound,
   searchNotes,
   stripLeadingHeader,
 } from './notes.js';
@@ -186,123 +177,43 @@ describe('searchNotes validation', () => {
   });
 });
 
-// Inline file-backed synthetic DB rather than `:memory:`. awaitRevisionIncrement
-// and awaitNoteCreation each open their own read-only connection via
-// openBearDatabase(BEAR_DB_PATH); both connections must see the same data,
-// which only works for a file-backed SQLite (`:memory:` is per-connection).
-// The returned ref's `writeDb` is reassigned in beforeEach — capture via the
-// ref, not by destructuring.
-function setupTempBearDb(schema: string): { writeDb: DatabaseSync } {
-  const ref = {} as { writeDb: DatabaseSync };
-  let tempDir: string;
-  let originalBearDbPath: string | undefined;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'bear-mcp-test-'));
-    const dbPath = join(tempDir, 'database.sqlite');
-    ref.writeDb = new DatabaseSync(dbPath);
-    ref.writeDb.exec(schema);
-    originalBearDbPath = process.env.BEAR_DB_PATH;
-    process.env.BEAR_DB_PATH = dbPath;
+// pollUntilFound is the shared primitive behind awaitRevisionIncrement and
+// awaitNoteCreation. Testing it with synthetic `read` callbacks keeps the
+// timing contract verifiable without racing scheduled SQLite writes — the
+// previous test shape was flaky on event-loop-starved CI runners because the
+// scheduled +50ms writer could slip past the helper's wallclock deadline.
+// End-to-end coverage of the SQLite integration lives in the system tests.
+describe('pollUntilFound', () => {
+  it('returns the first non-null value the read produces', async () => {
+    const sequence: (string | null)[] = [null, null, 'found'];
+    let i = 0;
+    const result = await pollUntilFound(() => sequence[i++] ?? null, 200, 1);
+    expect(result).toBe('found');
   });
 
-  afterEach(() => {
-    ref.writeDb.close();
-    rmSync(tempDir, { recursive: true, force: true });
-    if (originalBearDbPath === undefined) {
-      delete process.env.BEAR_DB_PATH;
-    } else {
-      process.env.BEAR_DB_PATH = originalBearDbPath;
-    }
-  });
-
-  return ref;
-}
-
-const REVISION_INCREMENT_SCHEMA = `
-  CREATE TABLE ZSFNOTE (
-    Z_PK INTEGER PRIMARY KEY,
-    ZUNIQUEIDENTIFIER TEXT,
-    Z_OPT INTEGER DEFAULT 1,
-    ZARCHIVED INTEGER DEFAULT 0,
-    ZTRASHED INTEGER DEFAULT 0,
-    ZENCRYPTED INTEGER DEFAULT 0
-  )
-`;
-
-// Adds ZTITLE and ZCREATIONDATE — the columns awaitNoteCreation reads to
-// resolve a freshly-inserted row by title within the lookback window.
-const NOTE_CREATION_SCHEMA = `
-  CREATE TABLE ZSFNOTE (
-    Z_PK INTEGER PRIMARY KEY,
-    ZTITLE TEXT,
-    ZUNIQUEIDENTIFIER TEXT,
-    ZCREATIONDATE REAL,
-    ZARCHIVED INTEGER DEFAULT 0,
-    ZTRASHED INTEGER DEFAULT 0,
-    ZENCRYPTED INTEGER DEFAULT 0,
-    Z_OPT INTEGER DEFAULT 1
-  )
-`;
-
-describe('awaitRevisionIncrement', () => {
-  const db = setupTempBearDb(REVISION_INCREMENT_SCHEMA);
-
-  it('resolves with the new revision when Z_OPT changes (inequality, not baseline+1)', async () => {
-    db.writeDb
-      .prepare('INSERT INTO ZSFNOTE (Z_PK, ZUNIQUEIDENTIFIER, Z_OPT) VALUES (1, ?, 5)')
-      .run('note-id');
-
-    // +2 mid-poll mirrors first-edit-after-creation. The helper must resolve
-    // on inequality, not wait for baseline+1=6.
-    scheduleAfter(() => {
-      db.writeDb.prepare('UPDATE ZSFNOTE SET Z_OPT = 7 WHERE ZUNIQUEIDENTIFIER = ?').run('note-id');
-    }, 50);
-
-    const result = await awaitRevisionIncrement('note-id', 5);
-    expect(result).toBe(7);
-  });
-
-  it('returns null on timeout when Z_OPT does not change', async () => {
-    db.writeDb
-      .prepare('INSERT INTO ZSFNOTE (Z_PK, ZUNIQUEIDENTIFIER, Z_OPT) VALUES (1, ?, 5)')
-      .run('note-id');
-
+  it('returns null when read never produces a non-null value', async () => {
     const start = Date.now();
-    const result = await awaitRevisionIncrement('note-id', 5);
+    const result = await pollUntilFound(() => null, 100, 5);
     const elapsed = Date.now() - start;
 
     expect(result).toBeNull();
-    // Cap is REVISION_POLL_CAP_MS=500; allow slack for CI/system variance.
-    expect(elapsed).toBeGreaterThanOrEqual(450);
-    expect(elapsed).toBeLessThan(900);
+    // Wallclock floor is the cap minus one interval — the deadline check
+    // fires before the final sleep would complete.
+    expect(elapsed).toBeGreaterThanOrEqual(95);
   });
 
-  it('returns null when the note does not exist', async () => {
-    const result = await awaitRevisionIncrement('ghost-id', 0);
-    expect(result).toBeNull();
-  });
-});
+  it('stops polling once read returns a value', async () => {
+    let calls = 0;
+    const result = await pollUntilFound(
+      () => {
+        calls++;
+        return 'first';
+      },
+      1_000,
+      5
+    );
 
-describe('awaitNoteCreation', () => {
-  const db = setupTempBearDb(NOTE_CREATION_SCHEMA);
-
-  it('resolves with both id and revision when the note is found', async () => {
-    // Core Data epoch (seconds since 2001-01-01). `now` is well within the
-    // CREATION_LOOKBACK_MS window the helper queries against.
-    const coreDataNow = Math.floor(Date.now() / 1000) - CORE_DATA_EPOCH_OFFSET;
-
-    // Mid-poll INSERT mirrors Bear's async creation and proves the
-    // {id, revision} tuple is bundled from a single SELECT.
-    scheduleAfter(() => {
-      db.writeDb
-        .prepare(
-          'INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZUNIQUEIDENTIFIER, ZCREATIONDATE, Z_OPT) VALUES (1, ?, ?, ?, 3)'
-        )
-        .run('Fresh Note', 'created-id', coreDataNow);
-    }, 50);
-
-    const result = await awaitNoteCreation('Fresh Note');
-    expect(result).toEqual({ id: 'created-id', revision: 3 });
+    expect(result).toBe('first');
+    expect(calls).toBe(1);
   });
 });

@@ -15,12 +15,14 @@ export const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
 
-// OCC inform polling cap (SVA-21). 500ms is a generous upper bound vs. SVA-20's
+// OCC inform polling cap (SVA-21). 1s is a generous upper bound vs. SVA-20's
 // empirically observed <30ms typical propagation from `open -g` to observable
-// SQLite. 15ms interval keeps polls tight enough to capture sub-30ms writes
-// without spamming SQLite (~33 in-process reads worst case per write).
+// SQLite — the headroom absorbs event-loop slop on slow machines without
+// changing happy-path latency. 15ms interval keeps polls tight enough to
+// capture sub-30ms writes without spamming SQLite (~66 in-process reads
+// worst case per write).
 export const REVISION_POLL_INTERVAL_MS = 15;
-export const REVISION_POLL_CAP_MS = 500;
+export const REVISION_POLL_CAP_MS = 1_000;
 
 interface NoteContentRow {
   title: string | null;
@@ -289,6 +291,26 @@ export function searchNotes(
 }
 
 /**
+ * Polls `read` until it returns a non-null value or the wallclock cap elapses.
+ * `read` signals "not found yet, keep polling" by returning null; any non-null
+ * value is final. The deadline is wallclock (not iteration count) so a slow
+ * `read` can't extend the cap by spending the budget inside a single call.
+ */
+export async function pollUntilFound<T>(
+  read: () => T | null,
+  capMs: number,
+  intervalMs: number
+): Promise<T | null> {
+  const deadline = Date.now() + capMs;
+  while (Date.now() < deadline) {
+    const value = read();
+    if (value !== null) return value;
+    await setTimeout(intervalMs);
+  }
+  return null;
+}
+
+/**
  * Polls Bear's SQLite database for the identifier and revision of a recently
  * created note. Designed for use after bear-create-note fires the URL API —
  * the note creation already succeeded, so errors here degrade gracefully to
@@ -328,21 +350,23 @@ export async function awaitNoteCreation(
       ORDER BY ZCREATIONDATE DESC LIMIT 1
     `);
 
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
+    const result = await pollUntilFound(
+      () => {
+        const row = stmt.get(title, sinceTimestamp) as
+          | { identifier: string; revision: number }
+          | undefined;
+        return row ? { id: row.identifier, revision: row.revision } : null;
+      },
+      POLL_TIMEOUT_MS,
+      POLL_INTERVAL_MS
+    );
 
-    while (Date.now() < deadline) {
-      const row = stmt.get(title, sinceTimestamp) as
-        | { identifier: string; revision: number }
-        | undefined;
-      if (row) {
-        logger.debug(`awaitNoteCreation: found note "${title}" at revision ${row.revision}`);
-        return { id: row.identifier, revision: row.revision };
-      }
-      await setTimeout(POLL_INTERVAL_MS);
+    if (result === null) {
+      logger.info(`awaitNoteCreation: timed out waiting for note "${title}"`);
+    } else {
+      logger.debug(`awaitNoteCreation: found note "${title}" at revision ${result.revision}`);
     }
-
-    logger.info(`awaitNoteCreation: timed out waiting for note "${title}"`);
-    return null;
+    return result;
   } catch (error) {
     // Intentionally not using logAndThrow — the note was already created via URL API,
     // failing to retrieve its ID should not turn a successful creation into an error
@@ -357,7 +381,7 @@ export async function awaitNoteCreation(
  * Polls ZSFNOTE.Z_OPT until it differs from `baseline`, returning the new
  * value or null on timeout. The inequality (vs `baseline + 1`) handles Bear's
  * empirically-observed +2 first-edit jump after note creation — a subtitle/
- * index recompute save. One DB connection covers the whole poll to avoid ~33
+ * index recompute save. One DB connection covers the whole poll to avoid ~66
  * SQLite opens per write.
  */
 export async function awaitRevisionIncrement(
@@ -379,21 +403,22 @@ export async function awaitRevisionIncrement(
          AND ZTRASHED = 0
          AND ZENCRYPTED = 0`
     );
-    const deadline = Date.now() + REVISION_POLL_CAP_MS;
 
-    while (Date.now() < deadline) {
-      const row = stmt.get(identifier) as { revision: number } | undefined;
-      if (row && row.revision !== baseline) {
-        logger.debug(
-          `awaitRevisionIncrement: revision ${baseline} → ${row.revision} for ${identifier}`
-        );
-        return row.revision;
-      }
-      await setTimeout(REVISION_POLL_INTERVAL_MS);
+    const result = await pollUntilFound(
+      () => {
+        const row = stmt.get(identifier) as { revision: number } | undefined;
+        return row && row.revision !== baseline ? row.revision : null;
+      },
+      REVISION_POLL_CAP_MS,
+      REVISION_POLL_INTERVAL_MS
+    );
+
+    if (result === null) {
+      logger.info(`awaitRevisionIncrement: timed out waiting for revision change on ${identifier}`);
+    } else {
+      logger.debug(`awaitRevisionIncrement: revision ${baseline} → ${result} for ${identifier}`);
     }
-
-    logger.info(`awaitRevisionIncrement: timed out waiting for revision change on ${identifier}`);
-    return null;
+    return result;
   } catch (error) {
     // The write already fired via x-callback-url — failing to capture the
     // new revision must not turn a successful write into a thrown error.
