@@ -25,7 +25,7 @@ afterAll(() => {
 });
 
 describe('bear-archive-note Revision wiring (OCC inform)', () => {
-  it('returns the pre-archive revision with explicit "at time of archive" label', async () => {
+  it('returns the pre-archive revision (post-archive read is filtered out)', async () => {
     const title = uniqueTitle(TEST_PREFIX, 'Archive', RUN_ID);
     const createResult = callTool({
       toolName: 'bear-create-note',
@@ -35,11 +35,9 @@ describe('bear-archive-note Revision wiring (OCC inform)', () => {
     createdIds.push(noteId);
 
     // Settle briefly so create's subtitle/index recompute save (the +2 jump
-    // documented in BEAR_DATABASE_SCHEMA.md) lands BEFORE we snapshot Z_OPT.
-    // Without this, the test's readNoteRevision and the handler's pre-flight
-    // getNoteContent — two separate DB reads bracketing an Inspector
-    // subprocess call — race against the recompute and can read different
-    // values, breaking the strict-equality toContain assertion below.
+    // in BEAR_DATABASE_SCHEMA.md) lands BEFORE we snapshot Z_OPT. Without it,
+    // the test's readNoteRevision and the handler's pre-flight getNoteContent
+    // race against the recompute and read different values.
     await sleep(PAUSE_AFTER_WRITE_OP);
 
     const preArchiveRevision = readNoteRevision(noteId);
@@ -50,8 +48,6 @@ describe('bear-archive-note Revision wiring (OCC inform)', () => {
       args: { id: noteId },
     }).content[0].text;
 
-    // Exact-text assertion locks in the explicit label — distinguishes a
-    // pre-write snapshot from a live current revision.
-    expect(archiveResult).toContain(`Revision at time of archive: ${preArchiveRevision}`);
+    expect(archiveResult).toContain(`Revision: ${preArchiveRevision}`);
   });
 });

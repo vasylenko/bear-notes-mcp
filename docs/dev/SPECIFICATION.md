@@ -167,8 +167,8 @@ Three write-path patterns capture the revision honestly — one per shape of "wh
     │
     ▼ fire bear://x-callback-url/archive
     ▼
-   response includes `Revision at time of archive: <preArchiveRev>`
-   (explicit temporal label — distinguishable from a live current revision)
+   response includes `Revision: <preArchiveRev>` (snapshot; the note is no
+   longer reachable via default queries to compare against anyway)
 ```
 
 **In-scope tools.** The six note-mutating tools — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — and the three note-reading tools that return notes — `bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes` — emit a revision line per the diagrams above. Global tag tools (`bear-rename-tag`, `bear-delete-tag`, `bear-list-tags`) and `bear-capabilities` do not reference a specific note and emit no revision line.

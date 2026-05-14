@@ -184,11 +184,9 @@ export function tryExtractNoteId(response: string): string | null {
   return match ? match[1] : null;
 }
 
-// Matches both "Revision: 42" and the archive variant "Revision at time of archive: 42".
-// Returns null for the timeout sentence ("Revision: unknown (...)") because that
-// contains no integer to extract — callers detect that branch by checking for
-// the literal "unknown" substring separately.
-const NOTE_REVISION_REGEX = /Revision(?:\s+at\s+time\s+of\s+archive)?:\s+(\d+)/;
+// Returns null for the timeout sentence ("Revision: unknown (...)") — callers
+// detect that branch by checking for the literal "unknown" substring separately.
+const NOTE_REVISION_REGEX = /Revision:\s+(\d+)/;
 
 /** Extracts a numeric revision from any MCP response, or null if not present (or the timeout sentence). */
 export function tryExtractRevision(response: string): number | null {

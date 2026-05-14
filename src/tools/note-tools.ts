@@ -925,7 +925,7 @@ The tags have been added to the beginning of the note.`);
       {
         title: 'Archive Bear Note',
         description:
-          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID. Response includes the note's revision at time of archive — a future capability will use revisions to reject stale writes.",
+          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID. Response includes the note's revision — a future capability will use it to reject stale writes.",
         inputSchema: {
           id: z
             .string()
@@ -953,8 +953,6 @@ Use bear-search-notes to find the correct note identifier.`);
 
           // Snapshot revision BEFORE the archive fires — post-archive the note
           // is filtered from default queries, so a fresh read would return null.
-          // The explicit "at time of archive" label tells the LLM consumer this
-          // value is a pre-write snapshot, not the live current revision.
           const preArchiveRevision = existingNote.revision;
 
           const url = buildBearUrl('archive', {
@@ -968,7 +966,7 @@ Use bear-search-notes to find the correct note identifier.`);
 
 Note: "${existingNote.title}"
 ID: ${id}
-Revision at time of archive: ${preArchiveRevision}
+${formatRevisionLine(preArchiveRevision)}
 
 The note has been moved to Bear's archive.`);
         } catch (error) {
