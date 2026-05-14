@@ -559,12 +559,10 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
 }
 
 // Mirrors fetchTagsForResults but reads from Bear's live DB (not the FTS shadow).
-// Single round trip via an IN-clause. The active-note filter (archived/trashed/
-// encrypted = 0) mirrors the FTS index build so a note that flipped to one of
-// those states between index build and this hydration read is treated as
-// unavailable — its row is excluded from the result, the Map.get miss surfaces
-// as null, and the caller renders REVISION_UNAVAILABLE_SENTENCE instead of a
-// numeric revision for a note Bear has effectively retired.
+// Single round trip via an IN-clause. Identifiers without a matching live-DB row
+// are absent from the returned Map (the IN-clause SELECT simply doesn't produce
+// a row for them); callers handle this by treating a missing entry as a null
+// revision and rendering REVISION_UNAVAILABLE_SENTENCE.
 function fetchRevisionsForResults(
   bearDb: DatabaseSync,
   identifiers: string[]
@@ -575,10 +573,7 @@ function fetchRevisionsForResults(
     .prepare(
       `SELECT ZUNIQUEIDENTIFIER as identifier, Z_OPT as revision
          FROM ZSFNOTE
-        WHERE ZUNIQUEIDENTIFIER IN (${placeholders})
-          AND ZARCHIVED = 0
-          AND ZTRASHED = 0
-          AND ZENCRYPTED = 0`
+        WHERE ZUNIQUEIDENTIFIER IN (${placeholders})`
     )
     .all(...identifiers) as unknown as Array<{ identifier: string; revision: number }>;
   return new Map(rows.map((r) => [r.identifier, r.revision]));
