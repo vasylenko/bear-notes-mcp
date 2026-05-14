@@ -347,8 +347,8 @@ Use bear-search-notes to find the correct note identifier.`);
             );
             // Keep the Revision line on the timeout branch too so consumers
             // parsing every response don't need to special-case create. The
-            // create-specific sentinel cites POLL_TIMEOUT_MS — the cap that
-            // actually fired — not REVISION_POLL_CAP_MS.
+            // create-specific sentinel cites POLL_TIMEOUT_MS — the budget that
+            // actually fired — not REVISION_POLL_TARGET_MS.
             responseLines.push(formatRevisionLine(null, REVISION_CREATION_TIMEOUT_SENTENCE));
           }
 

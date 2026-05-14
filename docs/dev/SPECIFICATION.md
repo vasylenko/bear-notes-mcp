@@ -138,11 +138,11 @@ Three write-path patterns capture the revision honestly — one per shape of "wh
     ▼ fire bear://x-callback-url/...
     │
     ▼ awaitRevisionIncrement(id, baseline) — polls Z_OPT every 15ms
-    │   until the value differs from baseline, capped at REVISION_POLL_CAP_MS
+    │   until the value differs from baseline, with a REVISION_POLL_TARGET_MS budget
     ▼
    response includes `Revision: <newRev>` or a duration-free
    `Revision: unknown (...)` sentence (see src/tools/responses.ts) when the
-   cap elapses without observing a change
+   budget elapses without observing a change
 
   bear-create-note
   — no pre-flight baseline (note doesn't exist yet); single bundled SELECT
@@ -152,7 +152,7 @@ Three write-path patterns capture the revision honestly — one per shape of "wh
     │
     ▼ awaitNoteCreation(title) — polls ZSFNOTE by (title, recent ZCREATIONDATE),
     │   projecting both ZUNIQUEIDENTIFIER and Z_OPT in one SELECT, capped at
-    │   POLL_TIMEOUT_MS (2000ms — wider than REVISION_POLL_CAP_MS because the
+    │   POLL_TIMEOUT_MS (2000ms — wider than REVISION_POLL_TARGET_MS because the
     │   first appearance of a newly-created row is slower than a Z_OPT bump)
     ▼
    response includes `Note ID: <id>` + `Revision: <revision>`, or

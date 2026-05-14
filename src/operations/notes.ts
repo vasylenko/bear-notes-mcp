@@ -15,14 +15,17 @@ export const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
 
-// OCC inform polling cap (SVA-21). 1s is a generous upper bound vs. SVA-20's
+// OCC inform polling target (SVA-21). 1s is a generous upper bound vs. SVA-20's
 // empirically observed <30ms typical propagation from `open -g` to observable
 // SQLite — the headroom absorbs event-loop slop on slow machines without
-// changing happy-path latency. 15ms interval keeps polls tight enough to
+// changing happy-path latency. Not a hard wall-clock bound: each stmt.get()
+// can block up to busy_timeout=3000ms (database.ts) when Bear holds a writer
+// lock; the duration-free REVISION_TIMEOUT_SENTENCE keeps the user-visible
+// response honest regardless. 15ms interval keeps polls tight enough to
 // capture sub-30ms writes without spamming SQLite (~66 in-process reads
 // worst case per write).
 export const REVISION_POLL_INTERVAL_MS = 15;
-export const REVISION_POLL_CAP_MS = 1_000;
+export const REVISION_POLL_TARGET_MS = 1_000;
 
 interface NoteContentRow {
   title: string | null;
@@ -409,7 +412,7 @@ export async function awaitRevisionIncrement(
         const row = stmt.get(identifier) as { revision: number } | undefined;
         return row && row.revision !== baseline ? row.revision : null;
       },
-      REVISION_POLL_CAP_MS,
+      REVISION_POLL_TARGET_MS,
       REVISION_POLL_INTERVAL_MS
     );
 
