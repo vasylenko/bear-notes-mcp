@@ -197,7 +197,10 @@ export function tryExtractRevision(response: string): number | null {
 /**
  * Reads the live Z_OPT value for a note via direct SQL against Bear's DB.
  * Used by OCC system tests to verify response Revision matches the actual
- * source-of-truth value. Returns null if the note doesn't exist or is filtered.
+ * source-of-truth value. No active-note filter is applied — the helper reads
+ * raw Z_OPT regardless of archived/trashed/encrypted state so tests can probe
+ * revisions independent of the server's visibility rules. Returns null only
+ * if the note doesn't exist.
  */
 export function readNoteRevision(id: string): number | null {
   let db: ReturnType<typeof openBearDatabase> | undefined;
