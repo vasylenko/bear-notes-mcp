@@ -150,10 +150,13 @@ Three write-path patterns capture the revision honestly — one per shape of "wh
     ▼ fire bear://x-callback-url/create
     │
     ▼ awaitNoteCreation(title) — polls ZSFNOTE by (title, recent ZCREATIONDATE),
-    │   projecting both ZUNIQUEIDENTIFIER and Z_OPT in one SELECT
+    │   projecting both ZUNIQUEIDENTIFIER and Z_OPT in one SELECT, capped at
+    │   POLL_TIMEOUT_MS (2000ms — wider than REVISION_POLL_CAP_MS because the
+    │   first appearance of a newly-created row is slower than a Z_OPT bump)
     ▼
-   response includes `Note ID: <id>` + `Revision: <revision>`, or both
-   marked as unknown when the new row is never observed within the
+   response includes `Note ID: <id>` + `Revision: <revision>`, or
+   `Note ID: unknown ...` + `Revision: unknown (creation confirmation timed
+   out after 2000ms)` when the new row is never observed within the
    creation poll window
 
   bear-archive-note
@@ -174,7 +177,7 @@ Three write-path patterns capture the revision honestly — one per shape of "wh
 
 - **Note ID** — for modifications, from the input parameter. For creation, from `awaitNoteCreation`'s post-create poll (the only path that needs polling at all, since the ID doesn't exist before the URL fires).
 - **Note title** — for modifications, from the pre-flight `getNoteContent` validation. For creation, from the input parameter when one was provided (the title-less creation path omits the line).
-- **Revision** — from `existingNote.revision` (free from the same pre-flight read), then post-write via `awaitRevisionIncrement(id, baseline)` for content writes, via `awaitNoteCreation` (bundled `{id, revision}` SELECT) for create, or directly from the pre-flight snapshot for archive. Helper constants: `REVISION_POLL_CAP_MS` (poll budget), `REVISION_TIMEOUT_SENTENCE` (write-timeout sentinel), `REVISION_UNAVAILABLE_SENTENCE` (read-side hydration miss; see *In-memory FTS5 Index* above).
+- **Revision** — from `existingNote.revision` (free from the same pre-flight read), then post-write via `awaitRevisionIncrement(id, baseline)` for content writes, via `awaitNoteCreation` (bundled `{id, revision}` SELECT) for create, or directly from the pre-flight snapshot for archive. Helper constants: `REVISION_POLL_CAP_MS` (post-write inequality-poll budget), `POLL_TIMEOUT_MS` (create-path poll budget), `REVISION_TIMEOUT_SENTENCE` (post-write timeout sentinel for content writes), `REVISION_CREATION_TIMEOUT_SENTENCE` (create-path timeout sentinel; cites `POLL_TIMEOUT_MS` rather than the inequality cap so the user sees the cap that actually fired), `REVISION_UNAVAILABLE_SENTENCE` (read-side hydration miss; see *In-memory FTS5 Index* above).
 
 **Constraint partially lifted: write verification.** *Key Design Constraints → Intentional Exclusions* notes "Write verification: No way to confirm Bear processed a URL action." OCC inform lifts this for any write that bumps `Z_OPT` — polling waits for the change, so a non-null `Revision` in the response *is* the confirmation. The constraint persists for writes that don't bump `Z_OPT` (the timeout sentence honestly signals this rather than masking it).
 

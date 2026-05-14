@@ -22,6 +22,7 @@ import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
 import { applyWriteGate } from './registration.js';
 import {
+  REVISION_CREATION_TIMEOUT_SENTENCE,
   REVISION_UNAVAILABLE_SENTENCE,
   createErrorResponse,
   createToolResponse,
@@ -351,8 +352,12 @@ Use bear-search-notes to find the correct note identifier.`);
             // mutation-response contract (note ID + title + revision +
             // what-changed) stays symmetric on the timeout branch. Without
             // this, a consumer parsing every response for a Revision line
-            // would need to special-case the create-timeout path.
-            responseLines.push(formatRevisionLine(null));
+            // would need to special-case the create-timeout path. The
+            // create-specific sentinel cites POLL_TIMEOUT_MS (the cap that
+            // actually fired here) rather than the default write-timeout
+            // sentence's REVISION_POLL_CAP_MS, which belongs to the post-
+            // write inequality poll used by content mutations.
+            responseLines.push(formatRevisionLine(null, REVISION_CREATION_TIMEOUT_SENTENCE));
           }
 
           const hasContent = title || text || tags;

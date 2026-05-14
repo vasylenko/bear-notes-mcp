@@ -11,7 +11,7 @@ import {
 } from '../infra/bear-encoding.js';
 
 const POLL_INTERVAL_MS = 25;
-const POLL_TIMEOUT_MS = 2_000;
+export const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
 

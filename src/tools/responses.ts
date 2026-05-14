@@ -1,6 +1,6 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { REVISION_POLL_CAP_MS } from '../operations/notes.js';
+import { POLL_TIMEOUT_MS, REVISION_POLL_CAP_MS } from '../operations/notes.js';
 import type { NoteRevision } from '../types.js';
 
 /**
@@ -39,6 +39,14 @@ export function createErrorResponse(text: string): Pick<CallToolResult, 'content
 // runtime cap — per MCP_STANDARDS.md: "Source numeric defaults from runtime
 // constants, not string literals."
 export const REVISION_TIMEOUT_SENTENCE = `Revision: unknown (write confirmation timed out after ${REVISION_POLL_CAP_MS}ms)`;
+
+// bear-create-note's confirmation path polls via awaitNoteCreation (cap
+// POLL_TIMEOUT_MS), not the post-write inequality poll. The default write-
+// timeout sentence cites the wrong cap and the wrong operation; a create-
+// specific sentinel keeps the cited duration honest and replaces "write
+// confirmation" with "creation confirmation" so the failure mode is named
+// correctly.
+export const REVISION_CREATION_TIMEOUT_SENTENCE = `Revision: unknown (creation confirmation timed out after ${POLL_TIMEOUT_MS}ms)`;
 
 // The write-timeout sentence reads as "the value should exist but we couldn't
 // confirm it"; for search-result hydration the truth is different — the note
