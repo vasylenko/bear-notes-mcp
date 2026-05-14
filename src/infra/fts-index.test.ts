@@ -464,6 +464,38 @@ describe('executeQueryWithCount', () => {
     });
   });
 
+  // The active-note filter inside fetchRevisionsForResults guards the narrow
+  // race where a note was active when the FTS shadow was built but flipped to
+  // archived/trashed/encrypted before this hydration read. The filter mirrors
+  // the index-build predicate so such a note surfaces as null (caller renders
+  // REVISION_UNAVAILABLE_SENTENCE) rather than a numeric Z_OPT that no longer
+  // corresponds to an addressable live note.
+  it.each([
+    { name: 'archived', column: 'ZARCHIVED' },
+    { name: 'trashed', column: 'ZTRASHED' },
+    { name: 'encrypted', column: 'ZENCRYPTED' },
+  ])(
+    'surfaces null revision when a result row flips to $name after the FTS index was built',
+    ({ column }) => {
+      withBearDb([{ pk: 1, title: 'hello world', text: 'body', z_opt: 5 }], (bearDb) => {
+        const state = buildIndex(bearDb);
+        try {
+          // Mutate AFTER index build so the FTS shadow still contains the row.
+          // executeQueryWithCount does not run the drift check (that lives in
+          // ensureFreshIndex), so this models the post-drift-check / pre-
+          // hydration race honestly.
+          bearDb.prepare(`UPDATE ZSFNOTE SET ${column} = 1 WHERE Z_PK = 1`).run();
+
+          const result = executeQueryWithCount(state.memDb, bearDb, spec({ term: 'hello' }));
+          expect(result.notes).toHaveLength(1);
+          expect(result.notes[0].revision).toBeNull();
+        } finally {
+          state.memDb.close();
+        }
+      });
+    }
+  );
+
   // ASCII \w drops é/ï and skips Cyrillic/Greek/CJK entirely, producing silent
   // zero-hits. One Latin-with-diacritic case + one non-Latin case pin both
   // failure modes; SQLite's tokenizer applies the same fold rules to index
