@@ -550,6 +550,11 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
 
 // Reads against the live Bear DB (not the FTS shadow). Identifiers with no
 // matching row are absent from the Map; callers treat that as null revision.
+// Active-note filters (ZARCHIVED/ZTRASHED/ZENCRYPTED = 0) mirror the FTS index
+// build: notes that became archived/trashed/encrypted after the shadow was
+// built must map-miss here so callers surface REVISION_UNAVAILABLE_SENTENCE —
+// without the filters, a now-archived note would still return a numeric Z_OPT
+// and the response would falsely advertise it as live.
 function fetchRevisionsForResults(
   bearDb: DatabaseSync,
   identifiers: string[]
@@ -560,7 +565,10 @@ function fetchRevisionsForResults(
     .prepare(
       `SELECT ZUNIQUEIDENTIFIER as identifier, Z_OPT as revision
          FROM ZSFNOTE
-        WHERE ZUNIQUEIDENTIFIER IN (${placeholders})`
+        WHERE ZUNIQUEIDENTIFIER IN (${placeholders})
+          AND ZARCHIVED = 0
+          AND ZTRASHED = 0
+          AND ZENCRYPTED = 0`
     )
     .all(...identifiers) as unknown as Array<{ identifier: string; revision: number }>;
   return new Map(rows.map((r) => [r.identifier, r.revision]));
