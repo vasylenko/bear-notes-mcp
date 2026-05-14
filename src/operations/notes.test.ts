@@ -186,36 +186,28 @@ describe('searchNotes validation', () => {
   });
 });
 
-describe('awaitRevisionIncrement', () => {
-  // Inline file-backed synthetic DB rather than `:memory:`. The function-under-test
-  // opens its own read-only connection via openBearDatabase(BEAR_DB_PATH); both
-  // connections need to see the same data, which only works for a file-backed
-  // SQLite (since `:memory:` is per-connection).
+// Inline file-backed synthetic DB rather than `:memory:`. awaitRevisionIncrement
+// and awaitNoteCreation each open their own read-only connection via
+// openBearDatabase(BEAR_DB_PATH); both connections must see the same data,
+// which only works for a file-backed SQLite (`:memory:` is per-connection).
+// The returned ref's `writeDb` is reassigned in beforeEach — capture via the
+// ref, not by destructuring.
+function setupTempBearDb(schema: string): { writeDb: DatabaseSync } {
+  const ref = {} as { writeDb: DatabaseSync };
   let tempDir: string;
-  let dbPath: string;
-  let writeDb: DatabaseSync;
   let originalBearDbPath: string | undefined;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'bear-mcp-occ-'));
-    dbPath = join(tempDir, 'database.sqlite');
-    writeDb = new DatabaseSync(dbPath);
-    writeDb.exec(`
-      CREATE TABLE ZSFNOTE (
-        Z_PK INTEGER PRIMARY KEY,
-        ZUNIQUEIDENTIFIER TEXT,
-        Z_OPT INTEGER DEFAULT 1,
-        ZARCHIVED INTEGER DEFAULT 0,
-        ZTRASHED INTEGER DEFAULT 0,
-        ZENCRYPTED INTEGER DEFAULT 0
-      )
-    `);
+    tempDir = mkdtempSync(join(tmpdir(), 'bear-mcp-test-'));
+    const dbPath = join(tempDir, 'database.sqlite');
+    ref.writeDb = new DatabaseSync(dbPath);
+    ref.writeDb.exec(schema);
     originalBearDbPath = process.env.BEAR_DB_PATH;
     process.env.BEAR_DB_PATH = dbPath;
   });
 
   afterEach(() => {
-    writeDb.close();
+    ref.writeDb.close();
     rmSync(tempDir, { recursive: true, force: true });
     if (originalBearDbPath === undefined) {
       delete process.env.BEAR_DB_PATH;
@@ -224,15 +216,47 @@ describe('awaitRevisionIncrement', () => {
     }
   });
 
+  return ref;
+}
+
+const REVISION_INCREMENT_SCHEMA = `
+  CREATE TABLE ZSFNOTE (
+    Z_PK INTEGER PRIMARY KEY,
+    ZUNIQUEIDENTIFIER TEXT,
+    Z_OPT INTEGER DEFAULT 1,
+    ZARCHIVED INTEGER DEFAULT 0,
+    ZTRASHED INTEGER DEFAULT 0,
+    ZENCRYPTED INTEGER DEFAULT 0
+  )
+`;
+
+// Adds ZTITLE and ZCREATIONDATE — the columns awaitNoteCreation reads to
+// resolve a freshly-inserted row by title within the lookback window.
+const NOTE_CREATION_SCHEMA = `
+  CREATE TABLE ZSFNOTE (
+    Z_PK INTEGER PRIMARY KEY,
+    ZTITLE TEXT,
+    ZUNIQUEIDENTIFIER TEXT,
+    ZCREATIONDATE REAL,
+    ZARCHIVED INTEGER DEFAULT 0,
+    ZTRASHED INTEGER DEFAULT 0,
+    ZENCRYPTED INTEGER DEFAULT 0,
+    Z_OPT INTEGER DEFAULT 1
+  )
+`;
+
+describe('awaitRevisionIncrement', () => {
+  const db = setupTempBearDb(REVISION_INCREMENT_SCHEMA);
+
   it('resolves with the new revision when Z_OPT changes (inequality, not baseline+1)', async () => {
-    writeDb
+    db.writeDb
       .prepare('INSERT INTO ZSFNOTE (Z_PK, ZUNIQUEIDENTIFIER, Z_OPT) VALUES (1, ?, 5)')
       .run('note-id');
 
-    // Schedule a +2 jump mid-poll. The +2 (not +1) mirrors first-edit-after-creation
-    // empirical behavior; the helper must resolve on inequality, not wait for 6.
+    // +2 mid-poll mirrors first-edit-after-creation. The helper must resolve
+    // on inequality, not wait for baseline+1=6.
     scheduleAfter(() => {
-      writeDb.prepare('UPDATE ZSFNOTE SET Z_OPT = 7 WHERE ZUNIQUEIDENTIFIER = ?').run('note-id');
+      db.writeDb.prepare('UPDATE ZSFNOTE SET Z_OPT = 7 WHERE ZUNIQUEIDENTIFIER = ?').run('note-id');
     }, 50);
 
     const result = await awaitRevisionIncrement('note-id', 5);
@@ -240,7 +264,7 @@ describe('awaitRevisionIncrement', () => {
   });
 
   it('returns null on timeout when Z_OPT does not change', async () => {
-    writeDb
+    db.writeDb
       .prepare('INSERT INTO ZSFNOTE (Z_PK, ZUNIQUEIDENTIFIER, Z_OPT) VALUES (1, ?, 5)')
       .run('note-id');
 
@@ -255,63 +279,23 @@ describe('awaitRevisionIncrement', () => {
   });
 
   it('returns null when the note does not exist', async () => {
-    // stmt.get returns undefined every poll; loop never matches; falls through to timeout.
     const result = await awaitRevisionIncrement('ghost-id', 0);
     expect(result).toBeNull();
   });
 });
 
 describe('awaitNoteCreation', () => {
-  // Reuses the same file-backed temp-DB pattern as awaitRevisionIncrement.
-  // The function opens its own read-only connection via BEAR_DB_PATH; mid-poll
-  // INSERT proves the {id, revision} tuple is bundled from a single SELECT
-  // (no second round trip for revision). Schema mirrors what awaitNoteCreation
-  // actually reads: ZTITLE, ZUNIQUEIDENTIFIER, ZCREATIONDATE, ZARCHIVED,
-  // ZTRASHED, ZENCRYPTED, Z_OPT.
-  let tempDir: string;
-  let dbPath: string;
-  let writeDb: DatabaseSync;
-  let originalBearDbPath: string | undefined;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'bear-mcp-create-'));
-    dbPath = join(tempDir, 'database.sqlite');
-    writeDb = new DatabaseSync(dbPath);
-    writeDb.exec(`
-      CREATE TABLE ZSFNOTE (
-        Z_PK INTEGER PRIMARY KEY,
-        ZTITLE TEXT,
-        ZUNIQUEIDENTIFIER TEXT,
-        ZCREATIONDATE REAL,
-        ZARCHIVED INTEGER DEFAULT 0,
-        ZTRASHED INTEGER DEFAULT 0,
-        ZENCRYPTED INTEGER DEFAULT 0,
-        Z_OPT INTEGER DEFAULT 1
-      )
-    `);
-    originalBearDbPath = process.env.BEAR_DB_PATH;
-    process.env.BEAR_DB_PATH = dbPath;
-  });
-
-  afterEach(() => {
-    writeDb.close();
-    rmSync(tempDir, { recursive: true, force: true });
-    if (originalBearDbPath === undefined) {
-      delete process.env.BEAR_DB_PATH;
-    } else {
-      process.env.BEAR_DB_PATH = originalBearDbPath;
-    }
-  });
+  const db = setupTempBearDb(NOTE_CREATION_SCHEMA);
 
   it('resolves with both id and revision when the note is found', async () => {
-    // ZCREATIONDATE in Core Data epoch (seconds since 2001-01-01). Any value
-    // >= now - CREATION_LOOKBACK_MS qualifies; convertDateToCoreDataTimestamp
-    // for `now` is well within range.
+    // Core Data epoch (seconds since 2001-01-01). `now` is well within the
+    // CREATION_LOOKBACK_MS window the helper queries against.
     const coreDataNow = Math.floor(Date.now() / 1000) - CORE_DATA_EPOCH_OFFSET;
 
-    // Schedule INSERT mid-poll to mirror Bear's async creation.
+    // Mid-poll INSERT mirrors Bear's async creation and proves the
+    // {id, revision} tuple is bundled from a single SELECT.
     scheduleAfter(() => {
-      writeDb
+      db.writeDb
         .prepare(
           'INSERT INTO ZSFNOTE (Z_PK, ZTITLE, ZUNIQUEIDENTIFIER, ZCREATIONDATE, Z_OPT) VALUES (1, ?, ?, ?, 3)'
         )
