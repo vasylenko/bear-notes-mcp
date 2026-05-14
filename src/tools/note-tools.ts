@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { DEFAULT_SEARCH_LIMIT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
+import { DEFAULT_SEARCH_LIMIT, ENABLE_NEW_NOTE_CONVENTIONS, MAX_SEARCH_LIMIT } from '../config.js';
 import { logger } from '../logging.js';
 import { applyNoteConventions } from '../operations/note-conventions.js';
 import {
@@ -399,9 +399,10 @@ The note has been added to your Bear Notes library.`);
           .number()
           .int()
           .min(1)
+          .max(MAX_SEARCH_LIMIT)
           .optional()
           .describe(
-            `Maximum number of results to return (default: ${DEFAULT_SEARCH_LIMIT}, min: 1)`
+            `Maximum number of results to return (default: ${DEFAULT_SEARCH_LIMIT}, min: 1, max: ${MAX_SEARCH_LIMIT})`
           ),
         createdAfter: z
           .string()
@@ -518,7 +519,14 @@ Try different search criteria or check if notes exist in Bear Notes.`);
         resultLines.push('Use bear-open-note with an ID to read the full content of any note.');
 
         if (hasMore) {
-          resultLines.push(`Use bear-search-notes with limit: ${totalCount} to get all results.`);
+          // Cap the suggestion at MAX_SEARCH_LIMIT — the schema rejects anything
+          // higher, so suggesting `limit: totalCount` for a large library
+          // (e.g. 50000 matches) would just produce a validation error on
+          // retry. Math.min collapses to totalCount for small over-flows.
+          const suggestedLimit = Math.min(totalCount, MAX_SEARCH_LIMIT);
+          resultLines.push(
+            `Use bear-search-notes with limit: ${suggestedLimit} to get more results.`
+          );
         }
 
         return createToolResponse(resultLines.join('\n'));
