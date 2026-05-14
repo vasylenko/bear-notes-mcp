@@ -40,22 +40,16 @@ export interface SearchSpec {
 }
 
 /**
- * A single search hit. Widens `BearNote.revision` to `NoteRevision | null` so
- * the post-FTS live-DB hydration step can surface "note vanished between index
- * build and hydration read" honestly via the sentinel sentence, rather than
- * defaulting to a structurally-impossible `0`. Other note-producing operations
- * (`getNoteContent`, `findUntaggedNotes`, `awaitNoteCreation`) read Z_OPT in
- * the same SELECT that finds the row, so their revision is always non-null —
- * widening only happens on this read-side miss path.
+ * A single search hit. `revision` is widened to `NoteRevision | null` because
+ * the post-FTS hydration step can miss (note vanished between index build and
+ * the live-DB read) — other note-producing paths read Z_OPT in the same SELECT
+ * that finds the row and never miss.
  */
 export interface SearchResult extends Omit<BearNote, 'revision'> {
   revision: NoteRevision | null;
   /**
-   * Snippet shape depends on the query:
-   * - Term query: FTS5 `snippet()` excerpt with matched terms wrapped in `[...]`.
-   * - Filter-only query (tag/date/pinned): leading 200-character body preview.
-   *
-   * Absent only when the underlying body is empty/null.
+   * Term query: FTS5 `snippet()` with matched terms wrapped in `[...]`.
+   * Filter-only query: leading 200-char body preview. Absent if body is empty.
    */
   snippet?: string;
 }
@@ -509,14 +503,10 @@ function executeQueryWithCount(
     rows.map((r) => r.rowid)
   );
 
-  // Hydrate revision (Z_OPT) from the live Bear DB rather than caching in the
-  // FTS shadow. The drift sentinel `MAX(ZMODIFICATIONDATE) + COUNT(*)` doesn't
-  // catch pin-only or tag-only writes that bump Z_OPT without bumping the
-  // modification date, so cached revisions would silently lag. When a row from
-  // the FTS shadow has no match in the live DB (note vanished between index
-  // build and this hydration read — deleted/archived/encrypted concurrently),
-  // the revision is surfaced as `null` so the caller renders the
-  // REVISION_UNAVAILABLE_SENTENCE instead of a misleading `0`.
+  // Revision is hydrated from the live Bear DB, not the FTS shadow: the drift
+  // sentinel `MAX(ZMODIFICATIONDATE) + COUNT(*)` misses pin-only and tag-only
+  // writes that bump Z_OPT without touching ZMODIFICATIONDATE. A row missing
+  // from the live DB surfaces as null → REVISION_UNAVAILABLE_SENTENCE.
   const identifiers = rows.map((r) => r.identifier);
   const revisionsByIdentifier = fetchRevisionsForResults(bearDb, identifiers);
 
@@ -558,11 +548,8 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
   return new Map(tagRows.map((tr) => [tr.rowid, tr.tags.split(',')]));
 }
 
-// Mirrors fetchTagsForResults but reads from Bear's live DB (not the FTS shadow).
-// Single round trip via an IN-clause. Identifiers without a matching live-DB row
-// are absent from the returned Map (the IN-clause SELECT simply doesn't produce
-// a row for them); callers handle this by treating a missing entry as a null
-// revision and rendering REVISION_UNAVAILABLE_SENTENCE.
+// Reads against the live Bear DB (not the FTS shadow). Identifiers with no
+// matching row are absent from the Map; callers treat that as null revision.
 function fetchRevisionsForResults(
   bearDb: DatabaseSync,
   identifiers: string[]

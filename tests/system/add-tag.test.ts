@@ -70,9 +70,7 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
-    // Settle briefly so create's subtitle/index recompute save lands before
-    // we read the baseline (otherwise Z_OPT can still jump +2 between baseline
-    // and the handler's pre-flight read — see BEAR_DATABASE_SCHEMA.md).
+    // Wait for Bear's +2 recompute save before reading baseline (BEAR_DATABASE_SCHEMA.md).
     await sleep(PAUSE_AFTER_WRITE_OP);
     const preAddRevision = readNoteRevision(noteId);
     expect(preAddRevision).not.toBeNull();

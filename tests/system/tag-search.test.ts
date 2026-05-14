@@ -164,8 +164,8 @@ describe('tag search via MCP Inspector CLI', () => {
   });
 
   it('per-result Revision matches live Z_OPT (OCC inform)', () => {
-    // Search by UNTAGGED_MARKER (a unique single-token query) so we get exactly
-    // one result entry — keeps the per-result Revision assertion unambiguous.
+    // UNTAGGED_MARKER returns exactly one hit, so tryExtractRevision's
+    // first-match behavior gives the target unambiguously.
     const result = callTool({
       toolName: 'bear-search-notes',
       args: { term: UNTAGGED_MARKER },
@@ -174,9 +174,6 @@ describe('tag search via MCP Inspector CLI', () => {
     const noteId = tryExtractNoteId(result);
     expect(noteId).toBeTruthy();
 
-    // tryExtractRevision returns the FIRST "Revision:" numeric value — which
-    // is the first result's, and UNTAGGED_MARKER returns exactly one hit so
-    // it's our target.
     const responseRevision = tryExtractRevision(result);
     expect(responseRevision).not.toBeNull();
 

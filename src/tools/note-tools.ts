@@ -110,8 +110,7 @@ Check the note content with bear-open-note to see available sections.`);
     const cleanText =
       mode === 'replace' ? stripLeadingHeader(text, cleanHeader || existingNote.title) : text;
 
-    // OCC inform baseline — comes from the existing pre-flight read above, so
-    // capturing it is free (no extra DB call).
+    // Baseline comes free from the pre-flight read above — no extra DB call.
     const baseline = existingNote.revision;
 
     const url = buildBearUrl('add-text', {
@@ -126,8 +125,6 @@ Check the note content with bear-open-note to see available sections.`);
     logger.debug(`Executing Bear URL: ${url}`);
     await executeBearXCallbackApi(url);
 
-    // Poll Z_OPT for change to confirm the write landed. On timeout
-    // formatRevisionLine emits REVISION_TIMEOUT_SENTENCE rather than a stale value.
     const newRevision = await awaitRevisionIncrement(id, baseline);
 
     const preposition = mode === 'replace' ? 'in' : 'to';
@@ -348,15 +345,10 @@ Use bear-search-notes to find the correct note identifier.`);
             responseLines.push(
               'Note ID: unknown — the create request was sent, but the new note could not be confirmed. Check in Bear to verify.'
             );
-            // Emit Revision: unknown alongside the ID: unknown line so the
-            // mutation-response contract (note ID + title + revision +
-            // what-changed) stays symmetric on the timeout branch. Without
-            // this, a consumer parsing every response for a Revision line
-            // would need to special-case the create-timeout path. The
-            // create-specific sentinel cites POLL_TIMEOUT_MS (the cap that
-            // actually fired here) rather than the default write-timeout
-            // sentence's REVISION_POLL_CAP_MS, which belongs to the post-
-            // write inequality poll used by content mutations.
+            // Keep the Revision line on the timeout branch too so consumers
+            // parsing every response don't need to special-case create. The
+            // create-specific sentinel cites POLL_TIMEOUT_MS — the cap that
+            // actually fired — not REVISION_POLL_CAP_MS.
             responseLines.push(formatRevisionLine(null, REVISION_CREATION_TIMEOUT_SENTENCE));
           }
 
@@ -506,10 +498,8 @@ Try different search criteria or check if notes exist in Bear Notes.`);
             resultLines.push(`   Tags: ${note.tags.join(', ')}`);
           }
           resultLines.push(`   ID: ${note.identifier}`);
-          // Search hydrates revision from the live Bear DB, which can miss a
-          // row if the note vanished after the FTS shadow was built. Pass the
-          // unavailable-sentence so the response distinguishes that from a
-          // write-side timeout.
+          // Unavailable-sentence (not the write-timeout default) — search-side
+          // miss has a different cause than a poll exhaustion.
           resultLines.push(
             `   ${formatRevisionLine(note.revision, REVISION_UNAVAILABLE_SENTENCE)}`
           );
@@ -519,10 +509,8 @@ Try different search criteria or check if notes exist in Bear Notes.`);
         resultLines.push('Use bear-open-note with an ID to read the full content of any note.');
 
         if (hasMore) {
-          // Cap the suggestion at MAX_SEARCH_LIMIT — the schema rejects anything
-          // higher, so suggesting `limit: totalCount` for a large library
-          // (e.g. 50000 matches) would just produce a validation error on
-          // retry. Math.min collapses to totalCount for small over-flows.
+          // Schema caps `limit` at MAX_SEARCH_LIMIT; suggesting a higher
+          // totalCount would just produce a validation error on retry.
           const suggestedLimit = Math.min(totalCount, MAX_SEARCH_LIMIT);
           resultLines.push(
             `Use bear-search-notes with limit: ${suggestedLimit} to get more results.`

@@ -49,17 +49,11 @@ describe('bear-create-note returns note ID via MCP Inspector CLI', () => {
 
     const responseRevision = tryExtractRevision(createResult);
     expect(responseRevision).not.toBeNull();
-    // Bear's Z_OPT starts at 1 for a freshly-created note. The response captures
-    // the value awaitNoteCreation first saw in its SELECT.
     expect(responseRevision).toBeGreaterThanOrEqual(1);
 
-    // dbRevision is read AFTER awaitNoteCreation returned, so Bear's subtitle/
-    // index recompute save (the +2 first-edit jump documented in
-    // docs/dev/BEAR_DATABASE_SCHEMA.md) may have landed in between. Z_OPT
-    // increases monotonically, so the live value can only be greater or equal —
-    // strict equality would race against the recompute. The greater-than-or-equal
-    // assertion still catches a regression where responseRevision is wrong
-    // (live DB never goes backward to match a stale captured value).
+    // >= because Bear's +2 recompute save (BEAR_DATABASE_SCHEMA.md) can land
+    // between the response and this read. Z_OPT is monotonic; live can only
+    // be ahead, never behind, so this still catches a stale captured value.
     const dbRevision = readNoteRevision(noteId!);
     expect(dbRevision).not.toBeNull();
     expect(dbRevision!).toBeGreaterThanOrEqual(responseRevision!);

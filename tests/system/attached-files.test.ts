@@ -273,8 +273,7 @@ describe('attached files content separation', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
-    // Settle briefly so create's subtitle/index recompute save lands before
-    // we read the baseline (Z_OPT +2 jump per BEAR_DATABASE_SCHEMA.md).
+    // Wait for Bear's +2 recompute save before reading baseline (BEAR_DATABASE_SCHEMA.md).
     await sleep(PAUSE_AFTER_WRITE_OP);
 
     const preAttachRevision = readNoteRevision(noteId);

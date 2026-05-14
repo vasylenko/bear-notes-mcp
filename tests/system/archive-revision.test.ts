@@ -34,10 +34,7 @@ describe('bear-archive-note Revision wiring (OCC inform)', () => {
     const noteId = tryExtractNoteId(createResult)!;
     createdIds.push(noteId);
 
-    // Settle briefly so create's subtitle/index recompute save (the +2 jump
-    // in BEAR_DATABASE_SCHEMA.md) lands BEFORE we snapshot Z_OPT. Without it,
-    // the test's readNoteRevision and the handler's pre-flight getNoteContent
-    // race against the recompute and read different values.
+    // Wait for Bear's +2 recompute save before reading baseline (BEAR_DATABASE_SCHEMA.md).
     await sleep(PAUSE_AFTER_WRITE_OP);
 
     const preArchiveRevision = readNoteRevision(noteId);

@@ -11,10 +11,8 @@ import {
 const TEST_PREFIX = '[Bear-MCP-stest-untagged-rev]';
 const RUN_ID = Date.now();
 
-// One untagged note is sufficient to exercise the per-result Revision wiring.
-// Bear's broader untagged inventory may include many other notes, so the test
-// scopes its assertions to the specific note it just created — extract its id,
-// then locate that id's result block in the response.
+// Test scopes assertions to its own note ID since the user's library may hold
+// many other untagged notes that would otherwise be in the result.
 const TITLE_UNTAGGED = uniqueTitle(TEST_PREFIX, 'Untagged', RUN_ID);
 let untaggedId: string;
 
@@ -37,10 +35,7 @@ describe('bear-find-untagged-notes Revision wiring', () => {
       args: { limit: '250' },
     }).content[0].text;
 
-    // The response may include many other untagged notes from the user's library.
-    // Find the block containing our specific note's ID, then extract the Revision
-    // line that follows it. Anchoring on the ID keeps the test deterministic in
-    // libraries that have unrelated untagged notes.
+    // Anchor on the test's ID — other untagged notes in the library are noise.
     const blockRegex = new RegExp(`ID:\\s+${untaggedId}\\s*\\n\\s*Revision:\\s+(\\d+)`);
     const match = result.match(blockRegex);
     expect(match).toBeTruthy();

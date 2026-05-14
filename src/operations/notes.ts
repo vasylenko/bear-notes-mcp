@@ -354,21 +354,11 @@ export async function awaitNoteCreation(
 }
 
 /**
- * Polls Bear's SQLite database until ZSFNOTE.Z_OPT for the given note differs
- * from `baseline`, capturing the post-write revision. Used after fire-and-forget
- * writes to convert them into write-confirmed responses (OCC inform half).
- *
- * Compares for inequality (not baseline+1) because Bear can bump Z_OPT by +2 on
- * the first edit after note creation — a subtitle/index recompute save observed
- * empirically in SVA-20. On timeout the caller surfaces the absence honestly via
- * REVISION_TIMEOUT_SENTENCE rather than reporting a stale value.
- *
- * Opens one DB connection for the lifetime of the poll loop (mirrors
- * awaitNoteCreation) to avoid ~33 SQLite opens per write in the worst case.
- *
- * @param identifier - The unique identifier of the Bear note being written to
- * @param baseline - Z_OPT value read before the write fired
- * @returns The new revision when Z_OPT differs from baseline, null on timeout
+ * Polls ZSFNOTE.Z_OPT until it differs from `baseline`, returning the new
+ * value or null on timeout. The inequality (vs `baseline + 1`) handles Bear's
+ * empirically-observed +2 first-edit jump after note creation — a subtitle/
+ * index recompute save. One DB connection covers the whole poll to avoid ~33
+ * SQLite opens per write.
  */
 export async function awaitRevisionIncrement(
   identifier: string,
@@ -378,14 +368,10 @@ export async function awaitRevisionIncrement(
 
   try {
     db = openBearDatabase();
-    // The trash/archive/encrypted filters guard against attributing an unrelated
-    // mid-poll Z_OPT bump to our write. If a concurrent process trashes/archives/
-    // encrypts the note during the 500ms poll window and Bear bumps Z_OPT for
-    // THAT row update, our poll would resolve on it and falsely report
-    // confirmation of OUR write. With the filters, such a note becomes invisible
-    // to this query mid-poll and we fall through to timeout, emitting
-    // REVISION_TIMEOUT_SENTENCE honestly. bear-archive-note uses a pre-write
-    // snapshot (not this helper), so no interaction.
+    // Active-note filter: if the note gets trashed/archived/encrypted mid-poll
+    // Bear bumps Z_OPT for THAT update; we'd falsely report confirmation of
+    // our own write. Filtered out, the row disappears mid-poll and we time
+    // out honestly. (bear-archive-note uses a pre-write snapshot, not this.)
     const stmt = db.prepare(
       `SELECT Z_OPT as revision FROM ZSFNOTE
        WHERE ZUNIQUEIDENTIFIER = ?
@@ -409,9 +395,8 @@ export async function awaitRevisionIncrement(
     logger.info(`awaitRevisionIncrement: timed out waiting for revision change on ${identifier}`);
     return null;
   } catch (error) {
-    // Mirrors awaitNoteCreation: the underlying write already fired via
-    // x-callback-url, so failing to capture the new revision must not turn a
-    // successful write into a thrown error. Caller emits REVISION_TIMEOUT_SENTENCE.
+    // The write already fired via x-callback-url — failing to capture the
+    // new revision must not turn a successful write into a thrown error.
     logger.error('awaitRevisionIncrement failed:', error);
     return null;
   } finally {
