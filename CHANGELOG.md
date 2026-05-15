@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Every note-scoped tool response now carries a `Revision: <n>` line** alongside the note ID, sourced from Bear's `ZSFNOTE.Z_OPT` counter. An LLM agent can compare revisions between calls to detect "did this note change since I last read it" — useful when you edit in Bear's UI between agent turns. Applies to the 9 note-scoped tools; global tag tools and `bear-capabilities` are unaffected. For writes, the response carries the post-write revision (captured via a poll that doubles as write confirmation); on the rare poll timeout the line becomes a `Revision: unknown (... timed out)` sentinel rather than a stale value. Strictly additive: no input schemas change, no new error states. Enforcement (rejecting stale-revision writes) is a follow-up.
+- **Every note-scoped tool response now carries a `Revision: <n>` line** alongside the note ID, sourced from Bear's `ZSFNOTE.Z_OPT` counter. An LLM agent can compare revisions between calls to detect "did this note change since I last read it" — useful when you edit in Bear's UI between agent turns. Applies to the 9 note-scoped tools; global tag tools and `bear-capabilities` are unaffected. For writes, the response carries the post-write revision (captured via a poll that doubles as write confirmation); on the rare poll timeout the line becomes a duration-free `Revision: unknown (...)` sentinel rather than a stale value. One small input change: `bear-search-notes` now rejects `limit > 1000` (matches the FTS hydration ceiling); otherwise additive. Enforcement (rejecting stale-revision writes) is a follow-up. ([#125](https://github.com/vasylenko/bear-notes-mcp/pull/125))
 
 ## [3.0.1] - 2026-05-12
 
