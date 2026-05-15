@@ -170,7 +170,7 @@ export function registerNoteTools(server: McpServer): void {
     {
       title: 'Open Bear Note',
       description:
-        'Read the full text content of a Bear note by its ID or title. Supports direct title lookup as an alternative to searching first. Always includes text extracted from attached images and PDFs (aka OCR search) with clear labeling.',
+        "Read the full text content of a Bear note by its ID or title. Supports direct title lookup as an alternative to searching first. Always includes text extracted from attached images and PDFs (aka OCR search) with clear labeling. Response includes the note's revision token that changes whenever the note is modified.",
       inputSchema: {
         id: z
           .string()
@@ -284,7 +284,7 @@ Use bear-search-notes to find the correct note identifier.`);
       {
         title: 'Create New Note',
         description:
-          "Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app. Response includes the note's revision — a future capability will use it to reject stale writes.",
+          "Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           title: z
             .string()
@@ -371,7 +371,7 @@ The note has been added to your Bear Notes library.`);
     {
       title: 'Find Bear Notes',
       description:
-        "Search your Bear notes for words or phrases. The search looks across note titles, body content, and OCR text in attached images and PDFs, returning matching notes ranked by relevance with a snippet of the matching context — so you can see what matched without opening the note. For best results, search with a phrase or several words from what you're looking for; a single word also works. Also supports filtering by tag, by creation/modification date range, or by pinned status — combine these with a search term, or use them on their own to browse without searching. Trashed and archived notes are not included.",
+        "Search your Bear notes for words or phrases. The search looks across note titles, body content, and OCR text in attached images and PDFs, returning matching notes ranked by relevance with a snippet of the matching context — so you can see what matched without opening the note. For best results, search with a phrase or several words from what you're looking for; a single word also works. Also supports filtering by tag, by creation/modification date range, or by pinned status — combine these with a search term, or use them on their own to browse without searching. Trashed and archived notes are not included. Response includes the note's revision token that changes whenever the note is modified.",
       inputSchema: {
         term: z
           .string()
@@ -531,7 +531,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Add Text to Note',
         description:
-          "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text. Response includes the note's revision — a future capability will use it to reject stale writes.",
+          "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -577,7 +577,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Replace Note Content',
         description:
-          "Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead. Response includes the note's revision — a future capability will use it to reject stale writes.",
+          "Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -635,7 +635,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
       {
         title: 'Add File to Note',
         description:
-          "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first. Response includes the note's revision — a future capability will use it to reject stale writes.",
+          "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           file_path: z
             .string()
@@ -767,7 +767,7 @@ The file has been attached to your Bear note.`);
     {
       title: 'Find Untagged Notes',
       description:
-        'Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes. Trashed and archived notes are not included.',
+        "Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes. Trashed and archived notes are not included. Response includes the note's revision token that changes whenever the note is modified.",
       inputSchema: {
         limit: z
           .number()
@@ -829,7 +829,7 @@ The file has been attached to your Bear note.`);
       {
         title: 'Add Tags to Note',
         description:
-          "Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags. Response includes the note's revision — a future capability will use it to reject stale writes.",
+          "Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -913,7 +913,7 @@ The tags have been added to the beginning of the note.`);
       {
         title: 'Archive Bear Note',
         description:
-          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID. Response includes the note's revision — a future capability will use it to reject stale writes.",
+          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
