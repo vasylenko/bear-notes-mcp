@@ -1,0 +1,68 @@
+name: Build .mcpb bundle for PR
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: build-bundle-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Compute a strictly-monotonic build version so Claude Desktop's installer
+      # always shows the "Update" affordance for each successive PR push. Scheme:
+      #   <base>-pr.<PR>.<run_number>
+      # github.run_number is workflow-global monotonic, so successive pushes to
+      # the same PR are always strictly newer per SemVer's prerelease ordering.
+      - name: Compute build version
+        id: version
+        run: |
+          set -euo pipefail
+          BASE=$(jq -r .version manifest.json)
+          CORE="${BASE%%-*}"
+          BV="${CORE}-pr.${{ github.event.pull_request.number }}.${{ github.run_number }}"
+          echo "build_version=${BV}" >> "$GITHUB_OUTPUT"
+          echo "Build version: ${BV}"
+
+      # Stamp the computed version into manifest.json, package.json, src/config.ts
+      # and regenerate the lockfile. Delegates to `task version` (Taskfile.yml)
+      # so the version-bearing-files list lives in exactly one place.
+      - name: Stamp build version
+        run: task version VERSION="${{ steps.version.outputs.build_version }}" -y
+
+      - name: Create bundle
+        run: task pack
+
+      - name: Compute short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mcpb-bundle-pr-${{ github.event.pull_request.number }}-${{ steps.vars.outputs.sha_short }}
+          path: bear-notes-mcpb-*.mcpb
+          retention-days: 14
+          if-no-files-found: error
