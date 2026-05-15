@@ -114,22 +114,22 @@ tasks:
     desc: Update version across all files
     interactive: true
     requires:
-      vars: 
+      vars:
         - VERSION
     prompt: "Confirm version update to {{.VERSION}}?"
     preconditions:
-      - sh: echo "{{.VERSION}}" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'
-        msg: "VERSION must follow semver format (x.y.z)"
+      - sh: echo "{{.VERSION}}" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+        msg: "VERSION must follow semver format (x.y.z[-prerelease])"
     cmds:
       - |
         echo "Updating version to {{.VERSION}}"
-        
-        sed -i '' 's/"version": "[^"]*"/"version": "{{.VERSION}}"/' package.json
-        
-        sed -i '' 's/"version": "[^"]*"/"version": "{{.VERSION}}"/' manifest.json
-        
-        sed -i '' "s/export const APP_VERSION = '[^']*'/export const APP_VERSION = '{{.VERSION}}'/" src/config.ts
-        
+
+        perl -pi -e 's/"version": "[^"]*"/"version": "{{.VERSION}}"/' package.json
+
+        perl -pi -e 's/"version": "[^"]*"/"version": "{{.VERSION}}"/' manifest.json
+
+        perl -pi -e "s/export const APP_VERSION = '[^']*'/export const APP_VERSION = '{{.VERSION}}'/" src/config.ts
+
         echo "Version updated to {{.VERSION}} in package.json, manifest.json, and src/config.ts"
       - npm install --package-lock-only
 

@@ -46,18 +46,11 @@ jobs:
           echo "build_version=${BV}" >> "$GITHUB_OUTPUT"
           echo "Build version: ${BV}"
 
-      # Stamp the computed version into the three files task version keeps in
-      # sync (Taskfile.yml task: version). Reuses GNU sed for the src/config.ts
-      # single-quoted assignment; uses jq atomic-rename for the JSON files so
-      # formatting and key order are preserved.
+      # Stamp the computed version into manifest.json, package.json, src/config.ts
+      # and regenerate the lockfile. Delegates to `task version` (Taskfile.yml)
+      # so the version-bearing-files list lives in exactly one place.
       - name: Stamp build version
-        run: |
-          set -euo pipefail
-          BV="${{ steps.version.outputs.build_version }}"
-          tmp=$(mktemp) && jq --arg v "$BV" '.version = $v' manifest.json > "$tmp" && mv "$tmp" manifest.json
-          tmp=$(mktemp) && jq --arg v "$BV" '.version = $v' package.json > "$tmp" && mv "$tmp" package.json
-          sed -i "s/export const APP_VERSION = '[^']*'/export const APP_VERSION = '${BV}'/" src/config.ts
-          npm install --package-lock-only
+        run: task version VERSION="${{ steps.version.outputs.build_version }}" -y
 
       - name: Create bundle
         run: task pack
