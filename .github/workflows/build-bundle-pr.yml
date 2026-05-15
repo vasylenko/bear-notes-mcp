@@ -32,22 +32,17 @@ jobs:
         run: npm ci
 
       # Compute a strictly-monotonic build version so Claude Desktop's installer
-      # shows the "Update" affordance for each successive PR push. Scheme:
-      #   <MAJOR>.<MINOR>.<PATCH + run_number>-pr.<PR>
-      # Empirically, Claude Desktop's extension installer compares MAJOR.MINOR.PATCH
-      # and ignores the prerelease segment. Within a PR every push must therefore
-      # produce a higher patch number than the previous push. github.run_number
-      # is workflow-global monotonic, so adding it to the manifest's base patch
-      # yields strictly-increasing patches per push.
+      # always shows the "Update" affordance for each successive PR push. Scheme:
+      #   <base>-pr.<PR>.<run_number>
+      # github.run_number is workflow-global monotonic, so successive pushes to
+      # the same PR are always strictly newer per SemVer's prerelease ordering.
       - name: Compute build version
         id: version
         run: |
           set -euo pipefail
           BASE=$(jq -r .version manifest.json)
           CORE="${BASE%%-*}"
-          IFS=. read -r MAJ MIN PAT <<< "$CORE"
-          NEW_PAT=$((PAT + ${{ github.run_number }}))
-          BV="${MAJ}.${MIN}.${NEW_PAT}-pr.${{ github.event.pull_request.number }}"
+          BV="${CORE}-pr.${{ github.event.pull_request.number }}.${{ github.run_number }}"
           echo "build_version=${BV}" >> "$GITHUB_OUTPUT"
           echo "Build version: ${BV}"
 
