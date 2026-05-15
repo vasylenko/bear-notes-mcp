@@ -1,0 +1,78 @@
+name: Build .mcpb bundle for PR
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: build-bundle-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Compute a strictly-monotonic build version so Claude Desktop's installer
+      # always shows the "Update" affordance for each successive PR push. Scheme:
+      #   <MAJOR>.<MINOR>.<PATCH+1>-pr.<PR>.<run_number>
+      # Patch-bump (not append) keeps the prerelease strictly greater than the
+      # base released version, so installing a PR build over the released base
+      # is recognized as newer rather than as a downgrade.
+      - name: Compute build version
+        id: version
+        run: |
+          set -euo pipefail
+          BASE=$(jq -r .version manifest.json)
+          CORE="${BASE%%-*}"
+          IFS=. read -r MAJ MIN PAT <<< "$CORE"
+          NEXT_PAT=$((PAT + 1))
+          BV="${MAJ}.${MIN}.${NEXT_PAT}-pr.${{ github.event.pull_request.number }}.${{ github.run_number }}"
+          echo "build_version=${BV}" >> "$GITHUB_OUTPUT"
+          echo "Build version: ${BV}"
+
+      # Stamp the computed version into the three files task version keeps in
+      # sync (Taskfile.yml task: version). Reuses GNU sed for the src/config.ts
+      # single-quoted assignment; uses jq atomic-rename for the JSON files so
+      # formatting and key order are preserved.
+      - name: Stamp build version
+        run: |
+          set -euo pipefail
+          BV="${{ steps.version.outputs.build_version }}"
+          tmp=$(mktemp) && jq --arg v "$BV" '.version = $v' manifest.json > "$tmp" && mv "$tmp" manifest.json
+          tmp=$(mktemp) && jq --arg v "$BV" '.version = $v' package.json > "$tmp" && mv "$tmp" package.json
+          sed -i "s/export const APP_VERSION = '[^']*'/export const APP_VERSION = '${BV}'/" src/config.ts
+          npm install --package-lock-only
+
+      - name: Create bundle
+        run: task pack
+
+      - name: Compute short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mcpb-bundle-pr-${{ github.event.pull_request.number }}-${{ steps.vars.outputs.sha_short }}
+          path: bear-notes-mcpb-*.mcpb
+          retention-days: 14
+          if-no-files-found: error
