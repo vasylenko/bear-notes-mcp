@@ -33,19 +33,16 @@ jobs:
 
       # Compute a strictly-monotonic build version so Claude Desktop's installer
       # always shows the "Update" affordance for each successive PR push. Scheme:
-      #   <MAJOR>.<MINOR>.<PATCH+1>-pr.<PR>.<run_number>
-      # Patch-bump (not append) keeps the prerelease strictly greater than the
-      # base released version, so installing a PR build over the released base
-      # is recognized as newer rather than as a downgrade.
+      #   <base>-pr.<PR>.<run_number>
+      # github.run_number is workflow-global monotonic, so successive pushes to
+      # the same PR are always strictly newer per SemVer's prerelease ordering.
       - name: Compute build version
         id: version
         run: |
           set -euo pipefail
           BASE=$(jq -r .version manifest.json)
           CORE="${BASE%%-*}"
-          IFS=. read -r MAJ MIN PAT <<< "$CORE"
-          NEXT_PAT=$((PAT + 1))
-          BV="${MAJ}.${MIN}.${NEXT_PAT}-pr.${{ github.event.pull_request.number }}.${{ github.run_number }}"
+          BV="${CORE}-pr.${{ github.event.pull_request.number }}.${{ github.run_number }}"
           echo "build_version=${BV}" >> "$GITHUB_OUTPUT"
           echo "Build version: ${BV}"
 
