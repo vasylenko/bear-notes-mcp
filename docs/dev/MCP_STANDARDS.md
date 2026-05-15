@@ -1,10 +1,6 @@
 # MCP Standards
 
-This project's conventions for designing our MCP server's tool surface — how we write tool descriptions, schemas, and mutation responses so they work well with LLM clients. Project-wide rules; they apply to every tool we add or modify. Read when adding a new tool or touching an existing one.
-
-Specific instantiation details (which fields a particular mutation response carries, which underlying system tokens it threads, which exceptions Bear's URL-API quirks force) live in `SPECIFICATION.md`.
-
-This doc is focused on the conventions themselves, so they remain easy to apply consistently across new and existing tools; it deliberately doesn't name specific tools, DB columns, or helper functions, because those belong with the implementations they describe.
+Conventions for the MCP server's tool surface — how to write tool descriptions, schemas, and mutation responses so they work well with LLM clients. Read this when adding a new tool or modifying an existing one.
 
 ## Separation of Concerns
 
@@ -12,7 +8,24 @@ Tool descriptions help with tool **selection** and understanding; schema (`descr
 
 ## LLM-First Design
 
-Tools are first discovered via descriptions, then invoked via schemas. Optimize both for the AI agent and the LLM, not for humans. 
+Tools are first discovered via descriptions, then invoked via schemas. Optimize both for the consumer (an LLM), not for human readability. The reference implementations are `src/tools/note-tools.ts` and `src/tools/tag-tools.ts` — mirror their patterns when adding new tools.
+
+## Mutation Response Metadata
+
+A mutation tool's response must carry enough metadata for the LLM consumer to confirm the write landed, address the affected resource in follow-up calls, and detect concurrent edits. Concretely:
+
+- **Stable identifier** of the affected resource so the consumer doesn't have to re-search to follow up.
+- **Human-readable label** naming the resource (e.g. note title) when one is available — so the response is meaningful to the user looking over the agent's shoulder.
+- **Version token** that moves monotonically across writes, so the consumer can compare across calls and detect "did this change since I last read it" (OCC inform).
+- **What changed** in user-facing terms.
+
+Source these from values already known before the write (input parameters, pre-flight validation reads) or from polls that wait *for state to change*. **Never from a post-write read that samples current state** — fire-and-forget write architectures (anything where the underlying API has no synchronous completion handle) can return pre-mutation state in a naïvely-timed post-write read, which would mislead the LLM into thinking the operation failed.
+
+**Exception: polling for change.** A post-write read IS permitted if it waits *until* the version token differs from a captured pre-write baseline. This preserves the spirit of the rule: the consumer receives a value that confirms the write landed, not a snapshot that might still reflect pre-mutation state. On timeout the response must surface a clearly-labeled sentinel rather than a value that could be stale.
+
+Global mutations whose target is a taxonomy rather than a specific resource intentionally omit per-resource metadata.
+
+The concrete instantiation for this server — which tools are in scope, which helpers implement these patterns, the runtime constants and labels — lives in `docs/dev/SPECIFICATION.md` under "Optimistic Concurrency Control (Inform Half)". Empirical findings about the underlying DB columns those helpers read live in `docs/dev/BEAR_DATABASE_SCHEMA.md`.
 
 ## Tool Description
 
@@ -53,15 +66,3 @@ const schema = z.object({
     .describe("Array of file paths to read. Each path must be a valid absolute or relative file path.")
 });
 ```
-
-## Mutation Response Conventions
-
-A mutation tool's response should give the LLM enough metadata to:
-
-1. **Confirm the write landed** — a "what-changed" summary or a version token the LLM can compare against its prior view.
-2. **Address the affected resource in follow-up calls** — a stable identifier (note ID, row ID, document path, etc.) the LLM can pass back without round-tripping through search.
-3. **Reason about freshness for subsequent writes** — a version token where the underlying system exposes one (HTTP `ETag`, Core Data `Z_OPT`, document revision, etc.). This is what enables eventual *enforce*-style optimistic concurrency (HTTP `If-Match` / `412 Precondition Failed`).
-
-**Field-sourcing discipline matters more than the field list.** Prefer values already available pre-write — input parameters, pre-flight validation reads, helpers that bundle id+version in a single SELECT — over post-write reads that may reflect pre-mutation state if the underlying write path is asynchronous and has no completion handle. When a post-write read is genuinely required to capture a version token, design it to wait for a *change* (write-confirmation) rather than to sample current state, and surface a clearly-labelled sentinel on timeout instead of a value that could be stale.
-
-For this server's instantiation — which fields the response carries, which underlying token is the version, how it's sourced safely, and the narrow exceptions to the general "never read after write" rule — see `SPECIFICATION.md`.

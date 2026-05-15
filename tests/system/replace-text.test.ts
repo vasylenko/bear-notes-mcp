@@ -4,8 +4,10 @@ import {
   callTool,
   cleanupTestNotes,
   extractNoteBody,
-  tryExtractNoteId,
+  readNoteRevision,
   sleep,
+  tryExtractNoteId,
+  tryExtractRevision,
   uniqueTitle,
 } from './inspector.js';
 
@@ -237,5 +239,36 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     expect(noteBody).toContain('Tracking content here');
     expect(noteBody).toContain('Services content here');
     expect(noteBody).toContain('Other content');
+  });
+
+  it('emits Revision matching live Z_OPT after replace-text (OCC inform)', async () => {
+    // /add-text in replace mode bumps ZSFNOTE.Z_OPT by +1 (empirically
+    // confirmed — see docs/dev/BEAR_DATABASE_SCHEMA.md). Response Revision
+    // must (a) exceed the pre-write baseline (proving the baseline wasn't
+    // echoed back) and (b) equal current live Z_OPT (proving freshness).
+    const title = uniqueTitle(TEST_PREFIX, 'ReplaceTextRevision', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Pre-replace body for revision test', tags: 'system-test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    // Wait for Bear's +2 recompute save before reading baseline (BEAR_DATABASE_SCHEMA.md).
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const preWriteRevision = readNoteRevision(noteId);
+    expect(preWriteRevision).not.toBeNull();
+
+    const result = callTool({
+      toolName: 'bear-replace-text',
+      args: { id: noteId, scope: 'full-note-body', text: 'Replaced body for revision test' },
+      env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
+    }).content[0].text;
+
+    const responseRevision = tryExtractRevision(result);
+    expect(responseRevision).not.toBeNull();
+    expect(responseRevision!).toBeGreaterThan(preWriteRevision!);
+
+    const liveDbRevision = readNoteRevision(noteId);
+    expect(responseRevision).toBe(liveDbRevision);
   });
 });

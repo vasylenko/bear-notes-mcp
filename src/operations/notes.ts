@@ -1,6 +1,6 @@
 import { setTimeout } from 'node:timers/promises';
 
-import type { AttachedFile, BearNote, DateFilter, NoteTitleMatch } from '../types.js';
+import type { AttachedFile, BearNote, DateFilter, NoteRevision, NoteTitleMatch } from '../types.js';
 import { DEFAULT_SEARCH_LIMIT } from '../config.js';
 import { closeBearDatabase, openBearDatabase } from '../infra/database.js';
 import { type SearchResults, type SearchSpec, searchByQuery } from '../infra/fts-index.js';
@@ -11,9 +11,21 @@ import {
 } from '../infra/bear-encoding.js';
 
 const POLL_INTERVAL_MS = 25;
-const POLL_TIMEOUT_MS = 2_000;
+export const POLL_TIMEOUT_MS = 2_000;
 // Safety window wider than POLL_TIMEOUT_MS to avoid matching a stale note with the same title
 const CREATION_LOOKBACK_MS = 10_000;
+
+// OCC inform polling target (SVA-21). 1s is a generous upper bound vs. SVA-20's
+// empirically observed <30ms typical propagation from `open -g` to observable
+// SQLite — the headroom absorbs event-loop slop on slow machines without
+// changing happy-path latency. Not a hard wall-clock bound: each stmt.get()
+// can block up to busy_timeout=3000ms (database.ts) when Bear holds a writer
+// lock; the duration-free REVISION_TIMEOUT_SENTENCE keeps the user-visible
+// response honest regardless. 15ms interval keeps polls tight enough to
+// capture sub-30ms writes without spamming SQLite (~66 in-process reads
+// worst case per write).
+export const REVISION_POLL_INTERVAL_MS = 15;
+export const REVISION_POLL_TARGET_MS = 1_000;
 
 interface NoteContentRow {
   title: string | null;
@@ -21,6 +33,7 @@ interface NoteContentRow {
   modificationDate: number;
   creationDate: number;
   pinned: number | null;
+  revision: number;
   text: string | null;
   filename: string | null;
   fileContent: string | null;
@@ -33,7 +46,7 @@ interface NoteTitleMatchRow {
 }
 
 function formatBearNote(row: NoteContentRow): BearNote {
-  const { title, identifier, modificationDate, creationDate, pinned, text } = row;
+  const { title, identifier, modificationDate, creationDate, pinned, revision, text } = row;
 
   if (!identifier) {
     logAndThrow('Database error: Note identifier is missing from database row');
@@ -54,6 +67,7 @@ function formatBearNote(row: NoteContentRow): BearNote {
     modification_date,
     creation_date,
     pin,
+    revision,
     ...(text != null && { text }),
   };
 }
@@ -85,6 +99,7 @@ export function getNoteContent(identifier: string): BearNote | null {
              note.ZCREATIONDATE as creationDate,
              note.ZMODIFICATIONDATE as modificationDate,
              note.ZPINNED as pinned,
+             note.Z_OPT as revision,
              note.ZTEXT as text,
              f.ZFILENAME as filename,
              f.ZSEARCHTEXT as fileContent
@@ -279,14 +294,41 @@ export function searchNotes(
 }
 
 /**
- * Polls Bear's SQLite database for the identifier of a recently created note.
- * Designed for use after bear-create-note fires the URL API — the note creation already
- * succeeded, so errors here degrade gracefully to null instead of throwing.
+ * Polls `read` until it returns a non-null value or the wallclock cap elapses.
+ * `read` signals "not found yet, keep polling" by returning null; any non-null
+ * value is final. The deadline is wallclock (not iteration count) so a slow
+ * `read` can't extend the cap by spending the budget inside a single call.
+ */
+export async function pollUntilFound<T>(
+  read: () => T | null,
+  capMs: number,
+  intervalMs: number
+): Promise<T | null> {
+  const deadline = Date.now() + capMs;
+  while (Date.now() < deadline) {
+    const value = read();
+    if (value !== null) return value;
+    await setTimeout(intervalMs);
+  }
+  return null;
+}
+
+/**
+ * Polls Bear's SQLite database for the identifier and revision of a recently
+ * created note. Designed for use after bear-create-note fires the URL API —
+ * the note creation already succeeded, so errors here degrade gracefully to
+ * null instead of throwing.
+ *
+ * Returns both id and revision (OCC inform) in a single object because the
+ * existing SELECT already reads the note row; projecting Z_OPT is a no-cost
+ * change that saves callers a second DB round trip.
  *
  * @param title - Exact title to match (case-sensitive, as Bear stores it)
- * @returns The created note's identifier, or null if not found within the timeout window
+ * @returns Object with the created note's identifier and revision, or null on timeout
  */
-export async function awaitNoteCreation(title: string): Promise<string | null> {
+export async function awaitNoteCreation(
+  title: string
+): Promise<{ id: string; revision: NoteRevision } | null> {
   if (!title?.trim()) {
     logger.debug('awaitNoteCreation: skipped — no title provided');
     return null;
@@ -304,30 +346,86 @@ export async function awaitNoteCreation(title: string): Promise<string | null> {
     db = openBearDatabase();
 
     const stmt = db.prepare(`
-      SELECT ZUNIQUEIDENTIFIER as identifier
+      SELECT ZUNIQUEIDENTIFIER as identifier, Z_OPT as revision
       FROM ZSFNOTE
       WHERE ZTITLE = ? AND ZCREATIONDATE >= ?
         AND ZARCHIVED = 0 AND ZTRASHED = 0 AND ZENCRYPTED = 0
       ORDER BY ZCREATIONDATE DESC LIMIT 1
     `);
 
-    const deadline = Date.now() + POLL_TIMEOUT_MS;
+    const result = await pollUntilFound(
+      () => {
+        const row = stmt.get(title, sinceTimestamp) as
+          | { identifier: string; revision: number }
+          | undefined;
+        return row ? { id: row.identifier, revision: row.revision } : null;
+      },
+      POLL_TIMEOUT_MS,
+      POLL_INTERVAL_MS
+    );
 
-    while (Date.now() < deadline) {
-      const row = stmt.get(title, sinceTimestamp) as { identifier: string } | undefined;
-      if (row) {
-        logger.debug(`awaitNoteCreation: found note "${title}"`);
-        return row.identifier;
-      }
-      await setTimeout(POLL_INTERVAL_MS);
+    if (result === null) {
+      logger.info(`awaitNoteCreation: timed out waiting for note "${title}"`);
+    } else {
+      logger.debug(`awaitNoteCreation: found note "${title}" at revision ${result.revision}`);
     }
-
-    logger.info(`awaitNoteCreation: timed out waiting for note "${title}"`);
-    return null;
+    return result;
   } catch (error) {
     // Intentionally not using logAndThrow — the note was already created via URL API,
     // failing to retrieve its ID should not turn a successful creation into an error
     logger.error('awaitNoteCreation failed:', error);
+    return null;
+  } finally {
+    if (db) closeBearDatabase(db);
+  }
+}
+
+/**
+ * Polls ZSFNOTE.Z_OPT until it differs from `baseline`, returning the new
+ * value or null on timeout. The inequality (vs `baseline + 1`) handles Bear's
+ * empirically-observed +2 first-edit jump after note creation — a subtitle/
+ * index recompute save. One DB connection covers the whole poll to avoid ~66
+ * SQLite opens per write.
+ */
+export async function awaitRevisionIncrement(
+  identifier: string,
+  baseline: NoteRevision
+): Promise<NoteRevision | null> {
+  let db: ReturnType<typeof openBearDatabase> | undefined;
+
+  try {
+    db = openBearDatabase();
+    // Active-note filter: if the note gets trashed/archived/encrypted mid-poll
+    // Bear bumps Z_OPT for THAT update; we'd falsely report confirmation of
+    // our own write. Filtered out, the row disappears mid-poll and we time
+    // out honestly. (bear-archive-note uses a pre-write snapshot, not this.)
+    const stmt = db.prepare(
+      `SELECT Z_OPT as revision FROM ZSFNOTE
+       WHERE ZUNIQUEIDENTIFIER = ?
+         AND ZARCHIVED = 0
+         AND ZTRASHED = 0
+         AND ZENCRYPTED = 0`
+    );
+
+    const result = await pollUntilFound(
+      () => {
+        const row = stmt.get(identifier) as { revision: number } | undefined;
+        return row && row.revision !== baseline ? row.revision : null;
+      },
+      REVISION_POLL_TARGET_MS,
+      REVISION_POLL_INTERVAL_MS
+    );
+
+    if (result === null) {
+      logger.info(`awaitRevisionIncrement: timed out waiting for revision change on ${identifier}`);
+    } else {
+      logger.debug(`awaitRevisionIncrement: revision ${baseline} → ${result} for ${identifier}`);
+    }
+    return result;
+  } catch (error) {
+    // The write already fired via x-callback-url — failing to capture the
+    // new revision must not turn a successful write into a thrown error.
+    logger.error('awaitRevisionIncrement failed:', error);
     return null;
   } finally {
     if (db) closeBearDatabase(db);

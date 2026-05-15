@@ -22,6 +22,7 @@ interface SyntheticNote {
   text?: string;
   uniqueId?: string;
   pinned?: boolean;
+  z_opt?: number; // ZSFNOTE.Z_OPT — defaults to 1 (fresh note's revision after first save)
   archived?: boolean;
   trashed?: boolean;
   encrypted?: boolean;
@@ -55,6 +56,7 @@ function buildSyntheticBearDb(notes: SyntheticNote[]): DatabaseSync {
       ZCREATIONDATE REAL,
       ZMODIFICATIONDATE REAL,
       ZPINNED INTEGER DEFAULT 0,
+      Z_OPT INTEGER DEFAULT 1,
       ZARCHIVED INTEGER DEFAULT 0,
       ZTRASHED INTEGER DEFAULT 0,
       ZENCRYPTED INTEGER DEFAULT 0
@@ -107,8 +109,8 @@ function buildSyntheticBearDb(notes: SyntheticNote[]): DatabaseSync {
     INSERT INTO ZSFNOTE (
       Z_PK, ZTITLE, ZTEXT, ZUNIQUEIDENTIFIER,
       ZCREATIONDATE, ZMODIFICATIONDATE,
-      ZPINNED, ZARCHIVED, ZTRASHED, ZENCRYPTED
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ZPINNED, Z_OPT, ZARCHIVED, ZTRASHED, ZENCRYPTED
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertFile = db.prepare('INSERT INTO ZSFNOTEFILE (ZNOTE, ZSEARCHTEXT) VALUES (?, ?)');
   const insertNoteTag = db.prepare('INSERT INTO Z_5TAGS (Z_5NOTES, Z_13TAGS) VALUES (?, ?)');
@@ -125,6 +127,7 @@ function buildSyntheticBearDb(notes: SyntheticNote[]): DatabaseSync {
       note.created ?? 700_000_000,
       note.modified ?? 700_000_000,
       note.pinned ? 1 : 0,
+      note.z_opt ?? 1,
       note.archived ? 1 : 0,
       note.trashed ? 1 : 0,
       note.encrypted ? 1 : 0
@@ -163,13 +166,19 @@ function withBearDb<T>(notes: SyntheticNote[], fn: (bearDb: DatabaseSync) => T):
   }
 }
 
-// Build-and-inspect wrapper for tests that only assert on the freshly built
-// index. Composes withBearDb so both DB and memDb close even if assertions throw.
-function withFixture<T>(notes: SyntheticNote[], fn: (memDb: DatabaseSync) => T): T {
+// Build-and-inspect wrapper for tests that assert on the freshly built index.
+// Exposes both memDb and bearDb to the test body — bearDb is required by
+// executeQueryWithCount for live-DB revision hydration (OCC inform). Tests that
+// only inspect memDb can ignore the second arg. Composes withBearDb so both DB
+// and memDb close even if assertions throw.
+function withFixture<T>(
+  notes: SyntheticNote[],
+  fn: (memDb: DatabaseSync, bearDb: DatabaseSync) => T
+): T {
   return withBearDb(notes, (bearDb) => {
     const state = buildIndex(bearDb);
     try {
-      return fn(state.memDb);
+      return fn(state.memDb, bearDb);
     } finally {
       state.memDb.close();
     }
@@ -391,8 +400,8 @@ describe('executeQueryWithCount', () => {
         { pk: 3, title: 'Careerist note', tags: ['careerist'] },
         { pk: 4, title: 'Different tag', tags: ['personal'] },
       ],
-      (memDb) => {
-        const results = executeQueryWithCount(memDb, spec({ tag: 'career' })).notes;
+      (memDb, bearDb) => {
+        const results = executeQueryWithCount(memDb, bearDb, spec({ tag: 'career' })).notes;
         const ids = new Set(results.map((r) => r.identifier));
         expect(ids).toEqual(new Set(['uuid-1', 'uuid-2']));
         expect(ids).not.toContain('uuid-3'); // prefix-overlap excluded
@@ -417,16 +426,42 @@ describe('executeQueryWithCount', () => {
         { pk: 1, title: 'Tagged note', tags: ['career', 'My+Cool+Tag'] },
         { pk: 2, title: 'Untagged note' },
       ],
-      (memDb) => {
-        const tagged = executeQueryWithCount(memDb, spec({ term: 'tagged' })).notes;
+      (memDb, bearDb) => {
+        const tagged = executeQueryWithCount(memDb, bearDb, spec({ term: 'tagged' })).notes;
         expect(tagged).toHaveLength(1);
         expect(tagged[0].tags).toEqual(expect.arrayContaining(['career', 'my cool tag']));
 
-        const untagged = executeQueryWithCount(memDb, spec({ term: 'untagged' })).notes;
+        const untagged = executeQueryWithCount(memDb, bearDb, spec({ term: 'untagged' })).notes;
         expect(untagged).toHaveLength(1);
         expect(untagged[0].tags).toBeUndefined();
       }
     );
+  });
+
+  it('hydrates revision from live Bear DB, reflecting Z_OPT changes outside the FTS drift sentinel', () => {
+    // Coverage for fetchRevisionsForResults (OCC inform). The FTS index is a
+    // cached shadow rebuilt only when the drift sentinel MAX(ZMODIFICATIONDATE)
+    // + COUNT(*) changes. Pin-only and tag-only writes bump Z_OPT without
+    // bumping ZMODIFICATIONDATE, so caching revision in the FTS would silently
+    // lag. The mid-search Z_OPT-only mutation proves hydration goes against
+    // the live Bear DB rather than the FTS shadow.
+    withBearDb([{ pk: 1, title: 'hello world', text: 'body', z_opt: 5 }], (bearDb) => {
+      const state = buildIndex(bearDb);
+      try {
+        const first = executeQueryWithCount(state.memDb, bearDb, spec({ term: 'hello' }));
+        expect(first.notes[0].revision).toBe(5);
+
+        // Bump Z_OPT only — does NOT move drift sentinel, so FTS will NOT
+        // rebuild. The next search returns the same cached FTS rows but the
+        // hydration step must surface the fresh Z_OPT.
+        bearDb.prepare('UPDATE ZSFNOTE SET Z_OPT = 9 WHERE Z_PK = 1').run();
+
+        const second = executeQueryWithCount(state.memDb, bearDb, spec({ term: 'hello' }));
+        expect(second.notes[0].revision).toBe(9);
+      } finally {
+        state.memDb.close();
+      }
+    });
   });
 
   // ASCII \w drops é/ï and skips Cyrillic/Greek/CJK entirely, producing silent
@@ -437,8 +472,8 @@ describe('executeQueryWithCount', () => {
     { name: 'accented Latin (café)', body: 'meeting at the café', term: 'café' },
     { name: 'Cyrillic', body: 'привет мир', term: 'привет' },
   ])('term-side tokenizer matches Unicode body content: $name', ({ body, term }) => {
-    withFixture([{ pk: 1, title: 'note', text: body }], (memDb) => {
-      const hit = executeQueryWithCount(memDb, spec({ term })).notes;
+    withFixture([{ pk: 1, title: 'note', text: body }], (memDb, bearDb) => {
+      const hit = executeQueryWithCount(memDb, bearDb, spec({ term })).notes;
       expect(hit.map((r) => r.identifier)).toEqual(['uuid-1']);
     });
   });
@@ -449,9 +484,10 @@ describe('executeQueryWithCount', () => {
         { pk: 1, title: 'Old', text: 'a', modified: isoToCoreData('2026-01-01T00:00:00Z') },
         { pk: 2, title: 'New', text: 'b', modified: isoToCoreData('2026-04-15T00:00:00Z') },
       ],
-      (memDb) => {
+      (memDb, bearDb) => {
         const results = executeQueryWithCount(
           memDb,
+          bearDb,
           spec({ modifiedAfterTimestamp: isoToCoreData('2026-03-01T00:00:00Z') })
         ).notes;
         expect(results.map((r) => r.identifier)).toEqual(['uuid-2']);
@@ -466,8 +502,8 @@ describe('executeQueryWithCount', () => {
         { pk: 2, title: 'Pinned in tag', tags: ['x'], pinnedInTags: ['x'] },
         { pk: 3, title: 'Not pinned', tags: ['x'] },
       ],
-      (memDb) => {
-        const results = executeQueryWithCount(memDb, spec({ pinned: true })).notes;
+      (memDb, bearDb) => {
+        const results = executeQueryWithCount(memDb, bearDb, spec({ pinned: true })).notes;
         expect(new Set(results.map((r) => r.identifier))).toEqual(new Set(['uuid-1', 'uuid-2']));
       }
     );
@@ -486,8 +522,12 @@ describe('executeQueryWithCount', () => {
         { pk: 3, title: 'Tagged x but not pinned', tags: ['x'] },
         { pk: 4, title: 'Pinned in y, also tagged x', tags: ['x', 'y'], pinnedInTags: ['y'] },
       ],
-      (memDb) => {
-        const results = executeQueryWithCount(memDb, spec({ tag: 'x', pinned: true })).notes;
+      (memDb, bearDb) => {
+        const results = executeQueryWithCount(
+          memDb,
+          bearDb,
+          spec({ tag: 'x', pinned: true })
+        ).notes;
         expect(results.map((r) => r.identifier)).toEqual(['uuid-2']);
       }
     );
@@ -516,8 +556,12 @@ describe('executeQueryWithCount', () => {
         // Tagged under career but not pinned anywhere → must not match.
         { pk: 4, title: 'Tagged career, not pinned', tags: ['career/meetings'] },
       ],
-      (memDb) => {
-        const results = executeQueryWithCount(memDb, spec({ tag: 'career', pinned: true })).notes;
+      (memDb, bearDb) => {
+        const results = executeQueryWithCount(
+          memDb,
+          bearDb,
+          spec({ tag: 'career', pinned: true })
+        ).notes;
         expect(new Set(results.map((r) => r.identifier))).toEqual(new Set(['uuid-1', 'uuid-2']));
       }
     );
@@ -529,9 +573,10 @@ describe('executeQueryWithCount', () => {
         { pk: 1, title: 'A', text: 'common phrase here', tags: ['career'] },
         { pk: 2, title: 'B', text: 'common phrase here', tags: ['personal'] },
       ],
-      (memDb) => {
+      (memDb, bearDb) => {
         const results = executeQueryWithCount(
           memDb,
+          bearDb,
           spec({ term: 'common phrase', tag: 'career' })
         ).notes;
         expect(results.map((r) => r.identifier)).toEqual(['uuid-1']);
@@ -547,8 +592,8 @@ describe('executeQueryWithCount', () => {
         { pk: 3, title: 'C', tags: ['career'] },
         { pk: 4, title: 'D', tags: ['personal'] },
       ],
-      (memDb) => {
-        const result = executeQueryWithCount(memDb, { limit: 2, tag: 'career' });
+      (memDb, bearDb) => {
+        const result = executeQueryWithCount(memDb, bearDb, { limit: 2, tag: 'career' });
         expect(result.notes).toHaveLength(2);
         expect(result.totalCount).toBe(3);
       }
@@ -572,8 +617,12 @@ describe('executeQueryWithCount', () => {
           ],
         },
       ],
-      (memDb) => {
-        const [result] = executeQueryWithCount(memDb, spec({ term: 'ocronlymarker' })).notes;
+      (memDb, bearDb) => {
+        const [result] = executeQueryWithCount(
+          memDb,
+          bearDb,
+          spec({ term: 'ocronlymarker' })
+        ).notes;
         expect(result.snippet).toBeDefined();
         expect(result.snippet).toContain('[ocronlymarker]');
       }
@@ -591,10 +640,10 @@ describe('executeQueryWithCount', () => {
     { name: 'fts5/syntax error (empty NEAR)', term: 'hello NEAR()' },
     { name: 'unknown special query (bare wildcard)', term: '*' },
   ])('throws an operator-free structured error on malformed FTS5 query: $name', ({ term }) => {
-    withFixture([{ pk: 1, title: 'A', text: 'hello' }], (memDb) => {
+    withFixture([{ pk: 1, title: 'A', text: 'hello' }], (memDb, bearDb) => {
       let thrown: Error | undefined;
       try {
-        executeQueryWithCount(memDb, spec({ term }));
+        executeQueryWithCount(memDb, bearDb, spec({ term }));
       } catch (e) {
         thrown = e as Error;
       }

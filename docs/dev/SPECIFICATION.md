@@ -63,11 +63,20 @@ All write operations execute in the background without disrupting the user's Bea
         │     (unicode61 tokenizer, remove_diacritics=2) plus a side
         │     note_tags table.
         │
-        └──▶ Run: FTS5 MATCH + ORDER BY rank (per-column BM25 weights:
-              title/body=2.0, ocr=0.5) with snippet() output (matched terms
-              wrapped in `[...]`) for term queries; mod-date DESC with a
-              200-character body-prefix snippet for filter-only queries.
-              Filters (tag, pinned, date) compose with AND.
+        ├──▶ Run: FTS5 MATCH + ORDER BY rank (per-column BM25 weights:
+        │     title/body=2.0, ocr=0.5) with snippet() output (matched terms
+        │     wrapped in `[...]`) for term queries; mod-date DESC with a
+        │     200-character body-prefix snippet for filter-only queries.
+        │     Filters (tag, pinned, date) compose with AND.
+        │
+        └──▶ Hydrate revision (`fetchRevisionsForResults`): batch SELECT
+              against the live Bear DB to attach each result's current
+              `Z_OPT`. Goes against the live DB rather than the FTS shadow
+              because the drift sentinel above misses pin-only and tag-only
+              writes that bump `Z_OPT` without bumping `ZMODIFICATIONDATE` —
+              a cached revision would silently lag. Identifiers absent from
+              the live DB (note vanished between rebuild and hydration)
+              surface as `Revision: unknown` with `REVISION_UNAVAILABLE_SENTENCE`.
 ```
 
 **Why in-memory, not persistent.** Bear syncs notes across the user's machines via iCloud. Any persistent derived state (a side-car DB, a shadow FTS5 file) would diverge from Bear's authoritative state without coordination. In-memory rebuild satisfies cross-Mac consistency by construction. Build cost (~70 ms / 229 notes empirically) is small enough to absorb on first search per server process.
@@ -76,7 +85,7 @@ All write operations execute in the background without disrupting the user's Bea
 
 **Concurrency.** `node:sqlite` is synchronous. JSON-RPC handlers run on Node's single event loop, so a search call that triggers a rebuild completes the rebuild atomically before the next call starts. No mutex needed; do not refactor the entry point to async/await without re-establishing this invariant.
 
-The atomicity guarantee is in-process only — Bear.app writes the source SQLite file as an independent macOS process, and `journal_mode=DELETE` provides no snapshot isolation across processes. Bear writes that land between rebuilds are detected by the next `MAX + COUNT` drift check and force a fresh rebuild. Bear writes that land *during* a rebuild — between `insertNotes`/`insertNoteTags` and `readDriftKey` — are reflected in the post-build drift key but not the index, leaving the new note invisible until another Bear write moves the key again. Bounded by Bear's typical write cadence; not addressed here because the build window is sub-100 ms for typical libraries.
+The atomicity guarantee is in-process only — Bear.app writes the source SQLite file as an independent macOS process, and `journal_mode=DELETE` provides no snapshot isolation across processes. Bear writes that land between rebuilds are detected by the next `MAX + COUNT` drift check and force a fresh rebuild. Bear writes that land _during_ a rebuild — between `insertNotes`/`insertNoteTags` and `readDriftKey` — are reflected in the post-build drift key but not the index, leaving the new note invisible until another Bear write moves the key again. Bounded by Bear's typical write cadence; not addressed here because the build window is sub-100 ms for typical libraries.
 
 **FTS5 query handling.** User-supplied terms are inspected by `prepareFTS5Term`:
 
@@ -104,13 +113,78 @@ The gate is the env var `UI_ENABLE_CONTENT_REPLACEMENT` (strict equality `=== 't
 
 When the gate is closed (default), the server's `tools/list` returns the 4 Bear-domain read-only tools plus `bear-capabilities`, a discovery tool registered conditionally (only when the gate is closed). The `initialize` response's `instructions` field carries the unlock guidance, but it's unreliable across MCP clients (Claude Desktop and OpenCode drop it; Codex CLI reroutes it), so `bear-capabilities` surfaces the same guidance through `tools/list` — the only channel guaranteed to reach the model in every client. When the gate is open, the 12 Bear-domain tools are advertised in `tools/list` and `instructions` carries the edit-mode guidance; `bear-capabilities` is not registered because there's nothing left to unlock.
 
-The read/write classification is locked in by the system test at `tests/system/registration-gate.test.ts`. Its `EXPECTED_READ_ONLY_TOOLS` and `EXPECTED_WRITE_TOOLS` constants enumerate which tool falls in which class; `task test:system` (run locally before merge) fails if a future tool registration is misclassified. System tests cannot run in CI — see *Testing Constraints* below.
+The read/write classification is locked in by the system test at `tests/system/registration-gate.test.ts`. Its `EXPECTED_READ_ONLY_TOOLS` and `EXPECTED_WRITE_TOOLS` constants enumerate which tool falls in which class; `task test:system` (run locally before merge) fails if a future tool registration is misclassified. System tests cannot run in CI — see _Testing Constraints_ below.
 
-**Why registration-time, not call-time.** With the gate at call time the LLM still sees write tools in `tools/list`, picks one, and receives a runtime error — wasted tokens and confusing UX. Registration-time gating gives the user a *provably* read-only mode verifiable with a single MCP wire call. The gate also widens past content replacement: it now covers all 8 write operations, not just `bear-replace-text`. The user-facing label "Edit Mode" replaces the older "Content Replacement" to reflect this widened scope.
+**Why registration-time, not call-time.** With the gate at call time the LLM still sees write tools in `tools/list`, picks one, and receives a runtime error — wasted tokens and confusing UX. Registration-time gating gives the user a _provably_ read-only mode verifiable with a single MCP wire call. The gate also widens past content replacement: it now covers all 8 write operations, not just `bear-replace-text`. The user-facing label "Edit Mode" replaces the older "Content Replacement" to reflect this widened scope.
 
 ### No Note Deletion
 
 There is no delete tool. Too destructive for AI-assisted workflows — a misidentified note ID would mean permanent data loss. Archiving is the closest alternative and is reversible in Bear.
+
+### Optimistic Concurrency Control (Inform Half)
+
+Every note-scoped tool response carries the note's current revision (`ZSFNOTE.Z_OPT`) as `Revision: <n>` alongside the note ID. This is the _inform_ half of Optimistic Concurrency Control (OCC, version-number variant) — the pattern Kung & Robinson defined in their 1981 ACM TODS paper _"On Optimistic Methods for Concurrency Control"_ and that RFC 9110 §13.1.1 ships as HTTP `If-Match` / `412 Precondition Failed`.
+
+The _enforce_ half — requiring a client-supplied revision on every write and rejecting stale ones with a `412`-equivalent — is a separate future sub-issue (SVA-22) and is **not** part of inform. Inform is strictly additive: no input schemas change, no new error states, no consumer coordination needed.
+
+Three write-path patterns capture the revision honestly — one per shape of "what's known before vs after the URL fires":
+
+```
+  Content writes (add-text, replace-text, add-file, add-tag)
+  — pre-write baseline + post-write poll for the change
+    │
+    ▼ existingNote.revision (free from pre-flight getNoteContent)
+    │
+    ▼ fire bear://x-callback-url/...
+    │
+    ▼ awaitRevisionIncrement(id, baseline) — polls Z_OPT every 15ms
+    │   until the value differs from baseline, with a REVISION_POLL_TARGET_MS budget
+    ▼
+   response includes `Revision: <newRev>` or a duration-free
+   `Revision: unknown (...)` sentence (see src/tools/responses.ts) when the
+   budget elapses without observing a change
+
+  bear-create-note
+  — no pre-flight baseline (note doesn't exist yet); single bundled SELECT
+  for {id, revision} after the URL fires
+    │
+    ▼ fire bear://x-callback-url/create
+    │
+    ▼ awaitNoteCreation(title) — polls ZSFNOTE by (title, recent ZCREATIONDATE),
+    │   projecting both ZUNIQUEIDENTIFIER and Z_OPT in one SELECT, capped at
+    │   POLL_TIMEOUT_MS (2000ms — wider than REVISION_POLL_TARGET_MS because the
+    │   first appearance of a newly-created row is slower than a Z_OPT bump)
+    ▼
+   response includes `Note ID: <id>` + `Revision: <revision>`, or
+   `Note ID: unknown ...` + `Revision: unknown (creation confirmation timed
+   out after 2000ms)` when the new row is never observed within the
+   creation poll window
+
+  bear-archive-note
+  — pre-write snapshot only; post-archive the note is filtered from
+  default queries (ZARCHIVED = 1), so a post-write read would return null
+    │
+    ▼ existingNote.revision (captured BEFORE the archive URL fires)
+    │
+    ▼ fire bear://x-callback-url/archive
+    ▼
+   response includes `Revision: <preArchiveRev>` (snapshot; the note is no
+   longer reachable via default queries to compare against anyway)
+```
+
+**In-scope tools.** The six note-mutating tools — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — and the three note-reading tools that return notes — `bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes` — emit a revision line per the diagrams above. Global tag tools (`bear-rename-tag`, `bear-delete-tag`, `bear-list-tags`) and `bear-capabilities` do not reference a specific note and emit no revision line.
+
+**Field-sourcing discipline.** Per the mutation-response-metadata rule in `MCP_STANDARDS.md`, every field must come from a value known before the write or from a write-confirming poll — never from a post-write read that samples current state. Concrete sourcing:
+
+- **Note ID** — for modifications, from the input parameter. For creation, from `awaitNoteCreation`'s post-create poll (the only path that needs polling at all, since the ID doesn't exist before the URL fires).
+- **Note title** — for modifications, from the pre-flight `getNoteContent` validation. For creation, from the input parameter when one was provided (the title-less creation path omits the line).
+- **Revision** — pre-flight `existingNote.revision` plus a post-write capture: `awaitRevisionIncrement` for content writes, `awaitNoteCreation`'s bundled `{id, revision}` SELECT for create, the pre-flight snapshot itself for archive. Three timeout sentinels — content-write, creation, and read-side-miss — each cite the cap that actually fired (constants in `src/tools/responses.ts`).
+
+**Constraint partially lifted: write verification.** _Key Design Constraints → Intentional Exclusions_ notes "Write verification: No way to confirm Bear processed a URL action." OCC inform lifts this for any write that bumps `Z_OPT` — polling waits for the change, so a non-null `Revision` in the response _is_ the confirmation. The constraint persists for writes that don't bump `Z_OPT` (the timeout sentence honestly signals this rather than masking it).
+
+**Constraint partially lifted: test pause-after-write.** _Testing Constraints_ notes existing tests pause briefly after writes "giving Bear time to process the callback." New OCC system tests use the response's `Revision` as a deterministic completion signal for the _under-test_ write — the polling already waited for Bear, so no `sleep` is needed between the write and its readback. Tests that chain a prior `create-note` before the under-test write still pause between them because Bear performs a subtitle/index recompute save shortly after creation (the `+2` first-edit jump in `BEAR_DATABASE_SCHEMA.md`); the polling on the under-test write doesn't cover that earlier gap.
+
+Empirical findings about `Z_OPT` behavior across URL actions live in `BEAR_DATABASE_SCHEMA.md`. The compound polling rule (compare for inequality, not `baseline + 1`) is driven by the empirically observed `+2` first-edit-after-creation jump.
 
 ---
 
@@ -147,16 +221,16 @@ Bear uses Core Data with SQLite. The schema is undocumented; the DB is small eno
 
 Two tiers of errors, from the client's perspective:
 
-| Tier | When | What the client sees |
-|------|------|---------------------|
-| Soft error | Expected condition handled inside tool handlers (note not found, section missing, handler-level parameter validation, file errors) | `isError: true` response with text describing the problem and suggesting a fix |
-| Hard error | Unexpected failure or deep validation error (subprocess crash, DB error, invalid date format) | MCP-level error response (thrown exception — SDK wraps these in `isError: true` automatically) |
+| Tier       | When                                                                                                                               | What the client sees                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Soft error | Expected condition handled inside tool handlers (note not found, section missing, handler-level parameter validation, file errors) | `isError: true` response with text describing the problem and suggesting a fix                 |
+| Hard error | Unexpected failure or deep validation error (subprocess crash, DB error, invalid date format)                                      | MCP-level error response (thrown exception — SDK wraps these in `isError: true` automatically) |
 
 The classification boundary is: **"Did the tool accomplish what it was asked to do?"** If yes (even with zero results), it stays a normal response via `createToolResponse()`. If no, it becomes `isError: true` via `createErrorResponse()`.
 
 Normal responses (not errors): empty search results, no tags found, no untagged notes, title disambiguation — these are correct answers, not failures.
 
-Note-level write tools do pre-flight DB validation to turn silent Bear failures into clear soft errors. Global tag operations cannot be pre-validated. Conditions tied to server configuration — such as Edit Mode being off — are surfaced via the MCP `instructions` field at registration time rather than via per-call soft errors (see *Registration-Time Read/Write Gating*).
+Note-level write tools do pre-flight DB validation to turn silent Bear failures into clear soft errors. Global tag operations cannot be pre-validated. Conditions tied to server configuration — such as Edit Mode being off — are surfaced via the MCP `instructions` field at registration time rather than via per-call soft errors (see _Registration-Time Read/Write Gating_).
 
 ---
 
@@ -171,6 +245,7 @@ Note-level write tools do pre-flight DB validation to turn silent Bear failures 
 ## References
 
 ### Documentation
+
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/README.md)
 - [MCPB Specification](https://github.com/anthropics/mcpb/blob/main/README.md)
 - [MCPB Manifest](https://github.com/anthropics/mcpb/blob/main/MANIFEST.md)
@@ -178,4 +253,5 @@ Note-level write tools do pre-flight DB validation to turn silent Bear failures 
 - [Taskfile Documentation](https://taskfile.dev/docs/guide)
 
 ### Bear Notes API
+
 - [Bear x-callback-url API](https://bear.app/faq/X-callback-url%20Scheme%20documentation/)

@@ -167,6 +167,7 @@ export function findUntaggedNotes(limit: number = 50): { notes: BearNote[]; tota
              ZUNIQUEIDENTIFIER as identifier,
              ZCREATIONDATE as creationDate,
              ZMODIFICATIONDATE as modificationDate,
+             Z_OPT as revision,
              COUNT(*) OVER() as totalCount
       FROM ZSFNOTE
       WHERE ZARCHIVED = 0 AND ZTRASHED = 0 AND ZENCRYPTED = 0
@@ -181,6 +182,7 @@ export function findUntaggedNotes(limit: number = 50): { notes: BearNote[]; tota
       identifier: string;
       creationDate: number;
       modificationDate: number;
+      revision: number;
       totalCount: number;
     }>;
 
@@ -198,6 +200,7 @@ export function findUntaggedNotes(limit: number = 50): { notes: BearNote[]; tota
       creation_date: convertCoreDataTimestamp(row.creationDate),
       modification_date: convertCoreDataTimestamp(row.modificationDate),
       pin: 'no' as const,
+      revision: row.revision,
     }));
 
     logger.info(`Found ${notes.length} untagged notes (${totalCount} total)`);

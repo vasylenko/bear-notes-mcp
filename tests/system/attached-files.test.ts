@@ -6,7 +6,9 @@ import {
   callTool,
   cleanupTestNotes,
   extractNoteBody,
+  readNoteRevision,
   tryExtractNoteId,
+  tryExtractRevision,
   sleep,
   uniqueTitle,
   waitForFileContent,
@@ -256,5 +258,37 @@ describe('attached files content separation', () => {
     const response = await waitForFileContent(noteId, 'custom-name.jpg');
     expect(response.content).toHaveLength(2);
     expect(response.content[1].text).toContain('custom-name.jpg');
+  });
+
+  it('emits Revision matching live Z_OPT after add-file (OCC inform)', async () => {
+    // /add-file bumps ZSFNOTE.Z_OPT by +1 (empirically confirmed —
+    // see docs/dev/BEAR_DATABASE_SCHEMA.md; note-row bumps, not only
+    // ZSFNOTEFILE). Response Revision must (a) exceed the pre-attach
+    // baseline (proving the baseline wasn't echoed back) and (b) equal
+    // current live Z_OPT (proving freshness).
+    const title = uniqueTitle(TEST_PREFIX, 'AddFileRevision', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Pre-attach body for revision test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    // Wait for Bear's +2 recompute save before reading baseline (BEAR_DATABASE_SCHEMA.md).
+    await sleep(PAUSE_AFTER_WRITE_OP);
+
+    const preAttachRevision = readNoteRevision(noteId);
+    expect(preAttachRevision).not.toBeNull();
+
+    const addResult = callTool({
+      toolName: 'bear-add-file',
+      args: { id: noteId, file_path: TINY_PNG_PATH },
+    }).content[0].text;
+
+    const responseRevision = tryExtractRevision(addResult);
+    expect(responseRevision).not.toBeNull();
+    expect(responseRevision!).toBeGreaterThan(preAttachRevision!);
+
+    const liveDbRevision = readNoteRevision(noteId);
+    expect(responseRevision).toBe(liveDbRevision);
   });
 });

@@ -1,12 +1,8 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-/**
- * Creates a standardized MCP tool response with consistent formatting.
- * Centralizes response structure to follow DRY principles.
- *
- * @param text - The response text content
- * @returns Formatted CallToolResult for MCP tools
- */
+import { POLL_TIMEOUT_MS } from '../operations/notes.js';
+import type { NoteRevision } from '../types.js';
+
 export function createToolResponse(text: string): Pick<CallToolResult, 'content'> {
   return {
     content: [
@@ -19,15 +15,31 @@ export function createToolResponse(text: string): Pick<CallToolResult, 'content'
   };
 }
 
-/**
- * Creates a standardized MCP error response with isError flag.
- * Signals to the LLM that the tool failed and self-correction may be needed.
- * Per the MCP spec, tool errors use isError: true inside the result object
- * so the LLM can see the failure and retry or adjust its approach.
- *
- * @param text - The error description with recovery guidance
- * @returns Formatted CallToolResult with isError: true
- */
+// isError: true inside the result object is the MCP-spec signal that lets the
+// LLM see the failure and self-correct rather than treating it as a transport
+// error. Wrapping vs throwing matters here.
 export function createErrorResponse(text: string): Pick<CallToolResult, 'content' | 'isError'> {
   return { ...createToolResponse(text), isError: true };
+}
+
+// Three failure modes, three sentences. TIMEOUT and UNAVAILABLE are
+// duration-free: the post-write safety window is an internal implementation
+// choice the caller doesn't act on, so the sentence shouldn't promise a
+// specific number that the underlying cap can outgrow. CREATION_TIMEOUT
+// keeps its duration because the create-poll cap IS the user-visible budget;
+// it's composed from POLL_TIMEOUT_MS (per MCP_STANDARDS "source numeric
+// defaults from runtime constants") so the sentence can't drift.
+export const REVISION_TIMEOUT_SENTENCE =
+  'Revision: unknown (the write was issued but observable confirmation did not arrive within the safety window)';
+export const REVISION_CREATION_TIMEOUT_SENTENCE = `Revision: unknown (creation confirmation timed out after ${POLL_TIMEOUT_MS}ms)`;
+export const REVISION_UNAVAILABLE_SENTENCE =
+  'Revision: unknown (note not found in live database — likely deleted, archived, or encrypted since the search index was built)';
+
+// Default unknownSentence is the post-write timeout — callers on the
+// read-miss path pass REVISION_UNAVAILABLE_SENTENCE explicitly.
+export function formatRevisionLine(
+  revision: NoteRevision | null,
+  unknownSentence: string = REVISION_TIMEOUT_SENTENCE
+): string {
+  return revision === null ? unknownSentence : `Revision: ${revision}`;
 }

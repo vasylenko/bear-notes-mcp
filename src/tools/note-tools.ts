@@ -5,11 +5,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { DEFAULT_SEARCH_LIMIT, ENABLE_NEW_NOTE_CONVENTIONS } from '../config.js';
+import { DEFAULT_SEARCH_LIMIT, ENABLE_NEW_NOTE_CONVENTIONS, MAX_SEARCH_LIMIT } from '../config.js';
 import { logger } from '../logging.js';
 import { applyNoteConventions } from '../operations/note-conventions.js';
 import {
   awaitNoteCreation,
+  awaitRevisionIncrement,
   findNotesByTitle,
   getNoteContent,
   noteHasHeader,
@@ -20,7 +21,13 @@ import { findUntaggedNotes, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
 
 import { applyWriteGate } from './registration.js';
-import { createErrorResponse, createToolResponse } from './responses.js';
+import {
+  REVISION_CREATION_TIMEOUT_SENTENCE,
+  REVISION_UNAVAILABLE_SENTENCE,
+  createErrorResponse,
+  createToolResponse,
+  formatRevisionLine,
+} from './responses.js';
 
 // Cap bear-add-file attachment size. Well above realistic PDFs/images, well
 // below "exfiltrate the entire ~/Library."
@@ -103,6 +110,9 @@ Check the note content with bear-open-note to see available sections.`);
     const cleanText =
       mode === 'replace' ? stripLeadingHeader(text, cleanHeader || existingNote.title) : text;
 
+    // Baseline comes free from the pre-flight read above — no extra DB call.
+    const baseline = existingNote.revision;
+
     const url = buildBearUrl('add-text', {
       id,
       text: cleanText,
@@ -114,6 +124,8 @@ Check the note content with bear-open-note to see available sections.`);
     });
     logger.debug(`Executing Bear URL: ${url}`);
     await executeBearXCallbackApi(url);
+
+    const newRevision = await awaitRevisionIncrement(id, baseline);
 
     const preposition = mode === 'replace' ? 'in' : 'to';
     const responseLines = [
@@ -128,6 +140,7 @@ Check the note content with bear-open-note to see available sections.`);
     }
 
     responseLines.push(`Note ID: ${id}`);
+    responseLines.push(formatRevisionLine(newRevision));
 
     const trailingMessage =
       mode === 'replace'
@@ -157,7 +170,7 @@ export function registerNoteTools(server: McpServer): void {
     {
       title: 'Open Bear Note',
       description:
-        'Read the full text content of a Bear note by its ID or title. Supports direct title lookup as an alternative to searching first. Always includes text extracted from attached images and PDFs (aka OCR search) with clear labeling.',
+        "Read the full text content of a Bear note by its ID or title. Supports direct title lookup as an alternative to searching first. Always includes text extracted from attached images and PDFs (aka OCR search) with clear labeling. Response includes the note's revision token that changes whenever the note is modified.",
       inputSchema: {
         id: z
           .string()
@@ -230,6 +243,7 @@ Use bear-search-notes to find the correct note identifier.`);
           `**${noteWithContent.title}**`,
           `Modified: ${noteWithContent.modification_date}`,
           `ID: ${noteWithContent.identifier}`,
+          formatRevisionLine(noteWithContent.revision),
         ];
 
         const noteText = noteWithContent.text || '*This note appears to be empty.*';
@@ -270,7 +284,7 @@ Use bear-search-notes to find the correct note identifier.`);
       {
         title: 'Create New Note',
         description:
-          'Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app.',
+          "Create a new note in your Bear library with optional title, content, and tags. Returns the note ID when a title is provided, enabling immediate follow-up operations. The note will be immediately available in Bear app. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           title: z
             .string()
@@ -312,7 +326,7 @@ Use bear-search-notes to find the correct note identifier.`);
 
           await executeBearXCallbackApi(url);
 
-          const createdNoteId = title ? await awaitNoteCreation(title) : undefined;
+          const created = title ? await awaitNoteCreation(title) : undefined;
 
           const responseLines: string[] = ['Bear note created successfully!', ''];
 
@@ -324,12 +338,18 @@ Use bear-search-notes to find the correct note identifier.`);
             responseLines.push(`Tags: ${tags}`);
           }
 
-          if (createdNoteId) {
-            responseLines.push(`Note ID: ${createdNoteId}`);
+          if (created) {
+            responseLines.push(`Note ID: ${created.id}`);
+            responseLines.push(formatRevisionLine(created.revision));
           } else if (title) {
             responseLines.push(
               'Note ID: unknown — the create request was sent, but the new note could not be confirmed. Check in Bear to verify.'
             );
+            // Keep the Revision line on the timeout branch too so consumers
+            // parsing every response don't need to special-case create. The
+            // create-specific sentinel cites POLL_TIMEOUT_MS — the budget that
+            // actually fired — not REVISION_POLL_TARGET_MS.
+            responseLines.push(formatRevisionLine(null, REVISION_CREATION_TIMEOUT_SENTENCE));
           }
 
           const hasContent = title || text || tags;
@@ -351,7 +371,7 @@ The note has been added to your Bear Notes library.`);
     {
       title: 'Find Bear Notes',
       description:
-        "Search your Bear notes for words or phrases. The search looks across note titles, body content, and OCR text in attached images and PDFs, returning matching notes ranked by relevance with a snippet of the matching context — so you can see what matched without opening the note. For best results, search with a phrase or several words from what you're looking for; a single word also works. Also supports filtering by tag, by creation/modification date range, or by pinned status — combine these with a search term, or use them on their own to browse without searching. Trashed and archived notes are not included.",
+        "Search your Bear notes for words or phrases. The search looks across note titles, body content, and OCR text in attached images and PDFs, returning matching notes ranked by relevance with a snippet of the matching context — so you can see what matched without opening the note. For best results, search with a phrase or several words from what you're looking for; a single word also works. Also supports filtering by tag, by creation/modification date range, or by pinned status — combine these with a search term, or use them on their own to browse without searching. Trashed and archived notes are not included. Response includes the note's revision token that changes whenever the note is modified.",
       inputSchema: {
         term: z
           .string()
@@ -371,9 +391,10 @@ The note has been added to your Bear Notes library.`);
           .number()
           .int()
           .min(1)
+          .max(MAX_SEARCH_LIMIT)
           .optional()
           .describe(
-            `Maximum number of results to return (default: ${DEFAULT_SEARCH_LIMIT}, min: 1)`
+            `Maximum number of results to return (default: ${DEFAULT_SEARCH_LIMIT}, min: 1, max: ${MAX_SEARCH_LIMIT})`
           ),
         createdAfter: z
           .string()
@@ -477,13 +498,23 @@ Try different search criteria or check if notes exist in Bear Notes.`);
             resultLines.push(`   Tags: ${note.tags.join(', ')}`);
           }
           resultLines.push(`   ID: ${note.identifier}`);
+          // Unavailable-sentence (not the write-timeout default) — search-side
+          // miss has a different cause than a poll exhaustion.
+          resultLines.push(
+            `   ${formatRevisionLine(note.revision, REVISION_UNAVAILABLE_SENTENCE)}`
+          );
           resultLines.push('');
         });
 
         resultLines.push('Use bear-open-note with an ID to read the full content of any note.');
 
         if (hasMore) {
-          resultLines.push(`Use bear-search-notes with limit: ${totalCount} to get all results.`);
+          // Schema caps `limit` at MAX_SEARCH_LIMIT; suggesting a higher
+          // totalCount would just produce a validation error on retry.
+          const suggestedLimit = Math.min(totalCount, MAX_SEARCH_LIMIT);
+          resultLines.push(
+            `Use bear-search-notes with limit: ${suggestedLimit} to get more results.`
+          );
         }
 
         return createToolResponse(resultLines.join('\n'));
@@ -500,7 +531,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Add Text to Note',
         description:
-          'Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text.',
+          "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -546,7 +577,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Replace Note Content',
         description:
-          'Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead.',
+          "Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -604,7 +635,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
       {
         title: 'Add File to Note',
         description:
-          'Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first.',
+          "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           file_path: z
             .string()
@@ -696,6 +727,8 @@ Use bear-add-file with a specific ID to attach to the desired note.`);
 Use bear-search-notes to find the correct note identifier.`);
           }
           const noteTitle = existingNote.title;
+          // OCC inform baseline (free from the pre-flight read above).
+          const baseline = existingNote.revision;
 
           const url = buildBearUrl('add-file', {
             id: resolvedId,
@@ -707,10 +740,18 @@ Use bear-search-notes to find the correct note identifier.`);
           logger.debug(`Executing Bear add-file URL for: ${resolvedFilename}`);
           await executeBearXCallbackApi(url);
 
+          // Attachment-add bumps ZSFNOTE.Z_OPT by +1 (empirically confirmed in
+          // this PR — see docs/dev/BEAR_DATABASE_SCHEMA.md). Polling stays in
+          // place for forward-compat: a hypothetical future Bear regression
+          // that stops bumping would surface as REVISION_TIMEOUT_SENTENCE
+          // rather than a silent stale value.
+          const newRevision = await awaitRevisionIncrement(resolvedId, baseline);
+
           return createToolResponse(`File "${resolvedFilename}" added successfully!
 
 Note: "${noteTitle}"
 ID: ${resolvedId}
+${formatRevisionLine(newRevision)}
 
 The file has been attached to your Bear note.`);
         } catch (error) {
@@ -726,7 +767,7 @@ The file has been attached to your Bear note.`);
     {
       title: 'Find Untagged Notes',
       description:
-        'Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes. Trashed and archived notes are not included.',
+        "Find notes in your Bear library that have no tags. Useful for organizing and categorizing notes. Trashed and archived notes are not included. Response includes the note's revision token that changes whenever the note is modified.",
       inputSchema: {
         limit: z
           .number()
@@ -764,6 +805,7 @@ The file has been attached to your Bear note.`);
           lines.push(`${index + 1}. **${note.title}**`);
           lines.push(`   Modified: ${modifiedDate}`);
           lines.push(`   ID: ${note.identifier}`);
+          lines.push(`   ${formatRevisionLine(note.revision)}`);
           lines.push('');
         });
 
@@ -787,7 +829,7 @@ The file has been attached to your Bear note.`);
       {
         title: 'Add Tags to Note',
         description:
-          'Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags.',
+          "Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -824,6 +866,8 @@ The file has been attached to your Bear note.`);
 
 Use bear-search-notes to find the correct note identifier.`);
           }
+          // OCC inform baseline (free from the pre-flight read above).
+          const baseline = existingNote.revision;
 
           const tagsString = tags.join(',');
 
@@ -838,6 +882,13 @@ Use bear-search-notes to find the correct note identifier.`);
 
           await executeBearXCallbackApi(url);
 
+          // /add-text with a `tags` param bumps ZSFNOTE.Z_OPT by +1
+          // (empirically confirmed in this PR — see docs/dev/BEAR_DATABASE_SCHEMA.md;
+          // note the separate /add-tags URL does NOT bump per SVA-20). Polling
+          // stays in place for forward-compat against a hypothetical Bear
+          // regression that stops bumping.
+          const newRevision = await awaitRevisionIncrement(id, baseline);
+
           const tagList = tags.map((t) => `#${t}`).join(', ');
 
           return createToolResponse(`Tags added successfully!
@@ -845,6 +896,7 @@ Use bear-search-notes to find the correct note identifier.`);
 Note: "${existingNote.title}"
 ID: ${id}
 Tags: ${tagList}
+${formatRevisionLine(newRevision)}
 
 The tags have been added to the beginning of the note.`);
         } catch (error) {
@@ -861,7 +913,7 @@ The tags have been added to the beginning of the note.`);
       {
         title: 'Archive Bear Note',
         description:
-          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID.",
+          "Move a note to Bear's archive. The note will no longer appear in regular searches but can be found in Bear's Archive section. Use bear-search-notes first to get the note ID. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -887,6 +939,10 @@ The tags have been added to the beginning of the note.`);
 Use bear-search-notes to find the correct note identifier.`);
           }
 
+          // Snapshot revision BEFORE the archive fires — post-archive the note
+          // is filtered from default queries, so a fresh read would return null.
+          const preArchiveRevision = existingNote.revision;
+
           const url = buildBearUrl('archive', {
             id,
             show_window: 'no',
@@ -898,6 +954,7 @@ Use bear-search-notes to find the correct note identifier.`);
 
 Note: "${existingNote.title}"
 ID: ${id}
+${formatRevisionLine(preArchiveRevision)}
 
 The note has been moved to Bear's archive.`);
         } catch (error) {

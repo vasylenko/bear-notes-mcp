@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import type { BearNote } from '../types.js';
+import type { BearNote, NoteRevision } from '../types.js';
 import { logAndThrow, logger } from '../logging.js';
 
 import { convertCoreDataTimestamp, decodeTagName } from './bear-encoding.js';
@@ -39,14 +39,17 @@ export interface SearchSpec {
   limit: number;
 }
 
-/** A single search hit. Extends `BearNote` with an optional snippet. */
-export interface SearchResult extends BearNote {
+/**
+ * A single search hit. `revision` is widened to `NoteRevision | null` because
+ * the post-FTS hydration step can miss (note vanished between index build and
+ * the live-DB read) — other note-producing paths read Z_OPT in the same SELECT
+ * that finds the row and never miss.
+ */
+export interface SearchResult extends Omit<BearNote, 'revision'> {
+  revision: NoteRevision | null;
   /**
-   * Snippet shape depends on the query:
-   * - Term query: FTS5 `snippet()` excerpt with matched terms wrapped in `[...]`.
-   * - Filter-only query (tag/date/pinned): leading 200-character body preview.
-   *
-   * Absent only when the underlying body is empty/null.
+   * Term query: FTS5 `snippet()` with matched terms wrapped in `[...]`.
+   * Filter-only query: leading 200-char body preview. Absent if body is empty.
    */
   snippet?: string;
 }
@@ -83,7 +86,7 @@ export function searchByQuery(spec: SearchSpec): SearchResults {
   const bearDb = openBearDatabase();
   try {
     const fresh = ensureFreshIndex(bearDb);
-    return executeQueryWithCount(fresh.memDb, spec);
+    return executeQueryWithCount(fresh.memDb, bearDb, spec);
   } catch (error) {
     // FTS5 syntax errors are already remapped by runWithFts5SyntaxRemap into a
     // user-facing envelope — pass them through so the LLM can retry with
@@ -466,7 +469,11 @@ function countMatches(memDb: DatabaseSync, spec: SearchSpec): number {
   return row.c;
 }
 
-function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchResults {
+function executeQueryWithCount(
+  memDb: DatabaseSync,
+  bearDb: DatabaseSync,
+  spec: SearchSpec
+): SearchResults {
   const { hasTerm, whereClause, baseParams } = buildSearchSqlAndParams(spec);
   // With a term: ORDER BY rank uses the per-column BM25 weights installed at
   // index build (title/body=2.0, ocr=0.5) — authored hits outrank OCR-only
@@ -496,6 +503,13 @@ function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchRes
     rows.map((r) => r.rowid)
   );
 
+  // Revision is hydrated from the live Bear DB, not the FTS shadow: the drift
+  // sentinel `MAX(ZMODIFICATIONDATE) + COUNT(*)` misses pin-only and tag-only
+  // writes that bump Z_OPT without touching ZMODIFICATIONDATE. A row missing
+  // from the live DB surfaces as null → REVISION_UNAVAILABLE_SENTENCE.
+  const identifiers = rows.map((r) => r.identifier);
+  const revisionsByIdentifier = fetchRevisionsForResults(bearDb, identifiers);
+
   // exactOptionalPropertyTypes: omit optional keys instead of assigning undefined.
   const notes = rows.map((row) => {
     const tags = tagsByRowid.get(row.rowid);
@@ -505,6 +519,7 @@ function executeQueryWithCount(memDb: DatabaseSync, spec: SearchSpec): SearchRes
       creation_date: convertCoreDataTimestamp(row.created),
       modification_date: convertCoreDataTimestamp(row.modified),
       pin: row.pinned === 1 ? ('yes' as const) : ('no' as const),
+      revision: revisionsByIdentifier.get(row.identifier) ?? null,
     };
     if (tags) result.tags = tags;
     if (row.snippet) result.snippet = row.snippet;
@@ -531,6 +546,32 @@ function fetchTagsForResults(memDb: DatabaseSync, rowIds: number[]): Map<number,
     )
     .all(...rowIds) as unknown as Array<{ rowid: number; tags: string }>;
   return new Map(tagRows.map((tr) => [tr.rowid, tr.tags.split(',')]));
+}
+
+// Reads against the live Bear DB (not the FTS shadow). Identifiers with no
+// matching row are absent from the Map; callers treat that as null revision.
+// Active-note filters (ZARCHIVED/ZTRASHED/ZENCRYPTED = 0) mirror the FTS index
+// build: notes that became archived/trashed/encrypted after the shadow was
+// built must map-miss here so callers surface REVISION_UNAVAILABLE_SENTENCE —
+// without the filters, a now-archived note would still return a numeric Z_OPT
+// and the response would falsely advertise it as live.
+function fetchRevisionsForResults(
+  bearDb: DatabaseSync,
+  identifiers: string[]
+): Map<string, NoteRevision> {
+  if (identifiers.length === 0) return new Map();
+  const placeholders = identifiers.map(() => '?').join(',');
+  const rows = bearDb
+    .prepare(
+      `SELECT ZUNIQUEIDENTIFIER as identifier, Z_OPT as revision
+         FROM ZSFNOTE
+        WHERE ZUNIQUEIDENTIFIER IN (${placeholders})
+          AND ZARCHIVED = 0
+          AND ZTRASHED = 0
+          AND ZENCRYPTED = 0`
+    )
+    .all(...identifiers) as unknown as Array<{ identifier: string; revision: number }>;
+  return new Map(rows.map((r) => [r.identifier, r.revision]));
 }
 
 // FTS5 surfaces user-query problems via several distinct SQLite error messages:

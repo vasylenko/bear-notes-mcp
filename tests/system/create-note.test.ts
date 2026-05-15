@@ -1,6 +1,13 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { callTool, cleanupTestNotes, tryExtractNoteId, uniqueTitle } from './inspector.js';
+import {
+  callTool,
+  cleanupTestNotes,
+  readNoteRevision,
+  tryExtractNoteId,
+  tryExtractRevision,
+  uniqueTitle,
+} from './inspector.js';
 
 const TEST_PREFIX = '[Bear-MCP-stest-create-note]';
 const RUN_ID = Date.now();
@@ -28,5 +35,27 @@ describe('bear-create-note returns note ID via MCP Inspector CLI', () => {
     }).content[0].text;
 
     expect(openResult).toContain(title);
+  });
+
+  it('emits Revision matching live Z_OPT after creation (OCC inform)', () => {
+    const title = uniqueTitle(TEST_PREFIX, 'Revision', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Creation revision test' },
+    }).content[0].text;
+
+    const noteId = tryExtractNoteId(createResult);
+    expect(noteId).toBeTruthy();
+
+    const responseRevision = tryExtractRevision(createResult);
+    expect(responseRevision).not.toBeNull();
+    expect(responseRevision).toBeGreaterThanOrEqual(1);
+
+    // >= because Bear's +2 recompute save (BEAR_DATABASE_SCHEMA.md) can land
+    // between the response and this read. Z_OPT is monotonic; live can only
+    // be ahead, never behind, so this still catches a stale captured value.
+    const dbRevision = readNoteRevision(noteId!);
+    expect(dbRevision).not.toBeNull();
+    expect(dbRevision!).toBeGreaterThanOrEqual(responseRevision!);
   });
 });

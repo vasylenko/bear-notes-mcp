@@ -184,6 +184,39 @@ export function tryExtractNoteId(response: string): string | null {
   return match ? match[1] : null;
 }
 
+// Returns null for the timeout sentence ("Revision: unknown (...)") — callers
+// detect that branch by checking for the literal "unknown" substring separately.
+const NOTE_REVISION_REGEX = /Revision:\s+(\d+)/;
+
+/** Extracts a numeric revision from any MCP response, or null if not present (or the timeout sentence). */
+export function tryExtractRevision(response: string): number | null {
+  const match = response.match(NOTE_REVISION_REGEX);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Reads the live Z_OPT value for a note via direct SQL against Bear's DB.
+ * Used by OCC system tests to verify response Revision matches the actual
+ * source-of-truth value. No active-note filter is applied — the helper reads
+ * raw Z_OPT regardless of archived/trashed/encrypted state so tests can probe
+ * revisions independent of the server's visibility rules. Returns null only
+ * if the note doesn't exist.
+ */
+export function readNoteRevision(id: string): number | null {
+  let db: ReturnType<typeof openBearDatabase> | undefined;
+  try {
+    db = openBearDatabase();
+    const row = db.prepare('SELECT Z_OPT FROM ZSFNOTE WHERE ZUNIQUEIDENTIFIER = ?').get(id) as
+      | { Z_OPT: number }
+      | undefined;
+    return row ? row.Z_OPT : null;
+  } catch {
+    return null;
+  } finally {
+    if (db) closeBearDatabase(db);
+  }
+}
+
 /** Trash a note by ID via Bear URL scheme (no MCP tool exists for trashing). */
 export function trashNote(id: string): void {
   try {

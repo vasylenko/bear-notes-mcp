@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { noteHasHeader, parseDateString, searchNotes, stripLeadingHeader } from './notes.js';
+import {
+  noteHasHeader,
+  parseDateString,
+  pollUntilFound,
+  searchNotes,
+  stripLeadingHeader,
+} from './notes.js';
 
 describe('parseDateString', () => {
   beforeEach(() => {
@@ -168,5 +174,46 @@ describe('searchNotes validation', () => {
     { name: 'all parameters omitted', call: () => searchNotes() },
   ])('throws when no real search criterion is provided: $name', ({ call }) => {
     expect(call).toThrow(/Please provide a search term, tag, date filter, or pinned filter/);
+  });
+});
+
+// pollUntilFound is the shared primitive behind awaitRevisionIncrement and
+// awaitNoteCreation. Testing it with synthetic `read` callbacks keeps the
+// timing contract verifiable without racing scheduled SQLite writes — the
+// previous test shape was flaky on event-loop-starved CI runners because the
+// scheduled +50ms writer could slip past the helper's wallclock deadline.
+// End-to-end coverage of the SQLite integration lives in the system tests.
+describe('pollUntilFound', () => {
+  it('returns the first non-null value the read produces', async () => {
+    const sequence: (string | null)[] = [null, null, 'found'];
+    let i = 0;
+    const result = await pollUntilFound(() => sequence[i++] ?? null, 200, 1);
+    expect(result).toBe('found');
+  });
+
+  it('returns null when read never produces a non-null value', async () => {
+    const start = Date.now();
+    const result = await pollUntilFound(() => null, 100, 5);
+    const elapsed = Date.now() - start;
+
+    expect(result).toBeNull();
+    // Wallclock floor is the cap minus one interval — the deadline check
+    // fires before the final sleep would complete.
+    expect(elapsed).toBeGreaterThanOrEqual(95);
+  });
+
+  it('stops polling once read returns a value', async () => {
+    let calls = 0;
+    const result = await pollUntilFound(
+      () => {
+        calls++;
+        return 'first';
+      },
+      1_000,
+      5
+    );
+
+    expect(result).toBe('first');
+    expect(calls).toBe(1);
   });
 });

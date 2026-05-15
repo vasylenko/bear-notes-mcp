@@ -13,10 +13,14 @@ export interface BearNote {
   modification_date: string;
   creation_date: string;
   pin: 'yes' | 'no';
+  revision: NoteRevision;
   tags?: string[]; // Only present in search results
   text?: string; // Only present in content queries
   files?: AttachedFile[]; // Only present in getNoteContent()
 }
+
+/** OCC version token. Backed by ZSFNOTE.Z_OPT — Bear's optimistic-locking counter. */
+export type NoteRevision = number;
 
 /**
  * Lightweight note match for title-based lookups where full content is not needed.

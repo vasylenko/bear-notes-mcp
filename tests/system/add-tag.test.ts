@@ -1,9 +1,18 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { callTool, cleanupTestNotes, tryExtractNoteId, uniqueTitle } from './inspector.js';
+import {
+  callTool,
+  cleanupTestNotes,
+  readNoteRevision,
+  sleep,
+  tryExtractNoteId,
+  tryExtractRevision,
+  uniqueTitle,
+} from './inspector.js';
 
 const TEST_PREFIX = '[Bear-MCP-stest-add-tag]';
 const RUN_ID = Date.now();
+const PAUSE_AFTER_WRITE_OP = 100; // ms to wait after write operations for Bear to process changes
 
 afterAll(() => {
   cleanupTestNotes(TEST_PREFIX);
@@ -41,5 +50,41 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
 
     expect(response.content[0].text).toContain('not found');
     expect(response.isError).toBe(true);
+  });
+
+  it('emits Revision matching live Z_OPT after add-tag (OCC inform)', async () => {
+    // /add-text with a `tags` param bumps ZSFNOTE.Z_OPT by +1 (empirically
+    // confirmed — see docs/dev/BEAR_DATABASE_SCHEMA.md; the separate /add-tags
+    // URL does NOT bump per SVA-20). awaitRevisionIncrement returns only when
+    // Z_OPT !== baseline, so the response carries the post-write revision
+    // captured directly from the live DB at poll time — assertions match it
+    // against (a) the pre-write baseline (strictly greater, proving the
+    // baseline wasn't echoed back) and (b) the current live Z_OPT (proving
+    // the response value is fresh and matches reality). A future Bear
+    // regression that stopped bumping would surface as a tryExtractRevision
+    // null and fail the toBe(liveDbRevision) assertion loudly.
+    const title = uniqueTitle(TEST_PREFIX, 'AddTagRevision', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Pre-tag body for revision test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    // Wait for Bear's +2 recompute save before reading baseline (BEAR_DATABASE_SCHEMA.md).
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const preAddRevision = readNoteRevision(noteId);
+    expect(preAddRevision).not.toBeNull();
+
+    const result = callTool({
+      toolName: 'bear-add-tag',
+      args: { id: noteId, tags: JSON.stringify([`stest-rev-${RUN_ID}`]) },
+    }).content[0].text;
+
+    const responseRevision = tryExtractRevision(result);
+    expect(responseRevision).not.toBeNull();
+    expect(responseRevision!).toBeGreaterThan(preAddRevision!);
+
+    const liveDbRevision = readNoteRevision(noteId);
+    expect(responseRevision).toBe(liveDbRevision);
   });
 });

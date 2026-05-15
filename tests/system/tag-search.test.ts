@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { callTool, cleanupTestNotes, uniqueTitle } from './inspector.js';
+import {
+  callTool,
+  cleanupTestNotes,
+  readNoteRevision,
+  tryExtractNoteId,
+  tryExtractRevision,
+  uniqueTitle,
+} from './inspector.js';
 
 const TEST_PREFIX = '[Bear-MCP-stest-tag-search]';
 const RUN_ID = Date.now();
@@ -154,5 +161,24 @@ describe('tag search via MCP Inspector CLI', () => {
 
     expect(result).toContain(TITLE_UNTAGGED);
     expect(result).not.toContain('Tags:');
+  });
+
+  it('per-result Revision matches live Z_OPT (OCC inform)', () => {
+    // UNTAGGED_MARKER returns exactly one hit, so tryExtractRevision's
+    // first-match behavior gives the target unambiguously.
+    const result = callTool({
+      toolName: 'bear-search-notes',
+      args: { term: UNTAGGED_MARKER },
+    }).content[0].text;
+
+    const noteId = tryExtractNoteId(result);
+    expect(noteId).toBeTruthy();
+
+    const responseRevision = tryExtractRevision(result);
+    expect(responseRevision).not.toBeNull();
+
+    const dbRevision = readNoteRevision(noteId!);
+    expect(dbRevision).not.toBeNull();
+    expect(responseRevision).toBe(dbRevision);
   });
 });
