@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Step 6 failure-path sabotage — to be reverted immediately.
+const _failureProbe: number = 'this is not a number';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
