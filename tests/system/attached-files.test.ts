@@ -454,12 +454,16 @@ describe('attached files content separation', () => {
     const r2 = readNoteRevision(noteId)!;
     expect(r2).toBeGreaterThan(r1);
 
-    // Stale revision + bogus file path: gate must fire first.
+    // Stale revision + bogus file path: gate must fire first. Path is in the
+    // tracked fixtures dir (mirroring TINY_PNG_PATH) but with a guaranteed-
+    // missing filename — keeps the test off Sonar's /tmp publicly-writable
+    // rule (S5443) without changing what we're proving.
+    const missingPath = resolve(import.meta.dirname, '../fixtures/sva22-missing.png');
     const response = callTool({
       toolName: 'bear-add-file',
       args: {
         id: noteId,
-        file_path: '/tmp/sva22-nonexistent-attachment-fixture.png',
+        file_path: missingPath,
         revision: r1,
       },
     });
