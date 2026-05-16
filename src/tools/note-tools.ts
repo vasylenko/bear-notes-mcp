@@ -726,11 +726,6 @@ Remove the header parameter to replace the full note body, or change scope to "s
           `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
         );
         try {
-          const attachment = readAttachmentFile(file_path);
-          if (!attachment.ok) return createErrorResponse(attachment.error);
-          const fileData = attachment.data;
-          const resolvedFilename = filename || basename(file_path);
-
           // Resolve title-only callers to an ID up-front (mirrors bear-open-note)
           // so the success response can always carry note title + ID per the
           // mutation-response rule. Resolving here also avoids attempting a Bear
@@ -771,11 +766,18 @@ Use bear-add-file with a specific ID to attach to the desired note.`);
 Use bear-search-notes to find the correct note identifier.`);
           }
 
-          // OCC enforce: stale-revision wins over downstream failures so the
-          // caller refreshes its view of the note (title, body, structure)
-          // rather than acting on a stale identity-of-note assumption.
+          // OCC enforce sits before attachment-readability per the
+          // SPECIFICATION.md gate-placement rule, so a stale view of the note
+          // surfaces as a stale-revision error rather than a misleading
+          // "file unreadable" message — and the up-to-25 MB base64 encoding
+          // in readAttachmentFile only runs on writes that will actually proceed.
           const staleError = checkRevisionGate(revision, existingNote.revision);
           if (staleError) return staleError;
+
+          const attachment = readAttachmentFile(file_path);
+          if (!attachment.ok) return createErrorResponse(attachment.error);
+          const fileData = attachment.data;
+          const resolvedFilename = filename || basename(file_path);
 
           const noteTitle = existingNote.title;
           // OCC inform baseline (free from the pre-flight read above).

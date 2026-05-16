@@ -407,4 +407,60 @@ describe('attached files content separation', () => {
     const liveAfter = readNoteRevision(noteId);
     expect(liveAfter).toBe(r2);
   });
+
+  it('rejects a stale revision before checking attachment readability', async () => {
+    // SPECIFICATION.md: the OCC gate fires BEFORE any tool-specific pre-flight,
+    // including attachment readability. A caller submitting both a stale
+    // revision AND an unreadable file must see the stale-revision error first
+    // so they refresh their view of the note instead of chasing a file path.
+    const title = uniqueTitle(TEST_PREFIX, 'StaleAddFileBadPath', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Initial body', tags: 'system-test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    await sleep(PAUSE_AFTER_WRITE_OP);
+
+    let warmupRev = readNoteRevision(noteId)!;
+    while (warmupRev < 10) {
+      callTool({
+        toolName: 'bear-add-text',
+        args: { id: noteId, text: 'warmup', position: 'end', revision: warmupRev },
+      });
+      await sleep(PAUSE_AFTER_WRITE_OP);
+      warmupRev = readNoteRevision(noteId)!;
+    }
+
+    const r1 = warmupRev;
+    expect(r1).toBeGreaterThanOrEqual(10);
+
+    callTool({
+      toolName: 'bear-add-text',
+      args: { id: noteId, text: 'competing', position: 'end', revision: r1 },
+    });
+    await sleep(PAUSE_AFTER_WRITE_OP);
+
+    const r2 = readNoteRevision(noteId)!;
+    expect(r2).toBeGreaterThan(r1);
+
+    // Stale revision + bogus file path: gate must fire first.
+    const response = callTool({
+      toolName: 'bear-add-file',
+      args: {
+        id: noteId,
+        file_path: '/tmp/sva22-nonexistent-attachment-fixture.png',
+        revision: r1,
+      },
+    });
+
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toContain('bear-open-note');
+    // The file-readability error sentinels must NOT appear — the gate ran first.
+    expect(response.content[0].text).not.toContain('File not found');
+    expect(response.content[0].text).not.toContain('Cannot read file');
+
+    const liveAfter = readNoteRevision(noteId);
+    expect(liveAfter).toBe(r2);
+  });
 });
