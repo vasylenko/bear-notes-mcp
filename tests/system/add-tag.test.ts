@@ -19,19 +19,25 @@ afterAll(() => {
 });
 
 describe('bear-add-tag via MCP Inspector CLI', () => {
-  it('adds tags to a note and returns each tag plus note metadata in the response', () => {
+  it('adds tags to a note and returns each tag plus note metadata in the response', async () => {
     const title = uniqueTitle(TEST_PREFIX, 'AddTags', RUN_ID);
     const createResult = callTool({
       toolName: 'bear-create-note',
       args: { title, text: 'Add tag test note', tags: 'system-test' },
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
+    // Wait for Bear's +2 recompute save before reading revision — the OCC enforce
+    // gate (SVA-22) rejects writes whose revision doesn't match live Z_OPT, so
+    // reading too early returns the stale pre-recompute value and the gate fires.
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const revision = readNoteRevision(noteId);
+    expect(revision).not.toBeNull();
     // Two tags exercise the array iteration in the handler — single-tag is a degenerate case of this
     const tags = [`stest-add-tag-${RUN_ID}-a`, `stest-add-tag-${RUN_ID}-b`];
 
     const result = callTool({
       toolName: 'bear-add-tag',
-      args: { id: noteId, tags: JSON.stringify(tags) },
+      args: { id: noteId, tags: JSON.stringify(tags), revision: String(revision!) },
     }).content[0].text;
 
     expect(result).toContain('added successfully');
@@ -43,9 +49,16 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
   });
 
   it('returns error for non-existent note ID', () => {
+    // Any revision value satisfies the schema; the not-found branch fires inside
+    // the handler before the revision gate is reached, so this test still
+    // verifies the existence-check path post-SVA-22.
     const response = callTool({
       toolName: 'bear-add-tag',
-      args: { id: '00000000-0000-0000-0000-000000000000', tags: '["bogus"]' },
+      args: {
+        id: '00000000-0000-0000-0000-000000000000',
+        tags: '["bogus"]',
+        revision: '0',
+      },
     });
 
     expect(response.content[0].text).toContain('not found');
@@ -77,7 +90,11 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
 
     const result = callTool({
       toolName: 'bear-add-tag',
-      args: { id: noteId, tags: JSON.stringify([`stest-rev-${RUN_ID}`]) },
+      args: {
+        id: noteId,
+        tags: JSON.stringify([`stest-rev-${RUN_ID}`]),
+        revision: String(preAddRevision!),
+      },
     }).content[0].text;
 
     const responseRevision = tryExtractRevision(result);
@@ -86,5 +103,76 @@ describe('bear-add-tag via MCP Inspector CLI', () => {
 
     const liveDbRevision = readNoteRevision(noteId);
     expect(responseRevision).toBe(liveDbRevision);
+  });
+});
+
+describe('bear-add-tag OCC enforce', () => {
+  it('rejects a stale revision, does not leak the live value, and leaves the note unchanged', async () => {
+    // OCC enforce contract (SVA-22): when the caller's revision doesn't match
+    // live Z_OPT, the write is rejected as a soft error with a re-read
+    // instruction (mentioning bear-open-note) and the error message must NOT
+    // include the live revision — returning it would let an agent satisfy
+    // the gate without re-reading the body, defeating the safety property.
+    const title = uniqueTitle(TEST_PREFIX, 'AddTagStaleRev', RUN_ID);
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: 'Stale-revision test note' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    // Warm-up writes bump live Z_OPT past 9 so the assertion that the error
+    // message does NOT contain String(R₂) isn't fooled by an incidental single
+    // digit in the wording. Also dodges the 1→3 first-edit-after-creation
+    // jump documented in BEAR_DATABASE_SCHEMA.md.
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    let currentRev = readNoteRevision(noteId);
+    expect(currentRev).not.toBeNull();
+    while (currentRev! < 10) {
+      const warmupResp = callTool({
+        toolName: 'bear-add-text',
+        args: { id: noteId, text: 'warmup', revision: String(currentRev!) },
+      });
+      const next = tryExtractRevision(warmupResp.content[0].text);
+      expect(next).not.toBeNull();
+      currentRev = next;
+    }
+
+    // Capture R₁ — the caller's view of the note's revision.
+    const r1 = readNoteRevision(noteId);
+    expect(r1).not.toBeNull();
+    expect(r1!).toBeGreaterThanOrEqual(10);
+
+    // Bump live to R₂ via a competing write (uses R₁, which is still fresh
+    // at this instant, so the write succeeds).
+    const bumpResp = callTool({
+      toolName: 'bear-add-text',
+      args: { id: noteId, text: 'competing', revision: String(r1!) },
+    });
+    const r2 = tryExtractRevision(bumpResp.content[0].text);
+    expect(r2).not.toBeNull();
+    expect(r2!).toBeGreaterThan(r1!);
+    expect(String(r2!).length).toBeGreaterThanOrEqual(2);
+    expect(readNoteRevision(noteId)).toBe(r2);
+
+    // Submit bear-add-tag with the now-stale R₁. The gate must reject.
+    const staleResp = callTool({
+      toolName: 'bear-add-tag',
+      args: {
+        id: noteId,
+        tags: JSON.stringify([`stest-stale-${RUN_ID}`]),
+        revision: String(r1!),
+      },
+    });
+
+    expect(staleResp.isError).toBe(true);
+    expect(staleResp.content[0].text).toContain('bear-open-note');
+    // Load-bearing regression guard: the live revision must not appear in the
+    // message. If a future change inlines it (e.g. "the note is at N"), this
+    // assertion catches it before the leak ships.
+    expect(staleResp.content[0].text).not.toContain(String(r2!));
+
+    // The rejected write must not have side-effected Bear — live revision
+    // is unchanged from R₂.
+    expect(readNoteRevision(noteId)).toBe(r2);
   });
 });
