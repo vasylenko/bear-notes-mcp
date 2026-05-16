@@ -124,35 +124,39 @@ describe('bear-add-tag OCC enforce', () => {
     // message does NOT contain String(R₂) isn't fooled by an incidental single
     // digit in the wording. Also dodges the 1→3 first-edit-after-creation
     // jump documented in BEAR_DATABASE_SCHEMA.md.
+    //
+    // Each iteration sleeps then re-reads live Z_OPT so Bear's async +2
+    // recompute can settle before the next iteration's write — the gate the
+    // test is about to exercise would otherwise reject the next warm-up
+    // call when the previous response revision is stale relative to live DB.
     await sleep(PAUSE_AFTER_WRITE_OP);
     let currentRev = readNoteRevision(noteId);
     expect(currentRev).not.toBeNull();
     while (currentRev! < 10) {
-      const warmupResp = callTool({
+      callTool({
         toolName: 'bear-add-text',
         args: { id: noteId, text: 'warmup', revision: String(currentRev!) },
       });
-      const next = tryExtractRevision(warmupResp.content[0].text);
-      expect(next).not.toBeNull();
-      currentRev = next;
+      await sleep(PAUSE_AFTER_WRITE_OP);
+      currentRev = readNoteRevision(noteId);
+      expect(currentRev).not.toBeNull();
     }
 
     // Capture R₁ — the caller's view of the note's revision.
-    const r1 = readNoteRevision(noteId);
-    expect(r1).not.toBeNull();
+    const r1 = currentRev;
     expect(r1!).toBeGreaterThanOrEqual(10);
 
     // Bump live to R₂ via a competing write (uses R₁, which is still fresh
     // at this instant, so the write succeeds).
-    const bumpResp = callTool({
+    callTool({
       toolName: 'bear-add-text',
       args: { id: noteId, text: 'competing', revision: String(r1!) },
     });
-    const r2 = tryExtractRevision(bumpResp.content[0].text);
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const r2 = readNoteRevision(noteId);
     expect(r2).not.toBeNull();
     expect(r2!).toBeGreaterThan(r1!);
     expect(String(r2!).length).toBeGreaterThanOrEqual(2);
-    expect(readNoteRevision(noteId)).toBe(r2);
 
     // Submit bear-add-tag with the now-stale R₁. The gate must reject.
     const staleResp = callTool({
