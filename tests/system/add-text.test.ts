@@ -30,11 +30,12 @@ describe('bear-add-text via MCP Inspector CLI', () => {
 
     // Wait for Bear's +2 recompute save before capturing the OCC revision.
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revision = readNoteRevision(noteId)!;
+    const revision = readNoteRevision(noteId);
+    expect(revision).not.toBeNull();
 
     callTool({
       toolName: 'bear-add-text',
-      args: { id: noteId, text: 'Prepended text', position: 'beginning', revision },
+      args: { id: noteId, text: 'Prepended text', position: 'beginning', revision: revision! },
     });
 
     await sleep(PAUSE_AFTER_WRITE_OP);
@@ -66,7 +67,8 @@ describe('bear-add-text via MCP Inspector CLI', () => {
     const noteId = tryExtractNoteId(createResult)!;
 
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revision = readNoteRevision(noteId)!;
+    const revision = readNoteRevision(noteId);
+    expect(revision).not.toBeNull();
 
     callTool({
       toolName: 'bear-add-text',
@@ -74,7 +76,7 @@ describe('bear-add-text via MCP Inspector CLI', () => {
         id: noteId,
         text: 'New action item appended',
         header: 'Action Items',
-        revision,
+        revision: revision!,
       },
     });
 
@@ -99,11 +101,12 @@ describe('bear-add-text via MCP Inspector CLI', () => {
     const noteId = tryExtractNoteId(createResult)!;
 
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revision = readNoteRevision(noteId)!;
+    const revision = readNoteRevision(noteId);
+    expect(revision).not.toBeNull();
 
     callTool({
       toolName: 'bear-add-text',
-      args: { id: noteId, text: 'Appended text', revision },
+      args: { id: noteId, text: 'Appended text', revision: revision! },
     });
 
     await sleep(PAUSE_AFTER_WRITE_OP);

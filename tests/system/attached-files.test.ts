@@ -44,11 +44,12 @@ describe('attached files content separation', () => {
 
     // OCC enforce gate: pass the live revision (post-Bear-recompute) so the write isn't rejected as stale.
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revBeforeAttach = readNoteRevision(noteId)!;
+    const revBeforeAttach = readNoteRevision(noteId);
+    expect(revBeforeAttach).not.toBeNull();
 
     callTool({
       toolName: 'bear-add-file',
-      args: { id: noteId, file_path: OCR_JPG_PATH, revision: revBeforeAttach },
+      args: { id: noteId, file_path: OCR_JPG_PATH, revision: revBeforeAttach! },
     });
 
     // Poll until Bear finishes OCR — avoids flaky fixed sleeps
@@ -88,17 +89,19 @@ describe('attached files content separation', () => {
 
     // OCC enforce gate: pass the live revision before each gated write.
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revBeforeFirstAttach = readNoteRevision(noteId)!;
+    const revBeforeFirstAttach = readNoteRevision(noteId);
+    expect(revBeforeFirstAttach).not.toBeNull();
 
     // Attach an OCR-able image and a non-OCR-able HTML to exercise both content branches
     const firstAddResult = callTool({
       toolName: 'bear-add-file',
-      args: { id: noteId, file_path: OCR_JPG_PATH, revision: revBeforeFirstAttach },
+      args: { id: noteId, file_path: OCR_JPG_PATH, revision: revBeforeFirstAttach! },
     }).content[0].text;
-    const revBeforeSecondAttach = tryExtractRevision(firstAddResult)!;
+    const revBeforeSecondAttach = tryExtractRevision(firstAddResult);
+    expect(revBeforeSecondAttach).not.toBeNull();
     callTool({
       toolName: 'bear-add-file',
-      args: { id: noteId, file_path: HTML_PATH, revision: revBeforeSecondAttach },
+      args: { id: noteId, file_path: HTML_PATH, revision: revBeforeSecondAttach! },
     });
 
     // Poll until Bear finishes OCR — avoids flaky fixed sleeps
@@ -124,7 +127,8 @@ describe('attached files content separation', () => {
 
     // OCC enforce gate: chain revisions through every gated write.
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revBeforeAttach = readNoteRevision(noteId)!;
+    const revBeforeAttach = readNoteRevision(noteId);
+    expect(revBeforeAttach).not.toBeNull();
 
     callTool({
       toolName: 'bear-add-file',
@@ -132,7 +136,7 @@ describe('attached files content separation', () => {
         id: noteId,
         file_path: TINY_PNG_PATH,
         filename: 'architecture.png',
-        revision: revBeforeAttach,
+        revision: revBeforeAttach!,
       },
     });
 
@@ -147,14 +151,15 @@ describe('attached files content separation', () => {
       .replace('## Open Issues', '![](architecture.png)\n\n## Open Issues');
 
     // The bear-open-note inside waitForFileContent returns the latest revision; reuse it.
-    const revBeforeFirstReplace = tryExtractRevision(response.content[0].text)!;
+    const revBeforeFirstReplace = tryExtractRevision(response.content[0].text);
+    expect(revBeforeFirstReplace).not.toBeNull();
     callTool({
       toolName: 'bear-replace-text',
       args: {
         id: noteId,
         scope: 'full-note-body',
         text: relocated,
-        revision: revBeforeFirstReplace,
+        revision: revBeforeFirstReplace!,
       },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
@@ -172,14 +177,15 @@ describe('attached files content separation', () => {
     );
 
     // The bear-open-note above carries the latest revision — use it.
-    const revBeforeSecondReplace = tryExtractRevision(withMidBodyImage.content[0].text)!;
+    const revBeforeSecondReplace = tryExtractRevision(withMidBodyImage.content[0].text);
+    expect(revBeforeSecondReplace).not.toBeNull();
     callTool({
       toolName: 'bear-replace-text',
       args: {
         id: noteId,
         scope: 'full-note-body',
         text: modified,
-        revision: revBeforeSecondReplace,
+        revision: revBeforeSecondReplace!,
       },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
@@ -211,7 +217,8 @@ describe('attached files content separation', () => {
 
     // OCC enforce gate: chain revisions through every gated write.
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revBeforeAttach = readNoteRevision(noteId)!;
+    const revBeforeAttach = readNoteRevision(noteId);
+    expect(revBeforeAttach).not.toBeNull();
 
     callTool({
       toolName: 'bear-add-file',
@@ -219,7 +226,7 @@ describe('attached files content separation', () => {
         id: noteId,
         file_path: TINY_PNG_PATH,
         filename: 'architecture.png',
-        revision: revBeforeAttach,
+        revision: revBeforeAttach!,
       },
     });
 
@@ -232,14 +239,15 @@ describe('attached files content separation', () => {
       '## Summary\n\nThe infrastructure review is complete. All services are stable.\n\n' +
       '## Action Items\n\n- Review alerting thresholds with SRE team\n- Evaluate managed Prometheus options';
 
-    const revBeforeReplace = tryExtractRevision(response.content[0].text)!;
+    const revBeforeReplace = tryExtractRevision(response.content[0].text);
+    expect(revBeforeReplace).not.toBeNull();
     callTool({
       toolName: 'bear-replace-text',
       args: {
         id: noteId,
         scope: 'full-note-body',
         text: rewrittenBody,
-        revision: revBeforeReplace,
+        revision: revBeforeReplace!,
       },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
@@ -271,11 +279,12 @@ describe('attached files content separation', () => {
 
     // OCC enforce gate: capture live revision before the write.
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revBeforeAttach = readNoteRevision(noteId)!;
+    const revBeforeAttach = readNoteRevision(noteId);
+    expect(revBeforeAttach).not.toBeNull();
 
     const addResult = callTool({
       toolName: 'bear-add-file',
-      args: { id: noteId, file_path: OCR_JPG_PATH, revision: revBeforeAttach },
+      args: { id: noteId, file_path: OCR_JPG_PATH, revision: revBeforeAttach! },
     }).content[0].text;
 
     // Server should infer filename from path and return complete metadata
@@ -300,7 +309,8 @@ describe('attached files content separation', () => {
 
     // OCC enforce gate: capture live revision before the write.
     await sleep(PAUSE_AFTER_WRITE_OP);
-    const revBeforeAttach = readNoteRevision(noteId)!;
+    const revBeforeAttach = readNoteRevision(noteId);
+    expect(revBeforeAttach).not.toBeNull();
 
     const addResult = callTool({
       toolName: 'bear-add-file',
@@ -308,7 +318,7 @@ describe('attached files content separation', () => {
         id: noteId,
         file_path: OCR_JPG_PATH,
         filename: 'custom-name.jpg',
-        revision: revBeforeAttach,
+        revision: revBeforeAttach!,
       },
     }).content[0].text;
 
