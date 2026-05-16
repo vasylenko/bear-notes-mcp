@@ -723,7 +723,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
           );
         }
         logger.info(
-          `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}`
+          `bear-add-file called with file_path: "${file_path}", filename: ${filename || 'none'}, id: ${id || 'none'}, title: ${title || 'none'}, revision: ${revision}`
         );
         try {
           // Resolve title-only callers to an ID up-front (mirrors bear-open-note)
