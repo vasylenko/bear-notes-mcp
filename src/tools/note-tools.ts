@@ -74,7 +74,9 @@ export const __testing__ = { readAttachmentFile, MAX_ATTACHMENT_BYTES };
  * the bear-add-text and bear-replace-text tool handlers.
  *
  * @param mode - Whether to append, prepend, or replace text
- * @param params - Note ID, text content, and optional header
+ * @param params - Note ID, text content, optional header, and the caller's
+ *                 expected revision token (OCC enforce gate — rejects the
+ *                 write if the note has changed since that revision).
  * @returns Formatted response indicating success or failure
  */
 async function handleNoteTextUpdate(
