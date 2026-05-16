@@ -107,9 +107,7 @@ async function handleNoteTextUpdate(
 Use bear-search-notes to find the correct note identifier.`);
     }
 
-    // OCC enforce: stale-revision wins over downstream pre-flight (e.g.
-    // "header not found"), since a stale view of the structure is itself
-    // a symptom of the revision mismatch.
+    // OCC enforce right after we found the needed note -- fail fast
     const staleError = checkRevisionGate(expectedRevision, existingNote.revision);
     if (staleError) return staleError;
 
@@ -768,11 +766,7 @@ Use bear-add-file with a specific ID to attach to the desired note.`);
 Use bear-search-notes to find the correct note identifier.`);
           }
 
-          // OCC enforce sits before attachment-readability per the
-          // SPECIFICATION.md gate-placement rule, so a stale view of the note
-          // surfaces as a stale-revision error rather than a misleading
-          // "file unreadable" message — and the up-to-25 MB base64 encoding
-          // in readAttachmentFile only runs on writes that will actually proceed.
+          // OCC enforce right after we found the needed note -- fail fast
           const staleError = checkRevisionGate(revision, existingNote.revision);
           if (staleError) return staleError;
 
