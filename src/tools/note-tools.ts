@@ -549,7 +549,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Add Text to Note',
         description:
-          "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text. Response includes the note's revision token that changes whenever the note is modified.",
+          "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Use bear-search-notes first to get the note ID. To insert without replacing existing text use this tool; to overwrite the direct content under a header use bear-replace-text. Requires the note's current revision token (from your last response that referenced the note); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -602,7 +602,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
       {
         title: 'Replace Note Content',
         description:
-          "Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead. Response includes the note's revision token that changes whenever the note is modified.",
+          "Replace content in an existing Bear note — either the full body or a specific section. Use bear-search-notes first to get the note ID. To add text without replacing existing content use bear-add-text instead. Requires the note's current revision token (from your last response that referenced the note); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
@@ -672,7 +672,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
       {
         title: 'Add File to Note',
         description:
-          "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first. Response includes the note's revision token that changes whenever the note is modified.",
+          "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable through bear-search-notes. Supports direct title lookup as an alternative to searching first. Requires the note's current revision token (from your last response that referenced the note); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           file_path: z
             .string()
@@ -882,7 +882,7 @@ The file has been attached to your Bear note.`);
       {
         title: 'Add Tags to Note',
         description:
-          "Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags. Response includes the note's revision token that changes whenever the note is modified.",
+          "Add one or more tags to an existing Bear note. Tags are added at the beginning of the note. Use bear-list-tags to see available tags. Requires the note's current revision token (from your last response that referenced the note); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying. Response includes the note's revision token that changes whenever the note is modified.",
         inputSchema: {
           id: z
             .string()
