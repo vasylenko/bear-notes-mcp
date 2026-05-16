@@ -121,56 +121,19 @@ The read/write classification is locked in by the system test at `tests/system/r
 
 There is no delete tool. Too destructive for AI-assisted workflows — a misidentified note ID would mean permanent data loss. Archiving is the closest alternative and is reversible in Bear.
 
-### Optimistic Concurrency Control (Inform Half)
+### Optimistic Concurrency Control
 
-Every note-scoped tool response carries the note's current revision (`ZSFNOTE.Z_OPT`) as `Revision: <n>` alongside the note ID. This is the _inform_ half of Optimistic Concurrency Control (OCC, version-number variant) — the pattern Kung & Robinson defined in their 1981 ACM TODS paper _"On Optimistic Methods for Concurrency Control"_ and that RFC 9110 §13.1.1 ships as HTTP `If-Match` / `412 Precondition Failed`.
+OCC has two halves and both ship here.
+1. Inform — every note-scoped response carries the note's current revision (`ZSFNOTE.Z_OPT`) as `Revision: <n>` — followed Kung & Robinson's 1981 ACM TODS paper _"On Optimistic Methods for Concurrency Control"_ 
+2. Enforce — body-modifying note tools require the caller to echo that revision and reject stale writes with a soft error — turns the advisory token into a write gate.
 
-The _enforce_ half — requiring a client-supplied revision on every write and rejecting stale ones with a `412`-equivalent — is a separate future sub-issue (SVA-22) and is **not** part of inform. Inform is strictly additive: no input schemas change, no new error states, no consumer coordination needed.
+#### Inform half
 
-Three write-path patterns capture the revision honestly — one per shape of "what's known before vs after the URL fires":
+Three write-path patterns capture the revision honestly — distinguished by what's known about the note before vs after the URL fires:
 
-```
-  Content writes (add-text, replace-text, add-file, add-tag)
-  — pre-write baseline + post-write poll for the change
-    │
-    ▼ existingNote.revision (free from pre-flight getNoteContent)
-    │
-    ▼ fire bear://x-callback-url/...
-    │
-    ▼ awaitRevisionIncrement(id, baseline) — polls Z_OPT every 15ms
-    │   until the value differs from baseline, with a REVISION_POLL_TARGET_MS budget
-    ▼
-   response includes `Revision: <newRev>` or a duration-free
-   `Revision: unknown (...)` sentence (see src/tools/responses.ts) when the
-   budget elapses without observing a change
-
-  bear-create-note
-  — no pre-flight baseline (note doesn't exist yet); single bundled SELECT
-  for {id, revision} after the URL fires
-    │
-    ▼ fire bear://x-callback-url/create
-    │
-    ▼ awaitNoteCreation(title) — polls ZSFNOTE by (title, recent ZCREATIONDATE),
-    │   projecting both ZUNIQUEIDENTIFIER and Z_OPT in one SELECT, capped at
-    │   POLL_TIMEOUT_MS (2000ms — wider than REVISION_POLL_TARGET_MS because the
-    │   first appearance of a newly-created row is slower than a Z_OPT bump)
-    ▼
-   response includes `Note ID: <id>` + `Revision: <revision>`, or
-   `Note ID: unknown ...` + `Revision: unknown (creation confirmation timed
-   out after 2000ms)` when the new row is never observed within the
-   creation poll window
-
-  bear-archive-note
-  — pre-write snapshot only; post-archive the note is filtered from
-  default queries (ZARCHIVED = 1), so a post-write read would return null
-    │
-    ▼ existingNote.revision (captured BEFORE the archive URL fires)
-    │
-    ▼ fire bear://x-callback-url/archive
-    ▼
-   response includes `Revision: <preArchiveRev>` (snapshot; the note is no
-   longer reachable via default queries to compare against anyway)
-```
+- **Content writes** (`bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`) — `existingNote.revision` from the pre-flight `getNoteContent`, then `awaitRevisionIncrement(id, baseline)` polls `Z_OPT` every 15ms until inequality, budgeted by `REVISION_POLL_TARGET_MS`. On timeout: duration-free `Revision: unknown (...)` sentinel.
+- **`bear-create-note`** — no pre-flight baseline (the note doesn't exist yet). `awaitNoteCreation(title)` polls `ZSFNOTE` by `(title, recent ZCREATIONDATE)`, projecting `{ZUNIQUEIDENTIFIER, Z_OPT}` in one SELECT, capped at `POLL_TIMEOUT_MS` (2000ms — wider than the content-write budget because first-row appearance is slower than a counter bump). On timeout: `Note ID: unknown ...` + `Revision: unknown (creation confirmation timed out after 2000ms)`.
+- **`bear-archive-note`** — pre-write snapshot only. Post-archive the row is filtered from default queries (`ZARCHIVED = 1`), so a post-write read would return null. Response carries the pre-archive snapshot directly; no timeout sentinel applies.
 
 **In-scope tools.** The six note-mutating tools — `bear-create-note`, `bear-add-text`, `bear-replace-text`, `bear-add-file`, `bear-add-tag`, `bear-archive-note` — and the three note-reading tools that return notes — `bear-open-note`, `bear-search-notes`, `bear-find-untagged-notes` — emit a revision line per the diagrams above. Global tag tools (`bear-rename-tag`, `bear-delete-tag`, `bear-list-tags`) and `bear-capabilities` do not reference a specific note and emit no revision line.
 
@@ -182,9 +145,33 @@ Three write-path patterns capture the revision honestly — one per shape of "wh
 
 **Constraint partially lifted: write verification.** _Key Design Constraints → Intentional Exclusions_ notes "Write verification: No way to confirm Bear processed a URL action." OCC inform lifts this for any write that bumps `Z_OPT` — polling waits for the change, so a non-null `Revision` in the response _is_ the confirmation. The constraint persists for writes that don't bump `Z_OPT` (the timeout sentence honestly signals this rather than masking it).
 
-**Constraint partially lifted: test pause-after-write.** _Testing Constraints_ notes existing tests pause briefly after writes "giving Bear time to process the callback." New OCC system tests use the response's `Revision` as a deterministic completion signal for the _under-test_ write — the polling already waited for Bear, so no `sleep` is needed between the write and its readback. Tests that chain a prior `create-note` before the under-test write still pause between them because Bear performs a subtitle/index recompute save shortly after creation (the `+2` first-edit jump in `BEAR_DATABASE_SCHEMA.md`); the polling on the under-test write doesn't cover that earlier gap.
+**Constraint partially lifted: test pause-after-write.** New OCC system tests use the response's `Revision` as a deterministic completion signal — no `sleep` is needed between the under-test write and its readback. The polling doesn't cover Bear's first-edit recompute save (the `+2` jump documented in `BEAR_DATABASE_SCHEMA.md`), so tests that chain a `create-note` before the under-test write still pause between them.
 
 Empirical findings about `Z_OPT` behavior across URL actions live in `BEAR_DATABASE_SCHEMA.md`. The compound polling rule (compare for inequality, not `baseline + 1`) is driven by the empirically observed `+2` first-edit-after-creation jump.
+
+#### Enforce half
+
+Every body-modifying note tool requires the caller to supply `revision` alongside the note ID. The handler reads the live revision via the existing `getNoteContent(id)` pre-flight (no new DB call — the row already carries `Z_OPT`), compares to the caller's value, and rejects mismatches with a soft error (`isError: true`) instructing the caller to re-read with `bear-open-note`.
+
+**Gate placement.** After the existing `getNoteContent` non-null check, BEFORE any tool-specific pre-flight (header existence, attachment readability, etc.). Stale-revision wins over downstream pre-flight because a stale view of the structure is itself a revision-mismatch symptom — surfacing "header not found" first would mislead the caller into thinking the structural shape changed when in fact their whole view is out of date.
+
+**Scope: body-modifying tools.** The criterion is "does the tool write body bytes?", not "is this any write at all". The threat the gate exists to mitigate — an agent writing from a stale view of the body — applies wherever caller intent depends on body content the caller previously read. Stale-clobber for replace, stale-intent for the additive writes.
+
+| Tool                | Body bytes change?                       | Threat without gate                                                                                                                            | Gated? |
+| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `bear-add-text`     | Yes — text inserted into body            | Stale-intent: wrong place by structure drift; wrong section by rename; wrong format by format drift; wrong semantics by note pivot             | ✓      |
+| `bear-replace-text` | Yes — section or full body replaced      | Stale-clobber (direct data loss) plus the stale-intent failures above                                                                          | ✓      |
+| `bear-add-file`     | Yes — attachment marker inserted in body | Stale-intent positional (attachment lands wrong place after structure drift)                                                                   | ✓      |
+| `bear-add-tag`      | Yes — tag markers prepended to body      | Stale-intent semantic (right ID, wrong meaning after note pivot)                                                                               | ✓      |
+| `bear-archive-note` | No — `ZARCHIVED` flag flip; reversible   | Mild stale-intent on whole-note signals (title, age, content overview) that are not sensitive to small concurrent edits; unarchive is one click | ✗      |
+| `bear-create-note`  | No prior state                           | No baseline to be stale against                                                                                                                | ✗      |
+
+**Constants and helper** (in `src/tools/responses.ts`, sitting next to the existing `REVISION_*_SENTENCE` constants and `createErrorResponse`):
+
+- `STALE_REVISION_MESSAGE` — single source of truth for the gate's error sentence. Contains the literal `bear-open-note` (testable recovery instruction). Deliberately contains no revision value (see decision below).
+- `checkRevisionGate(expected: NoteRevision, live: NoteRevision): Pick<CallToolResult, 'content' | 'isError'> | null` — body-modifying handlers all delegate here. Returns `null` on match, `createErrorResponse(STALE_REVISION_MESSAGE)` on mismatch. Downstream SVA-44 and SVA-43 reuse this helper.
+
+**Deliberate decision: the error message names `bear-open-note` but NOT the live revision value.** Returning the live revision would let an obedient agent extract it from the error, retry with the fresh number, and write a body derived from the stale view through a now-satisfied gate — defeating the safety property the gate exists for. The recovery path is `bear-open-note` (a fresh body and a fresh revision arrive together in one trip), not a number to copy. The system test for each gated tool includes a `not.toContain(String(liveRevision))` assertion as the load-bearing regression guard for this decision.
 
 ---
 

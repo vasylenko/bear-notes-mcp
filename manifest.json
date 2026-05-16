@@ -72,15 +72,15 @@
     },
     {
       "name": "bear-add-text",
-      "description": "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header"
+      "description": "Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying."
     },
     {
       "name": "bear-replace-text",
-      "description": "Replace content in an existing Bear note — either the full body or a specific section."
+      "description": "Replace content in an existing Bear note — either the full body or a specific section. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying."
     },
     {
       "name": "bear-add-file",
-      "description": "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable."
+      "description": "Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying."
     },
     {
       "name": "bear-list-tags",
@@ -92,7 +92,7 @@
     },
     {
       "name": "bear-add-tag",
-      "description": "Add one or more tags to an existing Bear note"
+      "description": "Add one or more tags to an existing Bear note. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying."
     },
     {
       "name": "bear-archive-note",

@@ -28,9 +28,21 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
+    // Let the create + first-edit-recompute settle before reading the live
+    // revision the OCC enforce gate will compare against (see
+    // docs/dev/BEAR_DATABASE_SCHEMA.md on the 1→3 jump).
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const liveRevision = readNoteRevision(noteId);
+    expect(liveRevision).not.toBeNull();
+
     callTool({
       toolName: 'bear-replace-text',
-      args: { id: noteId, scope: 'full-note-body', text: 'Completely new content' },
+      args: {
+        id: noteId,
+        scope: 'full-note-body',
+        text: 'Completely new content',
+        revision: liveRevision!,
+      },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
 
@@ -68,9 +80,19 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const liveRevision = readNoteRevision(noteId);
+    expect(liveRevision).not.toBeNull();
+
     callTool({
       toolName: 'bear-replace-text',
-      args: { id: noteId, scope: 'section', text: 'Updated details text', header: 'Details' },
+      args: {
+        id: noteId,
+        scope: 'section',
+        text: 'Updated details text',
+        header: 'Details',
+        revision: liveRevision!,
+      },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
 
@@ -107,6 +129,10 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const liveRevision = readNoteRevision(noteId);
+    expect(liveRevision).not.toBeNull();
+
     // AI agents naturally include the header in replacement text — the server must strip it
     callTool({
       toolName: 'bear-replace-text',
@@ -115,6 +141,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
         scope: 'section',
         text: '## Details\nReplaced details content',
         header: 'Details',
+        revision: liveRevision!,
       },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
@@ -137,7 +164,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     expect(noteBody).not.toContain('Original details');
   });
 
-  it('returns error when targeting a non-existent header', () => {
+  it('returns error when targeting a non-existent header', async () => {
     const title = uniqueTitle(TEST_PREFIX, 'Bad Header', RUN_ID);
     const createResult = callTool({
       toolName: 'bear-create-note',
@@ -145,9 +172,22 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
+    // Pass the live revision so the OCC gate is satisfied and the
+    // section-existence check is the actual error the test asserts on
+    // (the gate fires before the section-existence check by design).
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const liveRevision = readNoteRevision(noteId);
+    expect(liveRevision).not.toBeNull();
+
     const response = callTool({
       toolName: 'bear-replace-text',
-      args: { id: noteId, scope: 'section', text: 'new content', header: 'NonExistentSection' },
+      args: {
+        id: noteId,
+        scope: 'section',
+        text: 'new content',
+        header: 'NonExistentSection',
+        revision: liveRevision!,
+      },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
 
@@ -163,10 +203,19 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const liveRevision = readNoteRevision(noteId);
+    expect(liveRevision).not.toBeNull();
+
     // AI agents naturally include the title heading — the server must strip it
     callTool({
       toolName: 'bear-replace-text',
-      args: { id: noteId, scope: 'full-note-body', text: `# ${title}\nBrand new body content` },
+      args: {
+        id: noteId,
+        scope: 'full-note-body',
+        text: `# ${title}\nBrand new body content`,
+        revision: liveRevision!,
+      },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
 
@@ -209,6 +258,10 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
     }).content[0].text;
     const noteId = tryExtractNoteId(createResult)!;
 
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const liveRevision = readNoteRevision(noteId);
+    expect(liveRevision).not.toBeNull();
+
     // Correct usage: replace only the direct body under the header, not sub-headers
     callTool({
       toolName: 'bear-replace-text',
@@ -217,6 +270,7 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
         scope: 'section',
         text: 'Updated body text',
         header: 'Execution Model',
+        revision: liveRevision!,
       },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     });
@@ -260,7 +314,12 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
 
     const result = callTool({
       toolName: 'bear-replace-text',
-      args: { id: noteId, scope: 'full-note-body', text: 'Replaced body for revision test' },
+      args: {
+        id: noteId,
+        scope: 'full-note-body',
+        text: 'Replaced body for revision test',
+        revision: preWriteRevision!,
+      },
       env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
     }).content[0].text;
 
@@ -270,5 +329,88 @@ describe('bear-replace-text via MCP Inspector CLI', () => {
 
     const liveDbRevision = readNoteRevision(noteId);
     expect(responseRevision).toBe(liveDbRevision);
+  });
+
+  it('rejects stale revision and instructs re-read without leaking live value (OCC enforce)', async () => {
+    // The gate fires after the existence check, before the section-existence
+    // check. The error message must direct the caller to re-read with
+    // bear-open-note and must NOT contain the live revision — leaking it
+    // would let an agent satisfy the gate without re-reading the body, which
+    // defeats the safety property.
+    const title = uniqueTitle(TEST_PREFIX, 'StaleRevision', RUN_ID);
+    const sectionedText = ['## Foo', 'old content under foo'].join('\n');
+    const createResult = callTool({
+      toolName: 'bear-create-note',
+      args: { title, text: sectionedText, tags: 'system-test' },
+    }).content[0].text;
+    const noteId = tryExtractNoteId(createResult)!;
+
+    // Warm up the note's Z_OPT past 9 so the not.toContain(String(liveRevision))
+    // assertion below isn't fooled by incidental single-digit substrings in
+    // the error message.
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    let currentRev = readNoteRevision(noteId);
+    expect(currentRev).not.toBeNull();
+    while (currentRev! < 10) {
+      callTool({
+        toolName: 'bear-add-text',
+        args: {
+          id: noteId,
+          text: 'warmup',
+          position: 'end',
+          revision: currentRev!,
+        },
+        env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
+      });
+      await sleep(PAUSE_AFTER_WRITE_OP);
+      currentRev = readNoteRevision(noteId);
+      expect(currentRev).not.toBeNull();
+    }
+    expect(currentRev!).toBeGreaterThanOrEqual(10);
+
+    // Capture R₁ (what the caller thinks the revision is).
+    const r1 = currentRev!;
+
+    // Simulate a concurrent edit bumping the note past R₁.
+    callTool({
+      toolName: 'bear-add-text',
+      args: { id: noteId, text: 'competing edit', position: 'end', revision: r1 },
+      env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
+    });
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    const r2 = readNoteRevision(noteId)!;
+    expect(r2).toBeGreaterThan(r1);
+    expect(r2).toBeGreaterThanOrEqual(10); // multi-digit guard for the assertion below
+
+    // Now attempt bear-replace-text with stale R₁.
+    const response = callTool({
+      toolName: 'bear-replace-text',
+      args: {
+        id: noteId,
+        scope: 'section',
+        text: 'should be rejected',
+        header: 'Foo',
+        revision: r1,
+      },
+      env: { UI_ENABLE_CONTENT_REPLACEMENT: 'true' },
+    });
+
+    expect(response.isError).toBe(true);
+    const errorText = response.content[0].text;
+    expect(errorText).toContain('bear-open-note');
+    // Regression guard: live revision must NOT appear in the error.
+    expect(errorText).not.toContain(String(r2));
+
+    // The rejected write must not have side-effected Bear: live revision
+    // unchanged, and the Foo section's content is still the original.
+    await sleep(PAUSE_AFTER_WRITE_OP);
+    expect(readNoteRevision(noteId)).toBe(r2);
+    const openResult = callTool({
+      toolName: 'bear-open-note',
+      args: { id: noteId },
+    }).content[0].text;
+    const noteBody = extractNoteBody(openResult);
+    expect(noteBody).toContain('old content under foo');
+    expect(noteBody).not.toContain('should be rejected');
   });
 });

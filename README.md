@@ -102,12 +102,12 @@ Add to your MCP configuration file:
 - **`bear-open-note`** - Read the full text content of a Bear note by its ID or title, including OCR'd text from attached images and PDFs
 - **`bear-create-note`** - Create a new note in your Bear library with optional title, content, and tags
 - **`bear-search-notes`** - Find notes by relevance across titles, body, and OCR-extracted text from attached images and PDFs. Use a phrase or a few keywords describing what you're looking for; results are ranked by relevance and each includes a context snippet. Also supports tag, date-range, and pinned-only filters — combine with a search term or use them on their own to browse.
-- **`bear-add-text`** - Insert text at the beginning or end of a Bear note, or within a specific section identified by its header
-- **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section.
-- **`bear-add-file`** - Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable.
+- **`bear-add-text`** - Insert text at the beginning or end of a Bear note, or within a specific section identified by its header. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying.
+- **`bear-replace-text`** - Replace content in an existing Bear note — either the full body or a specific section. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying.
+- **`bear-add-file`** - Attach a local file (image, PDF, document) to an existing Bear note by its ID or title. Bear extracts text from images and PDFs via OCR, making attachment content searchable. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying.
 - **`bear-list-tags`** - List all tags in your Bear library as a hierarchical tree with note counts
 - **`bear-find-untagged-notes`** - Find notes in your Bear library that have no tags assigned
-- **`bear-add-tag`** - Add one or more tags to an existing Bear note
+- **`bear-add-tag`** - Add one or more tags to an existing Bear note. Requires the note's current revision token (the `Revision: N` line from your last response that referenced it); writes against a stale revision are rejected with an instruction to re-read with bear-open-note before retrying.
 - **`bear-archive-note`** - Archive a Bear note to remove it from active lists without deleting it
 - **`bear-rename-tag`** - Rename a tag across all notes in your Bear library
 - **`bear-delete-tag`** - Delete a tag from all notes in your Bear library without affecting the notes
