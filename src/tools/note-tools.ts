@@ -19,11 +19,13 @@ import {
 } from '../operations/notes.js';
 import { findUntaggedNotes, stripTagPrefix } from '../operations/tags.js';
 import { buildBearUrl, executeBearXCallbackApi } from '../infra/bear-urls.js';
+import type { NoteRevision } from '../types.js';
 
 import { applyWriteGate } from './registration.js';
 import {
   REVISION_CREATION_TIMEOUT_SENTENCE,
   REVISION_UNAVAILABLE_SENTENCE,
+  checkRevisionGate,
   createErrorResponse,
   createToolResponse,
   formatRevisionLine,
@@ -77,11 +79,21 @@ export const __testing__ = { readAttachmentFile, MAX_ATTACHMENT_BYTES };
  */
 async function handleNoteTextUpdate(
   mode: 'append' | 'prepend' | 'replace',
-  { id, text, header }: { id: string; text: string; header?: string | undefined }
+  {
+    id,
+    text,
+    header,
+    expectedRevision,
+  }: {
+    id: string;
+    text: string;
+    header?: string | undefined;
+    expectedRevision: NoteRevision;
+  }
 ): Promise<CallToolResult> {
   const action = mode === 'append' ? 'appended' : mode === 'prepend' ? 'prepended' : 'replaced';
   logger.info(
-    `handleNoteTextUpdate(${mode}) id: ${id}, text length: ${text.length}, header: ${header || 'none'}`
+    `handleNoteTextUpdate(${mode}) id: ${id}, text length: ${text.length}, header: ${header || 'none'}, expectedRevision: ${expectedRevision}`
   );
 
   try {
@@ -92,6 +104,12 @@ async function handleNoteTextUpdate(
 
 Use bear-search-notes to find the correct note identifier.`);
     }
+
+    // OCC enforce: stale-revision wins over downstream pre-flight (e.g.
+    // "header not found"), since a stale view of the structure is itself
+    // a symptom of the revision mismatch.
+    const staleError = checkRevisionGate(expectedRevision, existingNote.revision);
+    if (staleError) return staleError;
 
     // Strip markdown header syntax once — reused for both validation and Bear API
     const cleanHeader = header?.replace(/^#+\s*/, '');
@@ -556,6 +574,13 @@ Try different search criteria or check if notes exist in Bear Notes.`);
             .describe(
               "Where to insert: 'end' (default) for appending, logs, updates; 'beginning' for prepending, summaries, top of mind, etc. When `header` is set, position applies within that section's content, not the whole note."
             ),
+          revision: z
+            .number()
+            .int()
+            .nonnegative()
+            .describe(
+              'The revision token from your most recent response for this note (the `Revision: N` line — from bear-open-note or any prior write). The server rejects the write if the note has changed since that revision; on rejection, re-read with bear-open-note to refresh the body and revision, then retry.'
+            ),
         },
         annotations: {
           readOnlyHint: false,
@@ -564,9 +589,9 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           openWorldHint: true,
         },
       },
-      async ({ id, text, header, position }): Promise<CallToolResult> => {
+      async ({ id, text, header, position, revision }): Promise<CallToolResult> => {
         const mode = position === 'beginning' ? 'prepend' : 'append';
-        return handleNoteTextUpdate(mode, { id, text, header });
+        return handleNoteTextUpdate(mode, { id, text, header, expectedRevision: revision });
       }
     )
   );
@@ -603,6 +628,13 @@ Try different search criteria or check if notes exist in Bear Notes.`);
             .describe(
               'Section header to target — required when scope is "section", forbidden when scope is "full-note-body". Accepts any heading level, including the note title (H1).'
             ),
+          revision: z
+            .number()
+            .int()
+            .nonnegative()
+            .describe(
+              'The revision token from your most recent response for this note (the `Revision: N` line — from bear-open-note or any prior write). The server rejects the write if the note has changed since that revision; on rejection, re-read with bear-open-note to refresh the body and revision, then retry.'
+            ),
         },
         annotations: {
           readOnlyHint: false,
@@ -611,7 +643,7 @@ Try different search criteria or check if notes exist in Bear Notes.`);
           openWorldHint: true,
         },
       },
-      async ({ id, scope, text, header }): Promise<CallToolResult> => {
+      async ({ id, scope, text, header, revision }): Promise<CallToolResult> => {
         if (scope === 'section' && !header) {
           return createErrorResponse(`scope is "section" but no header was provided.
 
@@ -624,7 +656,12 @@ Set the header parameter to the section heading you want to replace.`);
 Remove the header parameter to replace the full note body, or change scope to "section".`);
         }
 
-        return handleNoteTextUpdate('replace', { id, text, header });
+        return handleNoteTextUpdate('replace', {
+          id,
+          text,
+          header,
+          expectedRevision: revision,
+        });
       }
     )
   );
@@ -664,6 +701,13 @@ Remove the header parameter to replace the full note body, or change scope to "s
             .describe(
               'Note title if ID is not available (case-insensitive). If multiple notes share the same title, returns a list of matches with IDs so you can pick one and retry with `id`.'
             ),
+          revision: z
+            .number()
+            .int()
+            .nonnegative()
+            .describe(
+              'The revision token from your most recent response for this note (the `Revision: N` line — from bear-open-note or any prior write). The server rejects the write if the note has changed since that revision; on rejection, re-read with bear-open-note to refresh the body and revision, then retry.'
+            ),
         },
         annotations: {
           readOnlyHint: false,
@@ -672,7 +716,7 @@ Remove the header parameter to replace the full note body, or change scope to "s
           openWorldHint: true,
         },
       },
-      async ({ file_path, filename, id, title }): Promise<CallToolResult> => {
+      async ({ file_path, filename, id, title, revision }): Promise<CallToolResult> => {
         if (!id && !title) {
           return createErrorResponse(
             'Either note ID or title is required. Use bear-search-notes to find the note ID.'
@@ -726,6 +770,13 @@ Use bear-add-file with a specific ID to attach to the desired note.`);
 
 Use bear-search-notes to find the correct note identifier.`);
           }
+
+          // OCC enforce: stale-revision wins over downstream failures so the
+          // caller refreshes its view of the note (title, body, structure)
+          // rather than acting on a stale identity-of-note assumption.
+          const staleError = checkRevisionGate(revision, existingNote.revision);
+          if (staleError) return staleError;
+
           const noteTitle = existingNote.title;
           // OCC inform baseline (free from the pre-flight read above).
           const baseline = existingNote.revision;
@@ -848,6 +899,13 @@ The file has been attached to your Bear note.`);
             .describe(
               'Tag names (leading # is stripped if present), e.g., ["career", "career/meetings"]'
             ),
+          revision: z
+            .number()
+            .int()
+            .nonnegative()
+            .describe(
+              'The revision token from your most recent response for this note (the `Revision: N` line — from bear-open-note or any prior write). The server rejects the write if the note has changed since that revision; on rejection, re-read with bear-open-note to refresh the body and revision, then retry.'
+            ),
         },
         annotations: {
           readOnlyHint: false,
@@ -856,8 +914,10 @@ The file has been attached to your Bear note.`);
           openWorldHint: true,
         },
       },
-      async ({ id, tags }): Promise<CallToolResult> => {
-        logger.info(`bear-add-tag called with id: ${id}, tags: [${tags.join(', ')}]`);
+      async ({ id, tags, revision }): Promise<CallToolResult> => {
+        logger.info(
+          `bear-add-tag called with id: ${id}, tags: [${tags.join(', ')}], revision: ${revision}`
+        );
 
         try {
           const existingNote = getNoteContent(id);
@@ -866,6 +926,13 @@ The file has been attached to your Bear note.`);
 
 Use bear-search-notes to find the correct note identifier.`);
           }
+
+          // OCC enforce: a stale view of the note (its content, title,
+          // structure) may have driven the agent's choice of tags — reject
+          // before applying so the caller refreshes that view.
+          const staleError = checkRevisionGate(revision, existingNote.revision);
+          if (staleError) return staleError;
+
           // OCC inform baseline (free from the pre-flight read above).
           const baseline = existingNote.revision;
 

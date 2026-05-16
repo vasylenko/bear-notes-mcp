@@ -43,3 +43,24 @@ export function formatRevisionLine(
 ): string {
   return revision === null ? unknownSentence : `Revision: ${revision}`;
 }
+
+// The message deliberately omits the live revision value. Including it would
+// let an agent satisfy the gate without re-reading the body — retry with the
+// fresh number, write through stale-derived bytes, defeat the safety property
+// the gate exists for. The recovery path is bear-open-note (a fresh body +
+// fresh revision in one trip), not a number to copy.
+export const STALE_REVISION_MESSAGE =
+  'Stale revision. The note has been edited since your last read, so the cached body you would write from is no longer trustworthy. Re-read the note with `bear-open-note` to capture the current state and revision, then retry with the fresh revision.';
+
+// Single point of policy for the OCC enforce gate. Body-modifying note tools
+// (bear-add-text, bear-replace-text, bear-add-file, bear-add-tag) delegate here
+// after their pre-flight read, before any tool-specific validation, so a stale
+// view of the note's structure surfaces as a stale-revision error rather than
+// a misleading downstream pre-flight failure.
+export function checkRevisionGate(
+  expected: NoteRevision,
+  live: NoteRevision
+): Pick<CallToolResult, 'content' | 'isError'> | null {
+  if (expected !== live) return createErrorResponse(STALE_REVISION_MESSAGE);
+  return null;
+}
