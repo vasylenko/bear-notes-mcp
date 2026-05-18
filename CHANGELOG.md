@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Every note-scoped tool response now carries a `Revision: <n>` line** alongside the note ID, sourced from Bear's `ZSFNOTE.Z_OPT` counter. An LLM agent can compare revisions between calls to detect "did this note change since I last read it" — useful when you edit in Bear's UI between agent turns. ([#125](https://github.com/vasylenko/bear-notes-mcp/pull/125))
   - **Stale-revision writes are now rejected on body-modifying note tools.** Catches the failure mode where an agent reads a note, the user (or another sync) edits it in Bear, and the agent later writes from its now-stale view — landing the write at the wrong place or on content whose meaning has shifted. ([#128](https://github.com/vasylenko/bear-notes-mcp/pull/128))
 
+### Internal
+
+- **PRs get a sticky `.mcpb` download comment** — each `pull_request` build now posts (and updates on subsequent pushes) a single comment with a link to the freshly-built bundle, the build version, short SHA, and the workflow run. Reviewers and contributors can install a PR's build without digging into the Actions tab. Skipped on fork PRs to avoid a 403 from the read-only `GITHUB_TOKEN`. ([#129](https://github.com/vasylenko/bear-notes-mcp/pull/129))
+
 ## [3.0.1] - 2026-05-12
 
 ### Internal
