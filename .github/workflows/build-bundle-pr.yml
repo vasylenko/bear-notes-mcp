@@ -76,7 +76,12 @@ jobs:
       # fragile if any other workflow ever comments on PRs as github-actions[bot].
       # All dynamic values flow in via `env:` to keep ${{ ... }} out of the shell
       # body (script-injection class).
+      # Skipped on fork PRs: `pull_request` from a fork gets a read-only
+      # GITHUB_TOKEN regardless of the `permissions:` block, so the gh api call
+      # would 403 and paint a red ✗ on every external-contributor PR. The
+      # artifact link is still reachable from the Actions run page.
       - name: Post or update PR build comment
+        if: github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
