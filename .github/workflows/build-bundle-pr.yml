@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     env:
       CI: 'true'
     steps:
@@ -60,9 +61,59 @@ jobs:
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Upload bundle artifact
+        id: upload
         uses: actions/upload-artifact@v7
         with:
           name: mcpb-bundle-pr-${{ github.event.pull_request.number }}-${{ steps.vars.outputs.sha_short }}
           path: bear-notes-mcpb-*.mcpb
           retention-days: 14
           if-no-files-found: error
+
+      # Post (or update on subsequent pushes) a single sticky comment on the PR
+      # so reviewers don't have to dig into the Actions tab to grab the .mcpb.
+      # Identity is anchored by an HTML-comment marker (invisible in rendered
+      # Markdown) rather than `gh pr comment --edit-last`, which would be
+      # fragile if any other workflow ever comments on PRs as github-actions[bot].
+      # All dynamic values flow in via `env:` to keep ${{ ... }} out of the shell
+      # body (script-injection class).
+      - name: Post or update PR build comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          BUILD_VERSION: ${{ steps.version.outputs.build_version }}
+          SHA: ${{ steps.vars.outputs.sha_short }}
+          MARKER: '<!-- mcpb-pr-build -->'
+        run: |
+          set -euo pipefail
+
+          BODY_FILE="${RUNNER_TEMP}/mcpb-pr-body.md"
+          cat >"${BODY_FILE}" <<EOF
+          ${MARKER}
+          **MCPB build for this PR**
+
+          | Field   | Value |
+          |---------|-------|
+          | Bundle  | [Download .mcpb](${ARTIFACT_URL}) |
+          | Version | \`${BUILD_VERSION}\` |
+          | Commit  | \`${SHA}\` |
+          | Run     | [#${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID}) |
+
+          _Artifact retained 14 days. This comment auto-updates on each push._
+          EOF
+
+          COMMENT_ID=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"${MARKER}\")) | .id" \
+            | head -n1)
+
+          if [ -n "${COMMENT_ID}" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT_ID}" \
+              -F body=@"${BODY_FILE}" >/dev/null
+            echo "Updated existing comment ${COMMENT_ID} on PR #${PR}"
+          else
+            NEW_ID=$(gh api -X POST "repos/${REPO}/issues/${PR}/comments" \
+              -F body=@"${BODY_FILE}" --jq '.id')
+            echo "Posted new comment ${NEW_ID} on PR #${PR}"
+          fi
