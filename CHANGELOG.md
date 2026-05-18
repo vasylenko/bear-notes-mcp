@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
-- **PRs get a sticky `.mcpb` download comment** — each `pull_request` build now posts (and updates on subsequent pushes) a single comment with a link to the freshly-built bundle, the build version, short SHA, and the workflow run. Reviewers and contributors can install a PR's build without digging into the Actions tab. Skipped on fork PRs to avoid a 403 from the read-only `GITHUB_TOKEN`. ([#129](https://github.com/vasylenko/bear-notes-mcp/pull/129))
+- **PRs get a sticky `.mcpb` download comment** — each `pull_request` build now posts (and updates on subsequent pushes) a single comment with a link to the freshly-built bundle, the build version, short SHA, and the workflow run. Skipped on fork PRs to avoid a 403 from the read-only `GITHUB_TOKEN`. ([#129](https://github.com/vasylenko/bear-notes-mcp/pull/129))
 
 ## [3.0.1] - 2026-05-12
 
