@@ -21,7 +21,7 @@ MCP server for Bear Notes, distributed through two channels:
 
 ## Source Layout
 
-`src/` is layered as **infra → operations → tools**. Adapters to external systems (SQLite, filesystem, Bear URL scheme) live in `infra/`; pure business logic in `operations/`; MCP tool registrations and handlers in `tools/`. Dependencies flow downward only — `tools/` may import from `operations/` and `infra/`, `operations/` from `infra/`, never the reverse. Tests are co-located with their source files using the `.test.ts` suffix. Use `find src -type f` for the current file list; the rules above are what's load-bearing.
+`src/` is layered as **infra → operations → tools**. Adapters to external systems (SQLite, Bear URL scheme) live in `infra/`; pure business logic in `operations/`; MCP tool registrations and handlers in `tools/`. Dependencies flow downward only — `tools/` may import from `operations/` and `infra/`, `operations/` from `infra/`, never the reverse. Tests are co-located with their source files using the `.test.ts` suffix. Use `find src -type f` for the current file list; the rules above are what's load-bearing.
 
 ## Additional technical context
 
