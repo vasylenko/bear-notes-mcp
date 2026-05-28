@@ -1,6 +1,6 @@
 # Code Style
 
-Most style is auto-enforced by tsconfig + eslint + prettier — run `task check` to validate, `task format` to auto-fix. This file captures the project-specific choices and the conventions to follow when tooling doesn't speak up.
+Most style is auto-enforced by tsconfig + eslint + prettier — run `npm run check` to validate, `task style` to auto-fix. This file captures the project-specific choices and the conventions to follow when tooling doesn't speak up.
 
 ## TypeScript
 - Strict type checking
@@ -27,7 +27,7 @@ Most style is auto-enforced by tsconfig + eslint + prettier — run `task check`
 
 ## Formatting
 
-Auto-enforced by prettier: 2-space indentation, semicolons required, single quotes preferred. Run `task format` to apply.
+Auto-enforced by prettier: 2-space indentation, semicolons required, single quotes preferred. Run `task style` to apply.
 
 ## Error handling
 
