@@ -8,11 +8,11 @@ Never assume — only state what you know for sure based on the new code you rev
 
 ## Review Guidelines
 1. Review for KISS and DRY
-- Carefully read the .claude/commands/kissdryer.md file, which explains how to review the code for KISS and DRY principles.
+- Carefully read the docs/dev/SPECIFICATION.md file, which explains the system architecture and design constraints (including KISS/YAGNI principles) for this project.
 - Using this knowledge, diligently review the PR changes according to these principles.
 
 2. Review for Codestyle
-- Carefully read the .claude/commands/codestyle.md file, which explains how to review the code for the style rules of this project.
+- Carefully read the docs/dev/CODE_STYLE.md file, which explains the style rules of this project.
 - Using this knowledge, diligently review the PR changes according to the style guides.
 
 ---
