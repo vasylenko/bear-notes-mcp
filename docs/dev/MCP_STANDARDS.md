@@ -25,7 +25,7 @@ Source these from values already known before the write (input parameters, pre-f
 
 Global mutations whose target is a taxonomy rather than a specific resource intentionally omit per-resource metadata.
 
-The concrete instantiation for this server — which tools are in scope, which helpers implement these patterns, the runtime constants and labels — lives in `docs/dev/SPECIFICATION.md` under "Optimistic Concurrency Control (Inform Half)". Empirical findings about the underlying DB columns those helpers read live in `docs/dev/BEAR_DATABASE_SCHEMA.md`.
+The concrete instantiation for this server — which tools are in scope, which helpers implement these patterns, the runtime constants and labels — lives in `docs/dev/SPECIFICATION.md` under "Optimistic Concurrency Control" → "Inform half". Empirical findings about the underlying DB columns those helpers read live in `docs/dev/BEAR_DATABASE_SCHEMA.md`.
 
 ## Tool Description
 
