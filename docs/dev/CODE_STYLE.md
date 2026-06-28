@@ -1,6 +1,6 @@
 # Code Style
 
-Most style is auto-enforced by tsconfig + eslint + prettier — run `npm run check` to validate, `task style` to auto-fix. This file captures the project-specific choices and the conventions to follow when tooling doesn't speak up.
+Most style is auto-enforced by tsconfig + eslint + prettier — run `npm run check` to validate eslint + prettier, `npm run build` or `task build` to validate TypeScript/tsconfig, and `task style` to auto-fix. This file captures the project-specific choices and the conventions to follow when tooling doesn't speak up.
 
 ## TypeScript
 - Strict type checking
