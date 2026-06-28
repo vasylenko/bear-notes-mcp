@@ -27,7 +27,7 @@ Most style is auto-enforced by tsconfig + eslint + prettier — run `npm run che
 
 ## Formatting
 
-Auto-enforced by prettier: 2-space indentation, semicolons required, single quotes preferred. Run `task style` to apply.
+Auto-enforced by prettier: 2-space indentation, semicolons required, single quotes preferred. Run `npm run format` to apply (or `task style` to apply formatting + eslint fixes).
 
 ## Error handling
 
